@@ -17,35 +17,6 @@ code ne touche ni la Forge ni la navigation.
 pile factice, qui ne valide plus rien (DAT §28.7). Il est absorbé par SPK-138 et
 rejoué contre la VM ; l'entrée sort du rapport à ce moment.
 
-## 2026-10-01 · Le panneau « Installer cette Forge » montre des accents graves bruts, sur une Forge installée
-
-**Constaté** sur la capture `spk135-vm-forge-virtio` : en bas de l'onglet
-Forge d'une Forge **installée** — tunnel ouvert, code à jour —, le panneau
-« Installer cette Forge » dit « Cette destination peut accepter SSH sans encore
-porter `sparkd` », et les accents graves s'affichent tels quels
-(`apps/webui/src/components/forge-installer.js`). C'est aussi la phrase de la
-capture d'échec du parcours clavier instable (entrée ci-dessus).
-
-**Arbitré le 2026-10-06** : garder le diagnostic, sans la phrase — SPK-148,
-DAT §50.1 bis. L'entrée sort du rapport quand la correction est livrée.
-
-## 2026-10-01 · La modale « Ressources » arrondit la mémoire au gibioctet, et renvoie la valeur arrondie
-
-**Constaté** sur la capture `spk142-vm-reservation-et-plafond`, prise dans la
-console branchée sur la VM du banc : un Spark créé avec **512 Mio**, dont on n'a
-changé que le réseau, a **1 Gio** de mémoire après « Appliquer les quotas ». La
-modale pré-remplit la mémoire par `Math.round(octets / 1 Gio)`
-(`apps/webui/src/app.js`) — 0,5 devient 1 —, puis envoie la valeur affichée.
-Changer un seul réglage en modifie donc un autre, en silence ; un Spark à
-1,25 Gio redescendrait à 1 Gio, ou serait refusé pour rétrécissement.
-`DESIGN_SYSTEM.md` §6.9 bis : la valeur affichée est EXACTE sur la grille du
-curseur, dont le pas mémoire est 256 Mio.
-
-**Arbitré le 2026-10-03** : corriger — SPK-144 — valeur exacte, et seuls les réglages changés partent. D'ici là, la
-modale ne doit pas servir sur un Spark dont la mémoire n'est pas un nombre entier
-de gibioctets. L'entrée sort du rapport quand
-la correction est livrée.
-
 ## 2026-10-03 · Le DAT promet un rendu du gabarit d'alerte avant l'enregistrement ; l'écran n'en montre aucun
 
 **Constaté** en spécifiant SPK-147 : le DAT §47.3.1 dit « L'écran montre le

@@ -120,6 +120,32 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-34 · Valeurs exactes des quotas, mode mémoire souple refusé, aide des alertes, panneau d'installation (SPK-144, SPK-146 à SPK-148)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable. Les
+                quatre unités sont validées sur la VM du banc (SPK-137).
+Objectif      : la fenêtre « Ressources » pré-remplit les valeurs exactes et
+                n'envoie que les réglages changés (SPK-144, §49.2 bis) ; la
+                création refuse `memory_enforce=soft` (SPK-146, §7.6) ; l'aide
+                du gabarit d'alerte nomme les dix champs (SPK-147, §47.3.1) ; le
+                panneau « Installer cette Forge » dit « Forge en service » quand
+                `sparkd` répond (SPK-148, §50.1 bis). Aucune migration, aucune
+                variable.
+Dépend de     : OP-33 (même chemin de mise à jour).
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) ;
+                3. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : `/healthz` rend le commit déployé ; le préflight reste vert.
+                Avant ou après, relever au registre si un Spark porte
+                `memory_enforce = 'soft'` — il le garde, rien ne le réécrit,
+                mais il se figera au premier dépassement (§7.6).
+Retour arrière: réinstaller la build précédente (runbook A.2) et relancer la
+                console.
+Risques       : une création qui envoyait `memory_enforce=soft` par l'API est
+                désormais refusée — la console, elle, ne l'envoie pas.
+```
+
 ### OP-33 · Retrait de route confirmé par Caddy, refus lus dans la ligne, saisie des alertes gardée, réseau en deux valeurs (SPK-139 à SPK-142)
 
 ```

@@ -5,6 +5,8 @@
  * @verifies docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 (deux valeurs, trois
  *           contrôles de cohérence, le plafond posé sur `eth0`) ·
  *           docs/DESIGN_SYSTEM_APP.md SPK-DS-37 · manuels M5, M8 · CLAUDE.md §16
+ * @verifies docs/BACKLOG.md#SPK-144 · docs/DAT.md §49.2 bis (la fenêtre montre la
+ *           mémoire exacte, et ne renvoie pas ce qu'on n'a pas touché)
  *
  * Le cas signalé par le responsable le 2026-10-01, rejoué par la console : un
  * Spark créé à 10 Mbit/s, dont on monte la réservation à 100 Mbit/s. Puis le
@@ -53,6 +55,9 @@ export default async function jouer({ console: url, verdict, dire, ssh, api }) {
     await ouvrirSpark(page, url, SPARK);
     await page.click('[data-ouvre="quotas"]');
     await page.waitForSelector('dialog.modale[open] #quota-network');
+    const memoireMontree = await page.inputValue('#quota-memory');
+    verdict('SPK-144 : la fenêtre montre la mémoire EXACTE (512 Mio)', memoireMontree === '0.5',
+            memoireMontree);
     await page.fill('#quota-network', '100');
     await page.click('dialog.modale[open] [data-engage="quotas"]');
     await page.waitForSelector('dialog.modale[open] .refus', { timeout: 30000 });
@@ -73,6 +78,8 @@ export default async function jouer({ console: url, verdict, dire, ssh, api }) {
     await page.locator('#titre-ressources').scrollIntoViewIfNeeded();
     await capturer(page, 'spk142-vm-reservation-et-plafond');
     const fiche = await page.innerText('section[aria-labelledby="titre-ressources"]');
+    verdict('SPK-144 : la mémoire, non touchée, n’a pas bougé', apres.memory_reservation_bytes
+            === 512 * 1024 ** 2, String(apres.memory_reservation_bytes));
     verdict('SPK-142 : les deux valeurs sont au registre', apres.network_reservation_bps === 100_000_000
             && apres.network_burst_bps === 200_000_000,
             `${apres.network_reservation_bps} / ${apres.network_burst_bps}`);

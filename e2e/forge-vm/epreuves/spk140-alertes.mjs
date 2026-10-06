@@ -4,6 +4,8 @@
  * @verifies docs/BACKLOG.md#SPK-140 · docs/DAT.md §47.3.0 bis (un refus garde la
  *           saisie, sauf le mot de passe) · docs/DESIGN_SYSTEM.md §6.11, §7.1 ·
  *           docs/BACKLOG.md#SPK-136 (le refus a la forme `.refus`) · CLAUDE.md §16
+ * @verifies docs/BACKLOG.md#SPK-147 · docs/DAT.md §47.3.1 (l'aide nomme les dix
+ *           champs que la Forge accepte)
  *
  * Le parcours d'un exploitant : l'accueil, la Forge, l'onglet Alertes ; un
  * gabarit qui nomme un champ inconnu, refusé par la VRAIE `sparkd` de la VM ;
@@ -24,6 +26,11 @@ export default async function jouer({ console: url, verdict, dire }) {
     await page.click('nav a[href="#/forge"]');
     await page.click('.onglet[href="#/forge/alertes"]');
     await page.waitForSelector('#formulaire-alertes', { timeout: 30000 });
+    const aide = await page.innerText('#alerte-gabarit-aide');
+    verdict('SPK-147 : l’aide du gabarit nomme les dix champs',
+            ['version', 'ts', 'forge', 'action', 'actor', 'actor_class', 'target_type',
+             'target_id', 'result', 'message'].every((c) => new RegExp(`\\b${c}\\b`).test(aide)),
+            aide.replace(/\s+/g, ' ').slice(0, 160));
 
     await page.fill('#alerte-url', ADRESSE);
     await page.fill('#alerte-gabarit', REFUSE);

@@ -8625,8 +8625,11 @@ modale arrondissait la mémoire au gibioctet, puis renvoyait la valeur arrondie.
   `e7a5002` (journal du 2026-10-06) : `valeursDesQuotas` pré-remplit les
   valeurs exactes, `corpsDesQuotas` n'envoie que les réglages changés ; cinq
   preuves de composant, dont le cas constaté (512 Mio, seul le réseau changé →
-  la mémoire ne part pas). **Reste `[~]`** : la vérification par la console sur
-  la VM.
+  la mémoire ne part pas).
+- **Vérifié le 2026-10-06 sur VM à installation fraîche** (épreuve
+  `spk142-reseau`) : la fenêtre montre « 0.5 » pour un Spark de 512 Mio, et la
+  mémoire, non touchée, reste 512 Mio après « Appliquer les quotas ». **Reste
+  `[~]`** : OP-34.
 
 ### [ ] SPK-145 · Mesurer si la réservation CPU garde son effet sous contention quand un plafond est posé
 
@@ -8654,8 +8657,11 @@ dépasse est freinée jusqu'au blocage — ce n'est pas un débordement.
   garde de permissions.
 - **Codé le 2026-10-06** : la création refuse `soft` en `422 quota_incoherent`
   (champ `memory_enforce`) ; deux preuves, rouges puis vertes ; suite `sparkd`
-  1 619 sur 1 619 — des diagnostics. **Reste `[~]`** : le refus constaté sur la
-  `sparkd` de la VM, puis la mise en production.
+  1 619 sur 1 619 — des diagnostics.
+- **Vérifié le 2026-10-06 sur la `sparkd` d'une VM à installation fraîche**
+  (épreuve `spk146-memoire`) : `soft` refusé en le nommant, rien de créé.
+  **Reste `[~]`** : OP-34, et le relevé du registre de production par le
+  responsable.
 
 ### [~] SPK-147 · L'aide du gabarit d'alerte et le manuel nomment les dix champs
 
@@ -8670,8 +8676,10 @@ n'en nommaient que huit.
   écrivant la spécification, un paragraphe périmé du §47.3.1 — « ce n'est pas
   encore le registre » — est remplacé : SPK-62 l'a rendu faux.
 - **Codé le 2026-10-06** : l'aide et M11 nomment les dix ; preuve de composant
-  rouge sur l'aide d'avant (huit champs), verte après. **Reste `[~]`** : la voir
-  dans la console branchée sur la VM.
+  rouge sur l'aide d'avant (huit champs), verte après.
+- **Vérifié le 2026-10-06 sur VM** (épreuve `spk140-alertes`) : l'aide nomme les
+  dix champs, ceux que le refus de la Forge énumère ; capture observée. **Reste
+  `[~]`** : OP-34.
 
 ### [~] SPK-148 · Le panneau « Installer cette Forge » dit la vérité sur une Forge en service
 
@@ -8692,8 +8700,11 @@ compris.
   `<code>` ; preuve de composant rouge avant ; vérification par la console sur
   la VM.
 - **Codé le 2026-10-06** : trois preuves de composant, rouges sur le panneau
-  d'avant, vertes après ; console 1 595 sur 1 595 — des diagnostics. **Reste
-  `[~]`** : la vérification par la console sur la VM.
+  d'avant, vertes après ; console 1 595 sur 1 595 — des diagnostics.
+- **Vérifié le 2026-10-06 sur VM** (épreuve `spk135-debit`) : sur la Forge en
+  service, le panneau dit « Forge en service : le diagnostic relit sa
+  conformité, sans rien écrire. », sans accent grave, bouton présent ; capture
+  observée. **Reste `[~]`** : OP-34.
 
 ### [~] SPK-149 · Une recette DNS écrit ce que son aperçu a montré, et accepte un sous-domaine à plusieurs niveaux
 
