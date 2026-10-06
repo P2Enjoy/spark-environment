@@ -405,7 +405,7 @@ Sémantique retenue, qui est le cœur du produit :
 
 Hors contention, un Spark consomme tout ce qui traîne.
 
-### 7.2 Les quatre modes CPU
+### 7.2 Les cinq modes CPU
 
 | Mode | Sémantique | Traduction Incus | Effet cgroup v2 mesuré |
 |---|---|---|---|
@@ -413,6 +413,7 @@ Hors contention, un Spark consomme tout ce qui traîne.
 | `capped` | pool partagé, plafond dur, pas de burst | `limits.cpu=<cpuset partagé>` + `limits.cpu.allowance=<t>ms/100ms` | `cpu.max=<t×1000> 100000` |
 | `dedicated` | cœurs physiques exclusifs, retirés du pool partagé | `limits.cpu=<IDs, frères SMT inclus>`, pas d'`allowance` | `cpuset.cpus=<IDs>` |
 | `shared-pinned` | cœurs imposés mais non exclusifs (localité cache / NUMA) | `limits.cpu=<IDs>` + `allowance` | `cpuset.cpus` + `cpu.weight` |
+| `shared-capped` | part du pool partagé, burst autorisé **jusqu'au plafond** (SPK-152, §7.2 quater) | comme `shared`, plus `raw.lxc` : `lxc.cgroup2.cpu.max = <t×1000> 100000` | `cpu.weight=<n−10+priorité>`, `cpu.max=<t×1000> 100000` **à partir du démarrage** |
 
 La documentation Incus recommande de ne pas combiner épinglage et quota temporel
 sans nécessité : `capped` et `shared` épinglent au **cpuset partagé complet**,
@@ -524,6 +525,74 @@ Un principe commun à ces trois règles : **quand la valeur demandée ne peut pa
 être rendue fidèlement, on refuse au lieu d'approximer**. Une approximation
 silencieuse fait diverger le registre de la machine, et c'est précisément ce que
 l'invariant du §7.3 interdit.
+
+### 7.2 quater Le mode partagé plafonné : une réservation ET un plafond (SPK-152)
+
+**Arbitré le 2026-10-06** par le responsable, sur la mesure de SPK-145
+(`docs/EXPLORATION_QUOTAS.md` §1) : sous contention, la part d'une cellule vaut
+le plus petit de son poids et de son plafond, et un plafond n'efface pas la
+réservation. Les quatre modes précédents obligeaient à choisir entre un plancher
+sans plafond (`shared`) et un plafond sans plancher (`capped`). Ce mode porte
+les deux.
+
+| | Valeur | Champ du registre |
+|---|---|---|
+| **réservation** | la part garantie sous contention, comme en `shared` (§7.1) | `cpu_reservation` |
+| **plafond** | ce que la cellule ne dépasse jamais, même sur une Forge vide | `cpu_max` |
+
+Nom technique `shared-capped` ; libellé « Partagé plafonné ».
+
+**Traduction.** Celle de `shared` (cpuset partagé complet, `allowance` en
+pourcentage, priorité), plus une ligne ajoutée aux deux lignes de la tranche que
+porte déjà `raw.lxc` (§32.1) :
+
+```
+lxc.cgroup.dir.container = spark.slice/<nom>
+lxc.cgroup.dir.monitor = spark.slice/monitor-<nom>
+lxc.cgroup2.cpu.max = <round(cpu_max × 100) × 1000> 100000
+```
+
+Le plafond s'exprime en millisecondes entières sur 100 ms, comme celui de
+`capped` (§7.2 ter, règle 3) : `1,5 CPU → 150000 100000`.
+
+**Pourquoi `raw.lxc`, et ce que cela coûte** — MESURÉ le 2026-10-06 sur la VM du
+banc, sur une cellule du produit rangée dans `spark.slice`
+(`docs/EXPLORATION_QUOTAS.md` §1 bis) :
+
+1. Incus ne sait pas poser un pourcentage ET un quota temporel :
+   `limits.cpu.allowance` porte l'un **ou** l'autre ;
+2. écrire `cpu.max` directement dans le cgroup de la cellule s'applique aussitôt
+   (1,92 → 0,50 CPU), mais Incus le **remet à `max`** dès qu'il repose une
+   `allowance` à chaud ;
+3. la ligne `lxc.cgroup2.cpu.max` de `raw.lxc` tient après un redémarrage, dans
+   la tranche (0,50 CPU mesuré).
+
+Le plafond prend donc effet **au démarrage de la cellule**, et à lui seul.
+**Arbitré le 2026-10-06** : « au redémarrage, avec bouton » — le changement
+s'annonce, il ne se cache pas, et l'écran offre le redémarrage qui l'applique
+(§49.8).
+
+**Ce qui remet le plafond à `max` sur une cellule en marche** : toute nouvelle
+pose de l'`allowance` à chaud — un redimensionnement qui change la réservation,
+la redistribution des cœurs quand un Spark dédié prend ou rend des cœurs
+(§7.4 bis). Rien ne l'efface **en silence** : `sparkd` relit le `cpu.max` réel
+de la cellule et l'écran dit l'écart (§49.8).
+
+**Contrôles de cohérence**, prononcés par `sparkd` avant toute écriture, en
+`422 quota_incoherent` avec le champ en cause (§49.7) :
+
+1. réservation **et** plafond sont présents, strictement positifs ;
+2. le plafond est **au moins** la réservation (`cpu_max`) — un plafond sous le
+   plancher promettrait ce qu'il interdit ;
+3. le plafond ne dépasse **pas les cœurs physiques du pool partagé**
+   (`cpu_max`) — au-delà, il ne limiterait rien (§7.7 : la capacité se compte en
+   cœurs physiques) ;
+4. le plafond se rend fidèlement en millisecondes sur 100 ms (§7.2 ter) — sinon
+   refusé, jamais arrondi.
+
+Le registre porte la contrainte 2 en `CHECK` (`docs/SCHEMA.md` §4) ; la 3
+dépend de la Forge, et un découpage ultérieur de cœurs dédiés peut la rendre
+fausse sans rien casser : le plafond limite alors moins que prévu, jamais plus.
 
 ### 7.3 L'invariant qui donne son sens à la réservation
 
@@ -773,6 +842,7 @@ qui n'existent pas.
 | `shared` | `cpu_reservation` | non |
 | `shared-pinned` | `cpu_reservation` | non — les cœurs sont imposés, pas exclusifs |
 | `capped` | `cpu_max` | non |
+| `shared-capped` | `cpu_reservation` — **pas** le plafond (arbitré le 2026-10-06) | non |
 | `dedicated` | rien | **oui**, `cpu_cores` cœurs entiers |
 
 `capped` consomme son **plafond**, pas zéro. Un Spark plafonné à 0,5 CPU peut
@@ -780,6 +850,11 @@ réellement consommer 0,5 CPU en permanence ; ne pas le provisionner reviendrait
 distribuer de la capacité déjà prise. C'est le seul mode où la grandeur comptée
 n'est pas une réservation, et c'est délibéré : on provisionne ce que le Spark
 peut prendre, pas ce qu'on espère qu'il prendra.
+
+`shared-capped` consomme sa **réservation**, comme `shared` : le plafond borne un
+burst qui, en `shared`, n'est borné par rien et n'est pas compté non plus. Ce
+que la cellule prend au-delà de sa réservation est ce que les autres laissent ;
+le compter reviendrait à vendre deux fois la même capacité libre.
 
 `dedicated` ne consomme pas de réservation : il **réduit la capacité du pool**
 pour tous les autres, ce qui est comptabilisé en amont dans la formule de
@@ -12762,6 +12837,43 @@ des quotas (§49.2) ne touchait pas le device `eth0`, où vit `limits.max`.
   plutôt qu'un refus qu'elle invente.
 
 Contrat d'écran : `DESIGN_SYSTEM_APP.md` SPK-DS-37.
+
+### 49.8 Le plafond CPU prend effet au démarrage, et l'écran le dit (SPK-152)
+
+**Arbitré le 2026-10-06** : en mode `shared-capped` (§7.2 quater), un nouveau
+plafond s'applique **au prochain démarrage** de la cellule ; tant qu'il n'est
+pas en vigueur, l'écran le dit et offre « Redémarrer pour l'appliquer ».
+
+**Le geste.** Le redimensionnement (§49.2) écrit le registre, puis pose la
+configuration : la réservation (`allowance`) s'applique à chaud ; la ligne
+`lxc.cgroup2.cpu.max` de `raw.lxc` attend le démarrage. `applied: true` dit que
+la configuration est **posée**, pas que le plafond est **en vigueur** — ce sont
+deux faits, et l'API les publie séparément.
+
+**Le plafond en vigueur se relit, il ne se suppose pas.** L'usage d'un Spark
+(`GET /v1/sparks/{nom}/usage`, §20) porte dans son bloc `cpu` :
+
+| Champ | Ce qu'il dit |
+|---|---|
+| `ceiling` | le plafond que le registre promet : `cpu_max` en `capped` et `shared-capped`, `null` sinon |
+| `ceiling_in_force` | le plafond **relu** dans `cpu.max` du cgroup de la cellule (`spark.slice/<nom>`), en CPU ; `null` quand `cpu.max` vaut `max` |
+| `ceiling_status` | `applied` — relu, égal à la promesse ; `pending` — cellule en marche, relu, différent : il prendra effet au prochain démarrage ; `unread` — cellule arrêtée, ou cgroup illisible |
+
+La comparaison vaut pour **tous** les modes : un passage de `shared-capped` à
+`shared` laisse l'ancien plafond en vigueur jusqu'au démarrage suivant, et la
+redistribution des cœurs (§7.2 quater) peut remettre un plafond à `max` sur une
+cellule qui n'a rien demandé. L'un et l'autre se voient de la même façon.
+
+**L'écran** (*Infos → Ressources*, `DESIGN_SYSTEM_APP.md` SPK-DS-41) : en
+`pending`, une annonce dit le plafond promis et celui en vigueur, et offre
+« Redémarrer pour l'appliquer ». Ce bouton est **le geste « Redémarrer »
+existant** — même route, même confirmation, même protection (§35) ; il n'en
+crée pas un second. Après le redémarrage, l'usage relu dit `applied`, et
+l'annonce disparaît.
+
+**Ce que ce contrat ne fait pas** : il ne réécrit jamais `cpu.max` à chaud, et
+ne redémarre jamais une cellule de lui-même. Redémarrer interrompt les services
+du locataire : c'est une décision de l'exploitant.
 
 ## 50. Installer une Forge distante depuis la console (SPK-68)
 

@@ -8863,8 +8863,24 @@ d'enregistrer ; l'onglet Alertes n'en montre aucun. **Arbitré le 2026-10-06** :
 §1 : la part d'une cellule vaut le plus petit de son poids et de son plafond, et
 un plafond n'efface pas la réservation) : « oui, le spécifier ».
 
-- Spécification : **à écrire, puis soumise au responsable avant le code** (DAT
-  §7.2, §7.7, §49 ; SCHEMA ; SPK-DS).
+- Spécification : `docs/DAT.md` **§7.2** (le cinquième mode), **§7.2 quater**
+  (sémantique, traduction, ce qui remet le plafond à `max`, contrôles de
+  cohérence), **§7.7** (l'admission compte la réservation), **§49.8** (le
+  plafond prend effet au démarrage ; `ceiling`, `ceiling_in_force`,
+  `ceiling_status` dans l'usage) · `docs/SCHEMA.md` **§4** (`cpu_mode`,
+  `cpu_max ≥ cpu_reservation`), **§12.3 bis** (reconstruire une table parente,
+  clés étrangères suspendues ; migration `022`) · `docs/DESIGN_SYSTEM_APP.md`
+  **SPK-DS-41** · manuels M5 (les modes CPU) et M8 (redimensionner) ·
+  `docs/PROD_MIGRATIONS.md` **OP-38**. Écrite le 2026-10-06 sur les quatre
+  arbitrages du même jour.
+- Découpage, dans cet ordre, chaque étape prouvée avant la suivante :
+  1. le moteur de migrations suspend les clés étrangères sur demande ; la
+     migration `022` élargit les `CHECK` de `spark` ;
+  2. `sparkd` : cohérence, admission, traduction (`raw.lxc`), redistribution
+     des cœurs, plafond relu dans l'usage, dossier de cellule, seed ;
+  3. la console : création, modale « Ressources », fiche et annonce ;
+  4. manuels, changelog, OP-38 ;
+  5. épreuve sur la VM du banc, dans la peau de l'exploitant.
 - Ce qu'elle doit trancher : le nom du mode, ce que l'admission compte (la
   réservation, ou le plafond comme le mode `capped`), les contrôles de
   cohérence (plafond ≥ réservation, plafond ≤ cœurs partagés), le plafond posé

@@ -13961,3 +13961,26 @@ Pour la spécification, une contrainte relevée : le mode demande d'élargir les
 `ON DELETE CASCADE`. La reconstruire comme une table ordinaire effacerait leurs
 lignes ; la migration passera par la procédure que SQLite documente pour
 modifier une contrainte sans toucher aux données.
+
+## 2026-10-06 · SPK-152 : la spécification, et la migration qui reconstruit `spark`
+
+Spécification écrite (DAT §7.2 quater, §7.7, §49.8 ; SCHEMA §4, §12.3 bis ;
+SPK-DS-41 ; OP-38).
+
+- **La migration.** Deux procédures documentées par SQLite étaient possibles :
+  réécrire la définition dans `sqlite_schema` (`writable_schema`), ou
+  reconstruire la table, clés étrangères suspendues. La première demande de
+  calculer `schema_version + 1` — impossible dans un script SQL, et SQLite la
+  réserve aux cas où rien d'autre ne marche. **Retenue : la reconstruction.**
+  Le moteur l'ouvre par une ligne `-- @cles-etrangeres: suspendues`, parce que
+  `PRAGMA foreign_keys` est sans effet dans une transaction. Éprouvée sur une
+  copie migrée jusqu'à 021 (SQLite 3.46.1) : une note de Spark survit, la
+  cascade fonctionne de nouveau après, `foreign_key_check` ne rend rien, les
+  déclencheurs de protection sont recréés.
+- **Le plafond se relit.** `applied: true` dit que la configuration est posée,
+  pas que le plafond est en vigueur : l'usage publie le `cpu.max` relu de la
+  cellule et l'écart (`ceiling_status`). La comparaison vaut pour tous les
+  modes — un retour à `shared` laisse l'ancien plafond jusqu'au démarrage, et
+  une redistribution de cœurs peut en effacer un : les deux se voient pareil.
+- **Le bouton** est le geste « Redémarrer » existant, et n'existe que là où
+  celui-ci existe (Spark protégé ou en transition : pas de bouton).

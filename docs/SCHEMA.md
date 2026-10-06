@@ -80,9 +80,9 @@ compris.
 | `state` | TEXT | `pending`, `creating`, `stopped`, `starting`, `running`, `stopping`, `error`, `deleting` |
 | `runtime` | TEXT | `container` (implémenté), `vm` (réservé) |
 | `image` | TEXT | ex. `images:debian/13` |
-| `cpu_mode` | TEXT | `shared`, `capped`, `dedicated`, `shared-pinned` |
-| `cpu_reservation` | REAL | en CPU ; requis si `shared` ou `shared-pinned` |
-| `cpu_max` | REAL | en CPU ; requis si `capped` |
+| `cpu_mode` | TEXT | `shared`, `capped`, `dedicated`, `shared-pinned`, `shared-capped` (migration 022, SPK-152) |
+| `cpu_reservation` | REAL | en CPU ; requis si `shared`, `shared-pinned` ou `shared-capped` |
+| `cpu_max` | REAL | en CPU ; requis si `capped` ou `shared-capped` — et, en `shared-capped`, **au moins** `cpu_reservation` (`CHECK`) |
 | `cpu_cores` | INTEGER | cœurs physiques ; requis si `dedicated` ou `shared-pinned` |
 | `cpu_priority` | INTEGER | 0–10, défaut 5 |
 | `memory_reservation_bytes` | INTEGER | |
@@ -709,6 +709,39 @@ Une migration s'applique dans **une seule transaction**, qui contient à la fois
 ses instructions et l'insertion de sa ligne dans `schema_migration`. Une
 migration interrompue ne laisse donc jamais un schéma à moitié migré sans trace :
 soit la transaction passe entière, soit rien.
+
+### 12.3 bis Reconstruire une table parente : les clés étrangères suspendues (SPK-152)
+
+SQLite ne modifie pas une contrainte `CHECK` existante : il faut **reconstruire**
+la table. `spark` est parente d'une quinzaine de tables en `ON DELETE CASCADE` ;
+avec les clés étrangères actives, `DROP TABLE spark` vide d'abord la table, et la
+cascade emporte les notes, les routes, les ports, l'historique de chaque Spark.
+
+La procédure est celle que SQLite documente pour les changements de schéma
+qu'`ALTER TABLE` ne sait pas faire (« Making Other Kinds Of Table Schema
+Changes ») :
+
+1. `PRAGMA foreign_keys = OFF` — **hors transaction** : à l'intérieur, la
+   directive est sans effet ;
+2. dans la transaction de la migration : créer la nouvelle table, y copier les
+   lignes, supprimer l'ancienne, renommer la nouvelle, recréer index et
+   déclencheurs ;
+3. `PRAGMA foreign_key_check` **avant** la validation : une seule ligne rendue
+   annule la migration entière ;
+4. valider, puis `PRAGMA foreign_keys = ON` — même en cas d'échec.
+
+Une migration le demande par une ligne de sa section `@up` :
+
+```sql
+-- @cles-etrangeres: suspendues
+```
+
+Le moteur ne suspend rien sans elle, et la ligne fait partie du checksum (§12.2).
+Le sens `@down` suit la même règle quand il reconstruit.
+
+Éprouvé le 2026-10-06 sur une copie du registre migré jusqu'à 021 (SQLite
+3.46.1) : les lignes filles restent, la cascade fonctionne de nouveau après
+coup, `foreign_key_check` ne rend rien.
 
 ### 12.4 Vérification au démarrage
 

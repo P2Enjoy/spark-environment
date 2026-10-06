@@ -120,6 +120,35 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-38 · Le mode CPU « partagé plafonné » : migration 022, `sparkd` et la console (SPK-152)
+
+```
+État          : EN ATTENTE — le code n'est pas encore livré.
+Objectif      : servir le cinquième mode CPU (docs/DAT.md §7.2 quater) et le
+                plafond relu dans l'usage (§49.8). La migration
+                `022_mode_partage_plafonne` reconstruit la table `spark` pour
+                élargir ses `CHECK`, clés étrangères suspendues
+                (docs/SCHEMA.md §12.3 bis) : aucune donnée n'est transformée,
+                mais c'est la première migration qui reconstruit une table
+                parente. Aucune variable.
+Dépend de     : OP-37 (même chemin de mise à jour).
+Ordre         : 1. sauvegarder le registre (§2 bis) — obligatoire, la migration
+                   reconstruit `spark` ;
+                2. mettre à jour sparkd (runbook A.2) — `sparkd.install`
+                   applique la migration 022 ;
+                3. relancer la console (« Redémarrer la console »).
+Vérification  : `/readyz` rend `schema_version: 22` ; le nombre de Sparks, de
+                routes et de notes est celui d'avant la mise à jour ; dans la
+                modale « Ressources » d'un Spark, le mode « Partagé plafonné »
+                est proposé.
+Retour arrière: `down` de 022 — refusé tant qu'un Spark est dans ce mode
+                (repassez-le dans un autre mode d'abord) ; puis réinstaller la
+                build précédente (runbook A.2).
+Risques       : la reconstruction de `spark` ; éprouvée sur une copie du
+                registre (lignes filles intactes, `foreign_key_check` vide),
+                d'où la sauvegarde de l'étape 1.
+```
+
 ### OP-37 · L'aperçu du message d'alerte : `sparkd` et la console (SPK-151)
 
 ```

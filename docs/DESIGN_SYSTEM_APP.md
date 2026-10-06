@@ -1623,6 +1623,45 @@ Sous le champ « Gabarit du message » de l'onglet Alertes, un bouton secondaire
   (SPK-140) ;
 - l'aperçu porte sur le gabarit **tapé**, pas sur celui enregistré.
 
+### SPK-DS-41 · Le mode « Partagé plafonné » : deux champs, et un plafond qui attend le démarrage
+
+**Date** : 2026-10-06 · SPK-152 · `DAT.md` §7.2 quater, §49.8 ·
+`DESIGN_SYSTEM.md` §1.3, §1.4, §1.5 bis, §6.8 (une pastille porte sa sortie),
+§6.27, §9.7, §14.3, §14.6 · SPK-DS-37
+
+**Saisie** — à la création et dans la modale « Ressources » :
+
+- le sélecteur de mode CPU propose « Partagé plafonné — une réservation, et
+  jamais au-delà du plafond », après « Partagé » ;
+- ce mode montre **deux** champs, dans cet ordre : « Réservation CPU » puis
+  « Plafond CPU ». L'aide de chacun tient en une ligne : « garantie sous
+  contention, comptée dans la capacité » ; « jamais dépassé — prend effet au
+  démarrage » ; le pourquoi est au manuel (§1.5 bis) ;
+- un plafond sous la réservation, ou au-delà des cœurs partagés, est **refusé
+  par la Forge** (`422 quota_incoherent`) : le refus s'affiche dans la modale,
+  près du bouton d'engagement, sans effacer la saisie (§6.27), comme au
+  SPK-DS-37. L'écran ne le prononce pas à sa place.
+
+**Lecture** — *Infos → Ressources* :
+
+- la ligne CPU dit les deux valeurs : « 0,5 CPU réservé · plafond 1,5 CPU » ;
+- quand l'usage relu dit `pending` (§49.8), une ligne s'ajoute sous elle :
+  une pastille **neutre** « en attente du démarrage » — l'état est voulu par
+  qui vient de régler le plafond (§6.8) —, puis « Plafond de 1,5 CPU : prendra
+  effet au prochain démarrage. En vigueur : aucun plafond. » (ou « En vigueur :
+  1 CPU »), en `role="status"`, puis le bouton compact **« Redémarrer pour
+  l'appliquer »** sur la même ligne ;
+- ce bouton est le geste « Redémarrer » de la barre de commandes, et il n'existe
+  que là où celui-ci existe : un Spark protégé ou en transition n'en porte pas,
+  et la barre de commandes dit déjà pourquoi (§1.4) ;
+- pendant le redémarrage, la ligne dit « Redémarrage… » ; elle ne disparaît que
+  sur l'usage **relu** `applied` (§1.3). Le focus va alors au titre de la
+  section Ressources (§14.3) ;
+- cellule en marche dont le cgroup n'a pas pu être relu, et qui porte un
+  plafond : « Plafond en vigueur : non relevé » (§14.6) — ni « appliqué », ni
+  « en attente ». Cellule arrêtée : rien de plus, le plafond s'appliquera à son
+  démarrage.
+
 ### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
 
 **Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus
