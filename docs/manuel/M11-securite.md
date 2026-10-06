@@ -172,8 +172,9 @@ valeur de l'alerte :
 
     SPARKD_NOTIFY_TEMPLATE='{"content":"**{forge}** — {action} sur {target_id} par {actor}"}'
 
-Un gabarit ne peut nommer que les champs de l'alerte — `forge`, `ts`, `action`,
-`actor`, `target_type`, `target_id`, `result`, `message`. **S'il en nomme un
+Un gabarit ne peut nommer que les dix champs de l'alerte — `version`, `ts`,
+`forge`, `action`, `actor`, `actor_class` (une personne, ou le serveur
+lui-même), `target_type`, `target_id`, `result`, `message`. **S'il en nomme un
 autre, le canal n'envoie rien du tout et l'écran vous le dit** : mieux vaut
 l'apprendre tout de suite qu'au moment où une alerte aurait dû partir. Aucune
 valeur de secret n'est accessible à un gabarit ; les champs qui les portent ne

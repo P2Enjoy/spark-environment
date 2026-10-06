@@ -313,6 +313,10 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-147 — l'aide du gabarit d'alerte nomme les dix champs.** L'onglet
+  Alertes et le manuel M11 n'en nommaient que huit ; la Forge en accepte dix,
+  `version` et `actor_class` compris. DAT §47.3.1, dont un paragraphe périmé
+  — « ce n'est pas encore le registre » — est remplacé.
 - **SPK-142 — la réservation et le plafond réseau se règlent séparément.**
   Monter le débit d'un Spark finissait en `500` : la modale « Plafond réseau »
   écrivait la réservation, jamais le plafond, et la contrainte

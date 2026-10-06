@@ -20,6 +20,8 @@
  *       peint quelque chose ; un crochet de script est un attribut `data-*`)
  * @spec docs/BACKLOG.md#SPK-140 · docs/DAT.md §47.3.0 bis · docs/DESIGN_SYSTEM.md
  *       §6.11, §7.1 (un refus garde la saisie, sauf le mot de passe)
+ * @spec docs/BACKLOG.md#SPK-147 · docs/DAT.md §47.3.1 (l'aide nomme les dix
+ *       champs que la Forge accepte)
  */
 
 const echapper = (v) =>
@@ -167,9 +169,10 @@ export function renderAlertes(etat = ALERTES_VIDE) {
     <p class="champ__aide" id="alerte-gabarit-aide">La plupart des services
     veulent le message à leur forme — Discord attend <code>{"content": …}</code>,
     Slack <code>{"text": …}</code>. Remplacez <code>{champ}</code> par la valeur
-    de l’alerte. Champs disponibles : <code>forge</code>, <code>ts</code>,
-    <code>action</code>, <code>actor</code>, <code>target_type</code>,
-    <code>target_id</code>, <code>result</code>, <code>message</code>.
+    de l’alerte. Champs disponibles : <code>version</code>, <code>ts</code>,
+    <code>forge</code>, <code>action</code>, <code>actor</code>,
+    <code>actor_class</code>, <code>target_type</code>, <code>target_id</code>,
+    <code>result</code>, <code>message</code>.
     <strong>Un champ inconnu est refusé ici</strong>, et non le jour de
     l’incident. Vide, le message part en JSON structuré.</p>
   </div>

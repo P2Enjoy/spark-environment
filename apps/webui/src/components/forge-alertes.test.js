@@ -6,6 +6,7 @@
  *           gabarit), §47.3.3 (le mot de passe à chaque écriture),
  *           §14.6 (les états se distinguent), §43.3 (un secret ne s'affiche
  *           pas) · docs/DESIGN_SYSTEM.md §6.13, §1.5 bis
+ * @verifies docs/BACKLOG.md#SPK-147 · docs/DAT.md §47.3.1 (les dix champs offerts)
  * @verifies docs/BACKLOG.md#SPK-140 · docs/DAT.md §47.3.0 bis (un refus garde
  *           la saisie, sauf le mot de passe) · docs/DESIGN_SYSTEM.md §6.11, §7.1
  */
@@ -201,4 +202,16 @@ test('la saisie retenue au refus ne garde ni le mot de passe, ni rien d’autre'
     url: 'https://hooks.exemple.test/abc', template: '{"content": "{inconnu}"}', enabled: false });
   donnees.set('webhook_enabled', 'on');
   assert.equal(saisieAlertes(donnees).enabled, true);
+});
+
+
+// --- SPK-147 · §47.3.1 : l'aide nomme les DIX champs que la Forge accepte ------
+
+test('l’aide du gabarit nomme les dix champs, ni plus ni moins', () => {
+  const html = pret(CONFIG({ enabled: true, configured: true }), {});
+  const aide = html.slice(html.indexOf('id="alerte-gabarit-aide"'));
+  const nommes = [...aide.slice(0, aide.indexOf('</p>')).matchAll(/<code>([a-z_]+)<\/code>/g)]
+    .map((m) => m[1]).filter((n) => !['champ'].includes(n));
+  assert.deepEqual(nommes, ['version', 'ts', 'forge', 'action', 'actor', 'actor_class',
+                            'target_type', 'target_id', 'result', 'message']);
 });

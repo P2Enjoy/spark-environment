@@ -13681,3 +13681,15 @@ est servi par ce Spark » à côté d'un sous-domaine — la phrase même qui fa
 croire que la racine est visée —, et l'aide du champ coupée entre « et son
 contenu. Campagne complète 148 sur 151 ; rejouée sur l'arbre committé, 145 sur
 149 avec les trois mêmes rouges et un quatrième : étrangers à l'unité.
+
+## 2026-10-06 · Le code de SPK-144 est parti dans un commit de spécification
+
+En committant la spécification de SPK-147 (`e7a5002`), un `git add -A` a
+embarqué le code de SPK-144 — `valeursDesQuotas`, `corpsDesQuotas`, leur
+branchement et leurs preuves —, encore non commité. Le commit est poussé ;
+l'historique n'est pas réécrit sans instruction du responsable. La trace de
+SPK-144 renvoie donc à `e7a5002` pour son code.
+
+Une autre session travaille dans le même dépôt (SPK-149, commits `6c674b7`,
+`b769b8c`). Les commits de celle-ci nomment désormais leurs fichiers un par un :
+un `git add -A` pourrait embarquer le travail en cours de l'autre.

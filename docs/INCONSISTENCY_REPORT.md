@@ -17,19 +17,6 @@ code ne touche ni la Forge ni la navigation.
 pile factice, qui ne valide plus rien (DAT §28.7). Il est absorbé par SPK-138 et
 rejoué contre la VM ; l'entrée sort du rapport à ce moment.
 
-## 2026-10-01 · L'aide du gabarit d'alerte nomme huit champs, la Forge en accepte dix
-
-**Constaté** en observant la capture `spk140-vm-refus-garde-la-saisie`, prise
-dans la console branchée sur la VM du banc : le refus de la `sparkd` dit
-« Champs disponibles : version, ts, forge, action, actor, actor_class,
-target_type, target_id, result, message », quand l'aide du champ, sous le
-gabarit, n'en nomme que huit — `version` et `actor_class` y manquent
-(`apps/webui/src/components/forge-alertes.js`). Le manuel M11 en nomme huit lui
-aussi.
-
-**Arbitré le 2026-10-03** : corriger — SPK-147 — l'aide et M11 nomment les dix champs. L'entrée sort du rapport quand
-la correction est livrée.
-
 ## 2026-10-01 · Le panneau « Installer cette Forge » montre des accents graves bruts, sur une Forge installée
 
 **Constaté** sur la capture `spk135-vm-forge-virtio` : en bas de l'onglet

@@ -8645,7 +8645,7 @@ dépasse est freinée jusqu'au blocage — ce n'est pas un débordement.
 - Portée : la création refuse `soft` en le nommant ; ce que deviennent les
   Sparks existants qui le porteraient se relève d'abord au registre.
 
-### [ ] SPK-147 · L'aide du gabarit d'alerte et le manuel nomment les dix champs
+### [~] SPK-147 · L'aide du gabarit d'alerte et le manuel nomment les dix champs
 
 **Constaté le 2026-10-01** (capture `spk140-vm-refus-garde-la-saisie`),
 **arbitré le 2026-10-03** : « l'aide et M11 nomment les 10 ». La Forge accepte
@@ -8657,6 +8657,9 @@ n'en nommaient que huit.
 - Portée : l'écran et le manuel disent les dix ; la Forge ne change pas. En
   écrivant la spécification, un paragraphe périmé du §47.3.1 — « ce n'est pas
   encore le registre » — est remplacé : SPK-62 l'a rendu faux.
+- **Codé le 2026-10-06** : l'aide et M11 nomment les dix ; preuve de composant
+  rouge sur l'aide d'avant (huit champs), verte après. **Reste `[~]`** : la voir
+  dans la console branchée sur la VM.
 
 ### [ ] SPK-148 · Le panneau « Installer cette Forge » n'apparaît que sur une destination sans `sparkd`
 
