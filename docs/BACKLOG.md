@@ -8875,6 +8875,10 @@ un plafond n'efface pas la réservation) : « oui, le spécifier ».
   plafond prend effet, **mesurer** sur la VM si l'écrire en direct dans le
   cgroup d'une cellule du produit — dans la tranche `spark.slice` — l'applique
   sans redémarrer.
+- **Mesuré le 2026-10-06** (`docs/EXPLORATION_QUOTAS.md` §1 bis) : l'écriture
+  directe s'applique aussitôt, mais Incus la remet à `max` dès qu'il repose une
+  réservation à chaud ; `raw.lxc` tient après un redémarrage, dans la tranche.
+  Le choix revient au responsable.
 
 ### [~] SPK-153 · La recette « site-web » ne pose le « www » que sur demande
 

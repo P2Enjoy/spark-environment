@@ -62,6 +62,29 @@ sur des cœurs différents, aucune contention : rejouée.
 - le coût d'un `raw.lxc` : une clé brute, qu'Incus transmet sans la valider, et
   qu'un projet Incus restreint peut interdire.
 
+### 1 bis. Le plafond À CHAUD, sur une cellule du produit — mesuré le 2026-10-06 (SPK-152)
+
+Le Spark « temoin » du banc — une cellule du **produit**, rangée par son
+`raw.lxc` dans `spark.slice` (§32.1), mode partagé —, deux boucles occupées
+(`e2e/forge-vm/epreuves/mesures-cpu-plafond-a-chaud.mjs`) :
+
+| Étape | `cpu.weight` | `cpu.max` | Sous charge |
+|---|---|---|---|
+| départ, sans plafond | 120 | `max` | 1,92 CPU |
+| `cpu.max` ← `50000 100000`, **écrit en direct** | 120 | `50000 100000` | **0,50 CPU** — sans redémarrer |
+| puis `limits.cpu.allowance=40%` posé **à chaud par Incus** | 35 | **`max`** | **2,00 CPU** — le plafond est **effacé** |
+| `raw.lxc` = les lignes de la tranche + `lxc.cgroup2.cpu.max`, redémarrage | 35 | `50000 100000` | **0,50 CPU** — tient dans la tranche |
+
+**Ce qui est établi** :
+
+- écrire `cpu.max` en direct applique un plafond **aussitôt** ;
+- mais **Incus le réécrit** dès qu'il repose une allocation CPU à chaud — un
+  redimensionnement ordinaire de la réservation remet `cpu.max` à `max`. Un
+  plafond posé en direct ne survit donc qu'à la condition d'être **reposé après
+  chaque geste d'Incus** sur le CPU de la cellule ;
+- par `raw.lxc`, ajouté aux deux lignes de la tranche, le plafond tient après un
+  redémarrage, **dans** `spark.slice`.
+
 ## 2. Mémoire
 
 | Réglage | `memory.low` | `memory.high` | `memory.max` | 700 Mio demandés |

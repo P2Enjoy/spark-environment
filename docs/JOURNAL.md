@@ -13937,3 +13937,13 @@ Coût assumé : une VM à monter (≈ 3 min 30) avant toute campagne.
 - **SPK-138** : la proposition par phases est **validée** ; la spécification
   s'écrit au DAT §28, et la phase 1 commence — `make runDev` sur la VM du banc.
 - **OP-37** (SPK-151 en production) : la jouer maintenant.
+
+## 2026-10-06 · SPK-152 : le plafond CPU à chaud, mesuré sur une cellule du produit
+
+Sur le Spark « temoin » du banc, dans `spark.slice` : écrire `cpu.max` en
+direct plafonne aussitôt (1,92 → 0,50 CPU) ; mais une réservation reposée à
+chaud par Incus (`limits.cpu.allowance`) remet `cpu.max` à `max` — le plafond
+s'efface (2,00 CPU). Par `raw.lxc` ajouté aux lignes de la tranche, le plafond
+tient après un redémarrage (0,50 CPU). Un plafond « à chaud » demanderait donc
+au produit de le reposer après chaque geste d'Incus sur le CPU. Choix soumis au
+responsable.
