@@ -8769,6 +8769,52 @@ expliquer, corriger.
     d'incohérences.
   - **Reste `[~]`** : la vérification sur VM, à arbitrer (ci-dessus).
 
+### [ ] SPK-150 · Le dossier pour un agent impose la configuration par la cellule et les trois notes
+
+**Signalé le 2026-10-06** par le responsable : la plupart des agents qui
+déploient à partir du texte pour le LLM poussent un fichier `.env` ou écrivent
+les variables dans l'`ENV` du `Dockerfile`, au lieu des environnements posés ;
+la grande majorité n'écrivent pas `README.md.?`, `CONTRIBUTORS.md.?` ni
+`INSTALL.md.?`. **Arbitré le même jour** : ils DOIVENT utiliser les
+environnements posés, et enregistrer les trois notes.
+
+- Spécification : `docs/DAT.md` **§44.11** (les trois règles, la section 0, la
+  liste finale, le briefing de la cellule) · §44.5 (le piège de la
+  redéclaration) · §44.6 (révisé : faits ET conditions) · §44.9.3, §44.9.7
+  (révisés) · §54.7 (révisé) · manuel M8 (« Donner à un agent de quoi préparer
+  le déploiement »).
+- Dépend de : SPK-85, SPK-99, SPK-104, SPK-105, SPK-107.
+- Constat, sur un dossier rendu le 2026-10-06 : il s'annonçait comme un texte
+  de faits seulement ; la section 6 exigeait les deux `env_file:` sans
+  interdire les autres voies ; une note vide s'achevait sur une invitation ;
+  rien ne disait ce que l'agent rend. **Mesuré** sur Compose 5.5.1 : un nom
+  injecté redéclaré sous `environment:` — `- NOM` comme `- NOM=${NOM}` — arrive
+  VIDE dans le conteneur.
+- Portée :
+  - une section **0** ouvre le dossier : la configuration vient de la cellule
+    seule, avec les cinq voies interdites ; les trois notes font partie du
+    travail rendu, avec la commande qui écrit un `.?` depuis le poste ; le
+    compte rendu en cinq rubriques, et ce qu'il porte sans accès à la cellule ;
+  - la phrase d'ouverture « il énonce des faits » est retirée ; une note vide
+    renvoie à la règle 2 ; la section 6 nomme le piège de la redéclaration ;
+  - le dossier se termine par « Avant de dire que c'est fini », en cases à
+    cocher ;
+  - le briefing de la cellule ouvre sur les mêmes règles, par la même fonction,
+    avec la commande locale ;
+  - un piège de plus au §44.5, donc au modèle JSON ;
+  - une cellule sans Docker reçoit la règle 1 dans ses mots ;
+  - l'annonce de la section *Dossier pour un agent* le nomme ; le manuel M8 dit
+    ce que l'agent rend.
+- Preuves attendues : unitaires et API (`test_briefing.py`) — ordre des
+  sections, voies interdites, commandes citées entre apostrophes, absence de
+  commande sans accès, cellule sans Docker, briefing de la cellule, aucune
+  valeur divulguée ; parcours E2E « copier le dossier » qui relit la section 0
+  dans le presse-papier ; captures `spk150-*` au format bureau et étroit ;
+  illustration `m8-dossier` reproduite.
+- **Hors de cette unité** : vérifier que les agents obéissent. Le produit ne
+  voit pas le dépôt de l'agent ; la preuve est le texte, et l'observation de
+  déploiements réels par le responsable.
+
 ### [ ] SPK-151 · L'onglet Alertes montre le message tel qu'il partirait, avant d'enregistrer
 
 **Constaté le 2026-10-03** (rapport d'incohérences) : le DAT §47.3.1 promet que

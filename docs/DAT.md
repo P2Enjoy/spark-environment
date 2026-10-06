@@ -11074,15 +11074,22 @@ minimum, mesurés au §41 et au §43.0 :
   ne peut pas faire.
 - `nproc` et `free` rapportent la machine, pas la cellule. Les chiffres qui font
   foi sont ceux du briefing.
+- **Un nom injecté, redéclaré sous `environment:`, y devient vide** (SPK-150,
+  mesuré au §44.11.1). `environment:` l'emporte sur `env_file:` : `- NOM` comme
+  `- NOM=${NOM}` remplacent la valeur posée par une valeur vide.
 
-### 44.6 Un briefing est une donnée, pas une consigne
+### 44.6 Un briefing énonce des faits et des conditions, jamais une autorisation
 
-Il s'adresse à un agent, donc il sera lu par quelque chose qui exécute ce qu'il
-lit. Deux règles en découlent, et elles sont du produit, pas de l'agent :
+**Révisé le 2026-10-06 (SPK-150, §44.11).** Il s'adresse à un agent, donc il sera
+lu par quelque chose qui exécute ce qu'il lit. Deux règles en découlent, et elles
+sont du produit, pas de l'agent :
 
-- le briefing **énonce des faits** et ne donne pas d'ordre. Il décrit la cellule,
-  ses limites et les commandes qui répondent à une question ; il ne dit jamais
-  quoi déployer.
+- le briefing **énonce des faits**, et les **conditions** que le produit pose à
+  tout déploiement dans un Spark : par où sa configuration entre, et ce que
+  l'agent laisse derrière lui (§44.11). Il décrit la cellule, ses limites et les
+  commandes qui répondent à une question ; il ne dit jamais **quoi** déployer.
+  La première rédaction n'énonçait que des faits : la mesure du §44.11.1 a montré
+  qu'un agent lit un fait comme du contexte, et que ses habitudes l'emportent.
 - il **dit qui l'a écrit** et jusqu'où va cette garantie : le plan de contrôle
   produit ce fichier, mais le locataire est `root` dans sa cellule et peut le
   réécrire. Un agent ne doit donc pas s'en servir pour décider de ce qu'il a le
@@ -11122,7 +11129,7 @@ Le modèle porte, sans valeurs d'environnement :
   du relevé : ce n'est pas une affirmation sur ce que la cellule est
   aujourd'hui, c'est ce qu'elle disait d'elle-même ce jour-là ;
 - les chemins `/etc/spark/env` et `/run/spark/secrets`, l'état du dernier
-  amorçage, et les cinq pièges du §44.5 ;
+  amorçage, et les pièges du §44.5 et du §44.10 ;
 - l'avertissement du §44.6 : fichier produit par le plan de contrôle mais
   modifiable par `root` dans la cellule, donc jamais preuve d'autorisation.
 
@@ -11235,8 +11242,9 @@ que le trajet du texte est différent :
   cellule. Le dossier d'un Spark ne renseigne pas sur ses voisins.
 
 Le §44.6 s'applique aussi, et le dossier le porte en toutes lettres : il énonce
-des faits, il ne donne pas d'ordre, et il ne prouve **aucune** autorisation. Un
-agent qui le lit ne doit pas en déduire ce qu'il a le droit de faire ; les
+des faits et les conditions du §44.11, et il ne prouve **aucune** autorisation.
+Une condition qu'il pose limite ce que l'agent fait ; elle ne lui accorde rien.
+Un agent qui le lit ne doit pas en déduire ce qu'il a le droit de faire ; les
 autorisations se jouent côté Forge, où le locataire n'atteint rien (§35.1).
 
 #### 44.9.4 La surface d'API
@@ -11315,9 +11323,11 @@ l'intérieur » (§44.9.2).
 **Décision : le dossier nomme la seule voie, et donne la FORME que la console
 accepte.** L'agent qui prépare le déploiement est précisément celui qui connaît
 les noms et les valeurs dont sa pile a besoin ; le propriétaire est le seul qui
-puisse les écrire. Le dossier demande donc à l'agent de **rendre un bloc au
-format `.env`**, et dit où le propriétaire le colle : fenêtre du Spark →
-*Environnement* → **Importer un lot**.
+puisse les écrire. Le dossier demande donc à l'agent de les **proposer** dans
+`/etc/spark/env.?` ou `/run/spark/secrets.?` (§55, SPK-105) — et, **s'il ne peut
+pas entrer dans la cellule**, de **rendre un bloc au format `.env`** dans son
+compte rendu (§44.11.2, règle 3), que le propriétaire colle dans la fenêtre du
+Spark → *Environnement* → **Importer un lot**.
 
 Ce que le dossier en dit, et rien de plus :
 
@@ -11337,12 +11347,14 @@ Ce que le dossier en dit, et rien de plus :
   à l'import ni à un simple redémarrage (§43.7, révisé par SPK-132) —
   `docker compose up -d`, ou le geste *Recréer* de la console.
 
-**C'est une voie, pas un ordre** (§44.6). Le dossier dit par où passe l'écriture
-et sous quelle forme elle est acceptée ; il ne demande à personne de l'accorder,
-et rien dans la cellule ne la rend possible. Le bloc que l'agent rend est **le
-sien** : il ne vient pas du registre, et le §44.9.3 n'est pas entamé — aucune
-valeur détenue par le plan de contrôle n'entre dans ce texte, dans un sens comme
-dans l'autre.
+**Pour l'agent, c'est la seule voie ; pour le propriétaire, ce n'est pas un
+ordre** (§44.6, révisé). Depuis SPK-150, le dossier **interdit** à l'agent toute
+autre voie — un `.env`, un `ENV` de `Dockerfile`, une valeur sous `environment:`
+(§44.11.2, règle 1). Il ne demande toujours à personne d'**accorder** la
+variable, et rien dans la cellule ne la rend possible. Le bloc que l'agent rend
+est **le sien** : il ne vient pas du registre, et le §44.9.3 n'est pas entamé —
+aucune valeur détenue par le plan de contrôle n'entre dans ce texte, dans un
+sens comme dans l'autre.
 
 
 ### 44.10 Ce que le briefing devient quand la cellule a deux comptes (SPK-94, SPK-95)
@@ -11374,6 +11386,154 @@ fichiers du **locataire** — le produit ne peut pas le corriger à sa place, et
 `chown` d'office sur `/srv` serait exactement l'ingérence que le §42.4 refuse. Il
 le **nomme**, ce qui est tout ce qu'un briefing peut faire, et c'est déjà ce qui
 évite l'aller-retour.
+
+### 44.11 Ce que le déploiement doit respecter, et ce que l'agent doit rendre (SPK-150)
+
+**Arbitrage du responsable, 2026-10-06** : « la plupart des agents qui déploient
+dans un Spark à partir du texte pour le LLM ne comprennent pas qu'ils DOIVENT
+utiliser les environnements posés — certains poussent un fichier `.env`,
+d'autres écrivent les variables dans la section `ENV` du `Dockerfile` —, et la
+grande majorité oublient ou évitent d'enregistrer les propositions
+`README.md.?`, `CONTRIBUTORS.md.?` et `INSTALL.md.?` ».
+
+#### 44.11.1 Ce que le texte disait, et pourquoi il était ignoré
+
+Relu sur un dossier rendu le 2026-10-06 — environ deux mille mots, neuf
+sections :
+
+- **il s'annonçait comme une description** : « il énonce des faits […] il ne
+  décrit pas l'application à déployer ». Un modèle lit un fait comme du
+  contexte, et ses habitudes l'emportent — un `.env` à côté du
+  `docker-compose.yml`, un `ENV` dans le `Dockerfile` ;
+- **la section 6 exigeait les deux `env_file:` sans dire qu'ils sont la SEULE
+  source** de configuration. Rien n'interdisait les autres ;
+- **une note vide s'achevait sur une invitation** — « vous êtes bien placé pour
+  l'écrire » —, en section 2, quand le moyen de l'écrire était en section 7.
+  Rien ne faisait des notes une partie du travail rendu ;
+- **rien ne disait à l'agent ce qu'il devait rendre**, ni à quoi il saurait
+  qu'il avait fini.
+
+Et un piège de Compose pousse précisément vers le `.env`. **Mesuré le
+2026-10-06**, Compose 5.5.1, un `env_file:` qui porte `DATABASE_URL`, dans un
+conteneur réel :
+
+| Sous `environment:` | Ce que le conteneur reçoit |
+|---|---|
+| rien | la valeur de l'`env_file:` |
+| `- DATABASE_URL` | `DATABASE_URL=` — vide |
+| `- DATABASE_URL=${DATABASE_URL}` | `DATABASE_URL=` — vide, avec un avertissement de Compose |
+
+`environment:` l'emporte sur `env_file:`, et `${NOM}` se résout dans le shell ou
+dans un `.env` du répertoire du projet — jamais dans l'`env_file:`. L'agent qui
+redéclare un nom voit sa variable vide, et la « répare » en créant le `.env` qui
+fait résoudre `${NOM}` : la valeur quitte alors la cellule pour un fichier que le
+plan de contrôle ne connaît pas.
+
+#### 44.11.2 Décision : trois règles, en tête du dossier
+
+Le §44.6 est révisé : le dossier énonce les faits de la cellule **et les
+conditions** que le produit pose à tout déploiement dans un Spark. Elles ne
+choisissent pas l'application — le §44.7 tient —, elles disent par où sa
+configuration entre et ce qu'on laisse derrière soi. Elles sont écrites **à
+l'impératif**, dans une section **0** qui ouvre le dossier, juste après son titre
+et sa date, avant la cellule elle-même. La phrase d'ouverture qui annonçait un
+texte de faits seulement est retirée.
+
+1. **La configuration vient de la cellule, et d'elle seule.** Toute valeur
+   propre à ce déploiement — adresse, domaine, identifiant, mot de passe, clé,
+   jeton, URL — se lit dans `/etc/spark/env` et `/run/spark/secrets`, par les
+   deux `env_file:` de la section 6. Sont **interdits** :
+   - un fichier `.env` créé, copié ou poussé dans la cellule, ou versionné avec
+     des valeurs ;
+   - une ligne `ENV` ou `ARG` du `Dockerfile` qui porte une valeur de
+     configuration ;
+   - une valeur de configuration écrite sous `environment:` ;
+   - un nom injecté redéclaré sous `environment:` — il y devient vide
+     (§44.11.1) ;
+   - un `--env-file` qui vise un autre fichier.
+
+   Une **constante** identique dans tout déploiement — `PYTHONUNBUFFERED=1`,
+   `NODE_ENV=production` — n'est pas une valeur de configuration, et peut rester
+   dans l'image. Une variable qui manque **se propose** : `/etc/spark/env.?`, ou
+   `/run/spark/secrets.?` pour un secret, valeur laissée vide si on l'ignore,
+   étiquette juste au-dessus (§55.3.3). **Un `.env.example` du dépôt est la
+   liste à proposer** : chaque variable, avec son commentaire pour étiquette.
+
+   Sur une cellule **sans Docker** (§42.13), la règle est la même et ses mots
+   changent : le service lit ces deux fichiers — par `EnvironmentFile=` d'une
+   unité systemd, par exemple —, et aucune valeur n'est écrite dans le code,
+   dans l'unité ni dans un `.env`.
+
+2. **Les trois notes font partie du travail rendu.** Avant de dire qu'il a
+   fini, l'agent écrit `README.md.?`, `CONTRIBUTORS.md.?` et `INSTALL.md.?` dans
+   `/etc/spark/notes/`, chacune selon sa destination (§54.2), que la règle
+   rappelle en une ligne. Une proposition de note **remplace le texte en
+   entier** (§55.3) : une note **déjà écrite** — recopiée en section 2 — se
+   repropose en partant de son texte si le travail change ce qu'elle dit ;
+   sinon, le compte rendu dit qu'elle reste juste. Un Spark qui n'expose rien à
+   un tiers **l'écrit** dans `INSTALL.md.?` plutôt que de laisser la note vide.
+
+   Quand le dossier connaît l'accès (§44.9.2), il donne **la commande qui écrit
+   un fichier `.?` depuis le poste** :
+
+   ```sh
+   ssh -J <rebond> root@<adresse> "cat > '/etc/spark/notes/README.md.?'" <<'EOF'
+   …le texte entier de la note…
+   EOF
+   ```
+
+   Le nom est **entre apostrophes** parce que `?` est un caractère de motif du
+   shell. Pour une variable, `cat >>` : on **ajoute** à ce qui attend déjà, on
+   n'écrase pas la proposition d'un autre. `root` écrit toujours ces fichiers ;
+   le compte `spark-docker` aussi, en rootless (§55.6).
+
+3. **Le compte rendu final porte cinq rubriques.** La réponse de l'agent à qui
+   lui a remis le dossier nomme : les **variables** proposées, les **secrets**
+   proposés — par leur nom, jamais leur valeur —, les **routes** proposées, les
+   **trois notes** et leur sort, et **une phrase** qui confirme qu'aucun `.env`,
+   aucun `ENV` de configuration et aucune valeur sous `environment:` n'a été
+   introduit. **Sans accès à la cellule** — aucune clé accordée, ou aucune
+   commande d'entrée composable —, le bloc `.env` et le texte entier des trois
+   notes vont **dans ce compte rendu**, pour que le propriétaire les colle :
+   *Environnement → Importer un lot*, et l'onglet *Notes*.
+
+Le dossier **se termine** par les mêmes règles en cases à cocher, sous « Avant de
+dire que c'est fini ». Ce n'est pas la répétition que le §55.7 refuse : la
+section 0 pose la règle, la dernière la fait vérifier, et un texte de deux mille
+mots se relit par ses deux bouts.
+
+Le piège de la redéclaration rejoint le §44.5 — donc le modèle JSON et le
+briefing —, et la section 6 le dit à côté du fragment `env_file:` qu'il défait.
+Une note vide, en section 2, ne s'achève plus sur une invitation : elle renvoie
+à la règle 2.
+
+#### 44.11.3 Le briefing de la cellule porte les mêmes règles
+
+L'agent qui entre dans la cellule lit `BRIEFING.md` (§44.1), souvent sans avoir
+vu le dossier. Le briefing **ouvre** donc sur les mêmes trois règles, écrites par
+la **même fonction** — deux rédactions finiraient par se contredire (§44.8). Seule
+la commande change : dans la cellule, `cat > '/etc/spark/notes/README.md.?'`,
+sans rebond. Le briefing ne porte pas la liste finale : il est relu à chaque
+entrée, pas d'un bout à l'autre.
+
+#### 44.11.4 Ce qui ne change pas
+
+- **Le §44.7** : le produit ne décrit toujours pas l'application, ne choisit
+  aucune image et ne prescrit aucun nom de variable. Les noms cités sont des
+  exemples de forme.
+- **Le §44.3 et le §44.9.3** : aucune valeur de secret, aucune valeur
+  d'environnement, dans aucune présentation.
+- **Le §44.6, seconde moitié** : le texte ne prouve **aucune** autorisation. Une
+  condition qu'il pose limite ce que l'agent fait ; elle ne lui accorde rien.
+- **Le §55** : rien ne s'applique sans le propriétaire. Une note proposée reste
+  une proposition ; une note vide reste un état normal **du produit** — c'est
+  l'agent qui déploie qui doit ne pas en laisser.
+- **Les en-têtes des fichiers `.?`** (§54.7, §55.7) : ils décrivent le fichier,
+  pour quiconque l'ouvre ; la règle est portée par le dossier et le briefing,
+  qui s'adressent à l'agent qui déploie.
+- **La console** : aucun geste ne change. L'annonce de la section *Dossier pour
+  un agent* nomme ce que le texte exige désormais, et le manuel M8 dit ce que
+  l'agent rend.
 
 
 ## 45. Modèle de menace des actions sensibles (SPK-35)
@@ -13456,9 +13616,13 @@ demande à l'agent de relire la destination de chaque fichier et de ranger ce
 qu'il a à dire dans celui qui lui correspond — et de ne pas inventer un quatrième
 sujet dans un fichier qui en porte déjà un autre.
 
-Ces textes **énoncent et ne prescrivent pas** (§44.6). Ils disent où écrire, ce
-qu'on attend là et ce qui arrive ensuite ; ils ne demandent à personne d'écrire
-quoi que ce soit, et une note vide est un état parfaitement normal.
+**Les en-têtes énoncent et ne prescrivent pas.** Ils disent où écrire, ce qu'on
+attend là et ce qui arrive ensuite, à quiconque ouvre le fichier ; une note vide
+est un état parfaitement normal **du produit**. **Révisé le 2026-10-06
+(SPK-150)** : le dossier et le briefing, eux, s'adressent à l'agent qui
+**déploie**, et lui imposent d'écrire les trois propositions avant de dire qu'il
+a fini (§44.11.2, règle 2). La première rédaction ne le demandait à personne : la
+grande majorité des agents ne les écrivaient pas.
 
 ### 54.8 Permissions dans la cellule
 

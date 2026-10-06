@@ -13720,3 +13720,65 @@ Deux autres sessions travaillent dans le même arbre de travail
 (`spark-environment-8f`, `spark-environment-fd`, dont SPK-150 au DAT §44).
 Elles ont été prévenues des numéros et des sections que cette session prend ;
 chaque commit nomme ses fichiers, et le DAT n'est indexé que hunk par hunk.
+
+## 2026-10-06 · SPK-150 : les agents lisent le dossier comme un décor
+
+**Problème**, signalé par le responsable : la plupart des agents qui déploient à
+partir du texte pour le LLM ne se servent pas des environnements posés — les uns
+poussent un fichier `.env`, les autres écrivent les variables dans l'`ENV` du
+`Dockerfile` —, et la grande majorité n'écrivent pas `README.md.?`,
+`CONTRIBUTORS.md.?` ni `INSTALL.md.?`.
+
+**Hypothèse** : le texte ne le leur demande pas. Ce n'est pas une hypothèse sur
+les agents, c'est une lecture du texte, vérifiable.
+
+**Observations**, sur un dossier rendu par le harnais de `test_briefing.py` —
+environ deux mille mots, neuf sections :
+
+- il s'ouvre en se disant **description** : « il énonce des faits […] il ne
+  décrit pas l'application à déployer ». C'est le §44.6 d'origine, appliqué à la
+  lettre ;
+- la section 6 exige les deux `env_file:`, **sans dire qu'ils sont la seule
+  voie** ; rien n'interdit un `.env`, un `ENV`, une valeur sous `environment:` ;
+- une note vide s'achève sur « vous êtes bien placé pour l'écrire », en section
+  2, quand la manière de l'écrire est en section 7. Le §54.7 l'avait voulu
+  ainsi : « ils ne demandent à personne d'écrire quoi que ce soit » ;
+- rien ne dit ce que l'agent rend, ni quand il a fini.
+
+**Mesure** (Compose 5.5.1, conteneur `busybox` réel, `env_file:` portant
+`DATABASE_URL`) : sous `environment:`, `- DATABASE_URL` et
+`- DATABASE_URL=${DATABASE_URL}` donnent tous deux `DATABASE_URL=` **vide** dans
+le conteneur ; le second avec l'avertissement « variable is not set ». C'est le
+chemin naturel vers le `.env` : l'agent redéclare, voit vide, et crée le fichier
+qui fait résoudre `${…}`. L'image de test a été retirée après la mesure.
+
+**Solutions envisagées** :
+
+- *allonger encore le texte* — écarté : le défaut n'est pas un fait manquant,
+  c'est un statut. Deux mille mots de faits de plus seraient lus comme les
+  premiers ;
+- *détecter un `.env` dans la cellule* — écarté : le produit ne lit pas la pile
+  du locataire (§1, §42.4), et le `.env` le plus fréquent vit dans le dépôt de
+  l'agent, hors de portée ;
+- **des règles impératives, en tête, et une liste de fin** — retenu. La
+  section 0 dit ce qui est interdit et ce qui est dû, avec la commande qui
+  écrit un `.?` ; la dernière section le fait cocher ; le compte rendu final a
+  cinq rubriques, et porte le texte des notes quand l'agent n'a pas d'accès.
+
+**Décision** (DAT §44.11) : le §44.6 est révisé — le texte énonce des faits **et
+les conditions** du déploiement, toujours sans prouver aucune autorisation ni
+choisir l'application. Le §54.7 est révisé dans le même sens pour le dossier et
+le briefing ; les en-têtes des `.?` restent descriptifs. Le briefing de la
+cellule ouvre sur les mêmes règles, écrites par la même fonction.
+
+**Conséquences** : la phrase d'ouverture du dossier change, et l'illustration
+`m8-dossier` avec elle ; un piège de plus au modèle JSON ; l'annonce de la
+console nomme ce que le texte exige.
+
+**Ce qui ne se prouvera pas ici** : que les agents obéissent. Le produit ne voit
+pas leur dépôt ; la preuve livrable est le texte. L'effet se lira sur les
+déploiements que le responsable observera.
+
+Une autre session (`spark-environment-e3`) prend SPK-151, SPK-152 et SPK-138, et
+les DAT §7, §28, §47 et §49 ; celle-ci tient SPK-150 et le DAT §44. Chaque
+commit nomme ses fichiers et n'indexe que ses propres hunks.
