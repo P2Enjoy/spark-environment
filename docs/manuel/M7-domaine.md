@@ -279,11 +279,32 @@ seul suffit à faire classer tout le courrier en indésirable**.
 
 Le bouton **Appliquer une recette DNS** pose ces jeux d'un geste.
 
+### Le nom : dans la zone que vous avez choisie
+
+Choisissez d'abord la **zone** ; le champ **Sous-domaine** ne porte ensuite que
+le début du nom, et la zone s'affiche à côté de lui. Laissé vide, c'est le
+domaine lui-même. `boutique` vise `boutique.<zone>`, et un point sépare
+plusieurs niveaux : `mcp.api` vise `mcp.api.<zone>`. Si vous tapez le nom
+complet par habitude, zone comprise, il est pris tel quel.
+
+Chaque niveau du nom porte de 1 à 63 lettres, chiffres ou tirets, sans tiret au
+début ni à la fin. Un nom mal formé — deux points de suite, un niveau vide, un
+caractère accentué — est refusé dans l'aperçu, avant que rien ne parte, avec la
+règle en toutes lettres.
+
 ### Ce que la fenêtre vous montre avant d'écrire
 
 La recette **entière**, ligne par ligne, avec pour chacune ce qu'elle fait et ce
 qu'elle deviendra : *sera posé*, *remplacera telle valeur*, ou *déjà à cette
 valeur*. Rien n'est écrit tant que vous n'avez pas engagé.
+
+**Ce qui est écrit est ce que l'aperçu montre.** L'aperçu suit votre saisie
+quand vous quittez un champ. Si vous cliquez **Écrire la recette** juste après
+avoir tapé, avant qu'il ait suivi, la fenêtre écrit *« Rien n'a été écrit »*,
+relit l'aperçu, et laisse le curseur sur le bouton : vérifiez les lignes, puis
+écrivez. Sans cette règle, une recette pouvait déclarer les routes du nom
+qu'affichait l'ancien aperçu — le domaine nu — et écrire le DNS du nom que vous
+veniez de taper.
 
 Elle vous montre aussi **ce que la recette ne peut pas faire** — les choses qui
 ne vivent pas dans la zone et qu'aucun enregistrement ne réglera.

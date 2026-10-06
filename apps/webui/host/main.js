@@ -174,7 +174,7 @@ export function createConsoleHost(options = {}) {
   }
 
   /**
-   * Adresse publique de la Forge courante (§38.6.5).
+   * Adresse publique de la Forge courante (§38.6.6).
    *
    * La console la connaît par son inventaire. La faire ressaisir dans chaque
    * recette serait demander ce qu'on sait déjà — et une recette existe pour

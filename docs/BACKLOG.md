@@ -8670,7 +8670,7 @@ compris.
   tunnel ; le nom s'écrit en `<code>` ; preuve de composant rouge avant ;
   vérification par la console sur la VM.
 
-### [ ] SPK-149 · Une recette DNS écrit ce que son aperçu a montré, et accepte un sous-domaine à plusieurs niveaux
+### [~] SPK-149 · Une recette DNS écrit ce que son aperçu a montré, et accepte un sous-domaine à plusieurs niveaux
 
 **Signalé le 2026-10-06** par le responsable : une recette appliquée à
 `evoliz-mcp.<zone>` « enregistre la racine et ignore le sous-domaine » ;
@@ -8700,6 +8700,30 @@ expliquer, corriger.
 - **Hors de cette unité** : `site-web` pose aussi le `www` du nom choisi, y
   compris sous un sous-domaine (`www.evoliz-mcp`) — c'est sa définition
   (§38.6.4), inchangée.
+- **Corrigé le 2026-10-06, non vérifié sur VM.** La garde de l'écriture compare
+  l'aperçu lu à la saisie courante (`cleApercuRecette`, `apercuAJour`) ; refusée,
+  l'écriture relit l'aperçu et rend le focus au bouton (SPK-DS-38) ; la saisie
+  est figée au moment où l'écriture part. `dansLaZone` compose plusieurs niveaux
+  et valide chacun. Vu en capture et corrigé dans le même changement : le rôle
+  « Le domaine nu est servi par ce Spark » s'affichait à côté d'un sous-domaine,
+  et l'aide du champ se coupait entre « et son contenu.
+  - Preuves unitaires rouges sur le code d'avant, vertes après : composition
+    (multi-niveaux, niveaux invalides, rôles, aide), garde de l'écran (aperçu
+    d'une autre saisie, relecture en cours, recette sans route), route
+    `/api/dns/recipe` (deux niveaux écrits, niveau vide refusé sans appel au
+    fournisseur). Suite de la console 1 592 sur 1 592.
+  - Parcours E2E au clavier contre le doublon DNS : le nouveau parcours
+    « tapé puis écrit aussitôt » **rouge sur le code d'avant** (« route
+    exemple.test déclarée ») et vert après ; « deux niveaux » vert ; les trois
+    parcours qui s'arrêtaient sur l'aperçu précédent attendent celui de leur
+    saisie. Captures `spk149-*` observées, 1440 px et 390 px.
+  - Campagne E2E complète : 148 sur 151. Les trois rouges — « révoquer une clé
+    malgré le gel », « un conteneur ARRÊTÉ montre son code de sortie », « un
+    geste sensible envoie une alerte hors bande » — passent isolément et sont
+    rouges aussi sur l'arbre committé sans ce changement (145 sur 149, un
+    quatrième en plus) : étrangers à cette unité, consignés au rapport
+    d'incohérences.
+  - **Reste `[~]`** : la vérification sur VM, à arbitrer (ci-dessus).
 ---
 
 ## Lot 6 — Réseau entre Sparks

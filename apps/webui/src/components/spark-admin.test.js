@@ -13,6 +13,8 @@
  * @verifies docs/BACKLOG.md#SPK-89 · docs/DAT.md §18.3 ter (la cible d'une route
  *           se corrige : le port et le TLS, jamais le domaine ni le Spark),
  *           §18.5 (l'ecart reste visible)
+ * @verifies docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (ce qui est écrit est
+ *           ce que l'aperçu a montré) · docs/DESIGN_SYSTEM.md §6.27
  * @verifies docs/BACKLOG.md#SPK-88 · docs/DAT.md §38.6.4 bis (une recette pose
  *           AUSSI sa route), §38.6.4 ter (un seul gabarit pour trois blocs)
  * @verifies docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la
@@ -43,6 +45,7 @@ import {
   renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation, zonePour,
   renderPortsPanel, refusZones, renderEtatDns, renderVerification,
   refusEcritureRecette, renderEtatCaddy, renderEtatCertificat, renderReleveRoutes,
+  cleApercuRecette, apercuAJour,
 } from './spark-admin.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16' };
@@ -1149,26 +1152,82 @@ test('un parametre de PORT se saisit comme un port, avec ses bornes', () => {
   assert.ok(/max="65535"/.test(rendu));
 });
 
+/** L'état d'un aperçu LU pour ces valeurs-là, et rien en cours (SPK-149). */
+const luPour = (values, extra = {}) => ({ lu: cleApercuRecette(values), chargement: false,
+                                          ...extra });
+
 test('ecrire une recette a routes SANS apercu est refuse, et le DIT', () => {
   // §38.6.4 bis : sans apercu, on n'ecrirait que le DNS — donc un nom qui pointe
   // vers une Forge qui ne le sert pas. C'est l'ordre que la regle refuse.
   const catalogue = [{ id: 'site-web', label: 'Site web', poseDesRoutes: true }];
-  const refus = refusEcritureRecette({ catalogue, apercu: null },
-                                     { recette: 'site-web', recette_zone: 'exemple.tech' });
+  const values = { recette: 'site-web', recette_zone: 'exemple.tech' };
+  const refus = refusEcritureRecette({ catalogue, apercu: null, ...luPour(values) }, values);
   assert.match(refus, /déclare des routes/);
   assert.match(refus, /ne le\s+sert pas/);
 });
 
 test('une recette SANS route n’exige pas d’apercu', () => {
   const catalogue = [{ id: 'relais', label: 'Relais', poseDesRoutes: false }];
-  assert.equal(refusEcritureRecette({ catalogue, apercu: null },
-                                    { recette: 'relais', recette_zone: 'exemple.tech' }), null);
+  const values = { recette: 'relais', recette_zone: 'exemple.tech' };
+  assert.equal(refusEcritureRecette({ catalogue, apercu: null, ...luPour(values) }, values),
+               null);
 });
 
 test('l’apercu present leve la garde', () => {
   const catalogue = [{ id: 'site-web', label: 'Site web', poseDesRoutes: true }];
-  assert.equal(refusEcritureRecette({ catalogue, apercu: { records: [], routes: [] } },
-                                    { recette: 'site-web', recette_zone: 'exemple.tech' }), null);
+  const values = { recette: 'site-web', recette_zone: 'exemple.tech' };
+  assert.equal(refusEcritureRecette(
+    { catalogue, apercu: { records: [], routes: [] }, ...luPour(values) }, values), null);
+});
+
+// --- SPK-149 · CE QUI EST ÉCRIT EST CE QUE L'APERÇU A MONTRÉ (DAT §38.6.6) -----
+
+test('un aperçu lu pour une AUTRE saisie n’autorise pas l’écriture (SPK-149)', () => {
+  // Le défaut mesuré le 2026-10-06 : l'aperçu affiché avait été composé AVANT la
+  // saisie du sous-domaine — libellé vide, donc l'apex. L'écriture prenait ses
+  // routes, et l'hôte écrivait le DNS de la saisie courante : deux noms.
+  const catalogue = [{ id: 'site-web', label: 'Site web', poseDesRoutes: true }];
+  const avant = { recette: 'site-web', recette_zone: 'exemple.tech', recette_params: {} };
+  const maintenant = { ...avant, recette_params: { domain: 'evoliz-mcp' } };
+  const refus = refusEcritureRecette(
+    { catalogue, apercu: { records: [], routes: [{ domain: 'exemple.tech' }] },
+      ...luPour(avant) }, maintenant);
+  assert.match(refus, /aperçu/);
+  assert.match(refus, /Vérifiez-le, puis écrivez/);
+  assert.equal(apercuAJour({ ...luPour(avant) }, maintenant), false);
+});
+
+test('pendant la relecture de l’aperçu, l’écriture attend — même pour SA saisie', () => {
+  // `change` part à la perte du focus, donc au clic : la relecture est EN COURS
+  // quand le clic arrive, et l'aperçu encore affiché est l'ancien.
+  const catalogue = [{ id: 'site-web', label: 'Site web', poseDesRoutes: true }];
+  const values = { recette: 'site-web', recette_zone: 'exemple.tech',
+                   recette_params: { domain: 'evoliz-mcp' } };
+  const refus = refusEcritureRecette(
+    { catalogue, apercu: { records: [], routes: [] }, ...luPour(values, { chargement: true }) },
+    values);
+  assert.match(refus, /aperçu/);
+});
+
+test('une recette SANS route n’écrit pas non plus un DNS que l’aperçu n’a pas montré', () => {
+  const catalogue = [{ id: 'relais', label: 'Relais', poseDesRoutes: false }];
+  const avant = { recette: 'relais', recette_zone: 'exemple.tech',
+                  recette_params: { domain: 'noreply' } };
+  const maintenant = { ...avant, recette_params: { domain: 'envoi' } };
+  assert.match(refusEcritureRecette({ catalogue, apercu: null, ...luPour(avant) }, maintenant),
+               /aperçu/);
+});
+
+test('la clé d’un aperçu suit la recette, la zone ET chaque paramètre', () => {
+  const base = { recette: 'site-web', recette_zone: 'exemple.tech',
+                 recette_params: { domain: 'a', port: '8080' } };
+  assert.equal(cleApercuRecette(base), cleApercuRecette({ ...base }));
+  for (const autre of [{ ...base, recette: 'relais' },
+                       { ...base, recette_zone: 'autre.tech' },
+                       { ...base, recette_params: { domain: 'b', port: '8080' } },
+                       { ...base, recette_params: { domain: 'a', port: '9000' } }]) {
+    assert.notEqual(cleApercuRecette(autre), cleApercuRecette(base));
+  }
 });
 
 test('une ROUTE refusée compte dans le total des échecs du compte rendu', () => {

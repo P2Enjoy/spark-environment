@@ -10,6 +10,8 @@
  *           certificat à chaque visite, §18.7),
  *           docs/BACKLOG.md#SPK-131 (une note proposée se relit en deux
  *           colonnes, §55.9.3),
+ *           docs/BACKLOG.md#SPK-149 (une recette écrit ce que son aperçu a
+ *           montré ; un sous-domaine à plusieurs niveaux, §38.6.6),
  *           docs/BACKLOG.md#SPK-132 (recréer un conteneur de pile Compose,
  *           §37.7.5 ; l'onglet Environnement nomme ce geste, §43.7) ·
  *           docs/DAT.md §29 (éprouver le produit par où
@@ -177,6 +179,18 @@ async function replierWidget(cible = page) {
   if ((await pastille.getAttribute('aria-expanded')) === 'true') await pastille.click();
   await cible.waitForFunction(
     () => !document.querySelector('.widget-inv__contenu'), null, { timeout: 10000 });
+}
+
+/**
+ * L'aperçu de la saisie COURANTE est arrivé (SPK-149, docs/DAT.md §38.6.6).
+ *
+ * Le bloc porte `aria-busy` pendant sa relecture. Attendre une simple ligne ne
+ * suffit pas : celle de l'aperçu PRÉCÉDENT est déjà là, et l'écriture refuse —
+ * à bon droit — de partir sur lui.
+ */
+async function apercuDeLaSaisie() {
+  await page.waitForSelector('#recette-apercu .recette-bloc:not([aria-busy])',
+                             { timeout: 15000 });
 }
 
 // --- LE PARCOURS NOMINAL ----------------------------------------------------
@@ -2908,8 +2922,9 @@ test('appliquer une recette écrit TOUTES ses lignes, et rend le sort de chacune
     await page.fill('[data-param="address"]', '198.51.100.7');
     await page.dispatchEvent('[data-param="address"]', 'change');
 
-    // L'écran présente la recette ENTIÈRE avant d'écrire (§38.6.3).
-    await page.waitForSelector('#recette-apercu .recette-lignes', { timeout: 15000 });
+    // L'écran présente la recette ENTIÈRE avant d'écrire (§38.6.3) — celle de
+    // CETTE saisie (§38.6.6).
+    await apercuDeLaSaisie();
     const apercu = await page.textContent('#recette-apercu');
     assert.ok(apercu.includes('@ A'), 'le domaine nu se note « @ »');
     assert.ok(apercu.includes('www A'));
@@ -3051,7 +3066,7 @@ test('le compte rendu d’une recette se VÉRIFIE, et voit l’écart quand il y
     await page.fill('[data-param="domain"]', 'exemple.test');
     await page.fill('[data-param="address"]', '203.0.113.10');
     await page.dispatchEvent('[data-param="address"]', 'change');
-    await page.waitForSelector('#recette-apercu .recette-lignes', { timeout: 15000 });
+    await apercuDeLaSaisie();
     await page.click('[data-engage="recette"]');
     await page.waitForSelector('#recette-resultat', { timeout: 20000 });
 
@@ -3322,7 +3337,10 @@ test('une route déjà tenue par un AUTRE Spark est refusée, sans bloquer le re
     await page.fill('[data-param="port"]', '9400');
     await page.dispatchEvent('[data-param="port"]', 'change');
 
-    await page.waitForSelector('#recette-apercu .recette-ligne--route', { timeout: 15000 });
+    // SPK-149 : une ligne de route était DÉJÀ là — celle de l'aperçu composé
+    // avant la saisie. S'y arrêter faisait cliquer sur l'aperçu précédent.
+    await apercuDeLaSaisie();
+    assert.ok((await page.textContent('#recette-apercu')).includes('route prise.exemple.test'));
     await page.click('[data-engage="recette"]');
     await page.waitForSelector('#recette-resultat', { timeout: 20000 });
 
@@ -3343,6 +3361,130 @@ test('une route déjà tenue par un AUTRE Spark est refusée, sans bloquer le re
     const www = corps.routes.find((r) => r.domain === 'www.prise.exemple.test');
     assert.ok(www, 'la route qui n’était prise par personne doit être posée');
     assert.equal(www.spark_name, 'boutique');
+  });
+});
+
+// --- SPK-149 · CE QUI EST ÉCRIT EST CE QUE L'APERÇU A MONTRÉ (DAT §38.6.6) -----
+
+/** Ouvre la recette « site-web » sur « exemple.test », l'adresse tapée puis Tab :
+ *  l'aperçu se compose sur un libellé vide, donc sur le domaine nu. C'est l'état
+ *  exact d'où le défaut du 2026-10-06 partait. */
+async function recetteSiteWebAuClavier() {
+  await ouvrir('boutique', 'routes');
+  await page.click('[data-ouvre="recette"]');
+  await page.waitForSelector('dialog.modale[open] #recette-id', { timeout: 15000 });
+  await page.selectOption('#recette-id', 'site-web');
+  await page.selectOption('#recette-zone', 'exemple.test');
+  await page.click('[data-param="address"]');
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type('203.0.113.10');
+  await page.keyboard.press('Tab');
+  await apercuDeLaSaisie();
+}
+
+/** Qui tient quel nom : la projection qui compte, sans les dates d'application. */
+const tenues = (routes, noms) => Object.fromEntries(
+  routes.filter((r) => noms.includes(r.domain)).map((r) => [r.domain, r.spark_name]));
+
+test('un sous-domaine tapé puis écrit AUSSITÔT : rien ne part sur l’aperçu d’avant', async () => {
+  // Le défaut signalé : « evoliz-mcp » déclarait les routes du domaine NU et
+  // écrivait le DNS du sous-domaine. `change` part au clic, et l'écriture
+  // prenait les routes de l'aperçu encore affiché — celui d'un libellé vide.
+  await parcours('spk149-apercu-perime', async () => {
+    await recetteSiteWebAuClavier();
+    assert.ok((await page.textContent('#recette-apercu')).includes('route exemple.test'),
+      'l’aperçu de départ vise le domaine nu : c’est lui qui était écrit à tort');
+    const NU = ['exemple.test', 'www.exemple.test'];
+    const { corps: avant } = await pile.lireSparkd('/v1/ingress');
+    const zoneAvant = dns.enregistrements('exemple.test');
+
+    // Le sous-domaine au clavier, et le clic SANS attendre : comme un exploitant.
+    await page.click('[data-param="domain"]');
+    await page.keyboard.type('evoliz-mcp');
+    await page.click('[data-engage="recette"]');
+
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+    assert.match(await page.textContent('dialog.modale[open] .refus'),
+                 /Rien n'a été écrit : l'aperçu ne montrait pas encore votre dernière/);
+    const { corps: apresClic } = await pile.lireSparkd('/v1/ingress');
+    assert.deepEqual(apresClic.routes.map((r) => r.domain).sort(),
+                     avant.routes.map((r) => r.domain).sort(), 'aucune route déclarée');
+    assert.deepEqual(dns.enregistrements('exemple.test'), zoneAvant,
+                     'aucun enregistrement écrit');
+
+    // L'aperçu se relit sur la saisie, et le focus attend sur le bouton.
+    await page.waitForFunction(() => document.querySelector('#recette-apercu')
+      ?.textContent.includes('route evoliz-mcp.exemple.test'), null, { timeout: 15000 });
+    await apercuDeLaSaisie();
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-engage')),
+                 'recette', 'le geste à refaire a le focus');
+    assert.equal(await page.inputValue('[data-param="domain"]'), 'evoliz-mcp',
+                 'la saisie survit au refus');
+    await capturer('spk149-apercu-relu', { hauteur: 1300 });
+    await capturer('spk149-apercu-relu-mobile', { largeur: 390, hauteur: 1300 });
+
+    // Relu et vérifié : Entrée sur le bouton.
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#recette-resultat', { timeout: 20000 });
+    const bilan = await page.textContent('#recette-resultat');
+    assert.ok(bilan.includes('route evoliz-mcp.exemple.test'));
+    assert.ok(bilan.includes('route www.evoliz-mcp.exemple.test'));
+    assert.ok(!bilan.includes('route exemple.test'), 'le domaine nu n’est pas visé');
+    await capturer('spk149-compte-rendu', { hauteur: 1300 });
+
+    // EFFETS : les routes et le DNS visent le MÊME nom ; le domaine nu n'a pas bougé.
+    const { corps: apres } = await pile.lireSparkd('/v1/ingress');
+    for (const nom of ['evoliz-mcp.exemple.test', 'www.evoliz-mcp.exemple.test']) {
+      const r = apres.routes.find((x) => x.domain === nom);
+      assert.ok(r, `la route ${nom} doit exister`);
+      assert.equal(r.spark_name, 'boutique');
+    }
+    assert.deepEqual(tenues(apres.routes, NU), tenues(avant.routes, NU),
+                     'aucune route du domaine nu n’a été déclarée ni changée');
+    const zone = dns.enregistrements('exemple.test');
+    assert.ok(zone.some((r) => r.name === 'evoliz-mcp' && r.type === 'A'));
+    assert.ok(zone.some((r) => r.name === 'www.evoliz-mcp' && r.type === 'A'));
+  });
+});
+
+test('un sous-domaine à DEUX niveaux s’écrit dans la zone ; un niveau vide est refusé', async () => {
+  await parcours('spk149-deux-niveaux', async () => {
+    await recetteSiteWebAuClavier();
+
+    // Un niveau vide : refusé à l'aperçu, en nommant la règle.
+    await page.click('[data-param="domain"]');
+    await page.keyboard.type('mcp..evoliz');
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(() => document.querySelector('#recette-apercu .refus')
+      ?.textContent.includes('1 à 63 lettres, chiffres ou tirets'), null, { timeout: 15000 });
+    await capturer('spk149-niveau-vide', { hauteur: 1300 });
+
+    // Corrigé : deux niveaux, la zone en suffixe.
+    await page.click('[data-param="domain"]');
+    await page.keyboard.press('Control+A');
+    await page.keyboard.type('mcp.evoliz');
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(() => document.querySelector('#recette-apercu')
+      ?.textContent.includes('route mcp.evoliz.exemple.test'), null, { timeout: 15000 });
+    await apercuDeLaSaisie();
+    const apercu = await page.textContent('#recette-apercu');
+    assert.ok(apercu.includes('route www.mcp.evoliz.exemple.test'));
+    assert.ok(apercu.includes('mcp.evoliz A'), 'le nom relatif garde ses deux niveaux');
+    await capturer('spk149-deux-niveaux-apercu', { hauteur: 1300 });
+
+    await page.click('[data-engage="recette"]');
+    await page.waitForSelector('#recette-resultat', { timeout: 20000 });
+    await capturer('spk149-deux-niveaux-compte-rendu', { hauteur: 1300 });
+
+    const { corps } = await pile.lireSparkd('/v1/ingress');
+    for (const nom of ['mcp.evoliz.exemple.test', 'www.mcp.evoliz.exemple.test']) {
+      const r = corps.routes.find((x) => x.domain === nom);
+      assert.ok(r, `la route ${nom} doit exister`);
+      assert.equal(r.spark_name, 'boutique');
+    }
+    const zone = dns.enregistrements('exemple.test');
+    assert.ok(zone.some((r) => r.name === 'mcp.evoliz' && r.type === 'A'));
+    assert.ok(zone.some((r) => r.name === 'www.mcp.evoliz' && r.type === 'A'));
   });
 });
 

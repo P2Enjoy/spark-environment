@@ -2,6 +2,8 @@
  * @verifies docs/BACKLOG.md#SPK-50 · docs/DAT.md §38.6 (les recettes),
  *           §38.6.1 (une fonction, pas une donnée), §38.6.2 (la garde élargie),
  *           §38.6.3 (le compte rendu), §38.6.4 (les deux recettes) · §38.5
+ * @verifies docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (le nom dans la zone,
+ *           plusieurs niveaux, chaque niveau validé ; l'adresse pré-remplie)
  *
  * Une recette à moitié posée est pire qu'une recette absente : un `MX` sans SPF
  * fait recevoir du courrier qu'on ne peut pas renvoyer. C'est ce que ces preuves
@@ -56,10 +58,21 @@ test('un type que le produit ne COMPOSE pas est refuse, en les enumerant', () =>
 });
 
 test('une recette n’est PAS une porte derobee : chaque ligne passe la garde', () => {
-  // Un domaine hors de la zone reste refuse, meme composé par une recette.
-  assert.throws(() => composer('site-web',
-    { domain: 'autre.fr', address: '203.0.113.7' }, { zone: 'exemple.tech' }),
-    /n'est pas dans la zone/);
+  // REVISE le 2026-10-06 (SPK-149, §38.6.6) : « autre.fr » etait refuse comme
+  // hors zone. Un libelle a plusieurs niveaux se compose desormais DANS la zone
+  // — un nom compose ne peut donc plus en sortir, par construction.
+  const vu = composer('site-web', { domain: 'autre.fr', address: '203.0.113.7' },
+                      { zone: 'exemple.tech' });
+  assert.ok(vu.records.every((r) => r.zone === 'exemple.tech'));
+  assert.deepEqual(vu.records.map((r) => r.name), ['autre.fr', 'www.autre.fr']);
+  // Et chaque ligne passe toujours la garde du §38.5 : l'espace de noms du poste
+  // et la forme de la valeur, exactement comme une ecriture simple.
+  assert.throws(() => composer('site-web', { domain: 'boutique', address: '203.0.113.7' },
+                               { zone: 'exemple.tech', motif: '^essai\\.' }),
+                /sort de l'espace de noms/);
+  assert.throws(() => composer('site-web', { domain: 'boutique', address: 'pas-une-ip' },
+                               { zone: 'exemple.tech' }),
+                /invalide pour un A/);
 });
 
 // --- le catalogue (§38.6.1) --------------------------------------------------
@@ -157,7 +170,7 @@ test('une recette inconnue est refusee', () => {
                 /inconnue/);
 });
 
-// --- le nom est RELATIF à la zone (§38.6.5) ----------------------------------
+// --- le nom est RELATIF à la zone (§38.6.6) ----------------------------------
 
 test('la zone étant choisie, un libellé vide vaut le domaine lui-même', () => {
   // Redemander le domaine entier faisait ressaisir ce que l'écran sait déjà.
@@ -179,14 +192,85 @@ test('le nom COMPLET de la zone reste accepté : c’est une saisie par habitude
   assert.equal(vu.records[0].name, 'boutique');
 });
 
-test('un libellé pointé hors zone est REFUSÉ, et la sortie est nommée', () => {
-  // Sans ce refus, « autre.fr » deviendrait « autre.fr.exemple.tech » en
-  // silence : un nom que personne n'a voulu, écrit dans la bonne zone.
-  assert.throws(() => dansLaZone('www.boutique', 'exemple.tech'),
-                /nom complet.*www\.boutique\.exemple\.tech/s);
+test('un libellé à tiret compose son nom dans la zone, routes comprises (SPK-149)', () => {
+  // Le défaut signalé le 2026-10-06 accusait le tiret : il n'y est pour rien.
+  // La composition est juste ; c'est l'écran qui écrivait un aperçu périmé.
+  const vu = composer('site-web',
+                      { domain: 'evoliz-mcp', address: '203.0.113.7', port: '8080' },
+                      { zone: 'exemple.tech' });
+  assert.deepEqual(vu.records.map((r) => r.name), ['evoliz-mcp', 'www.evoliz-mcp']);
+  assert.deepEqual(vu.routes.map((r) => r.domain),
+                   ['evoliz-mcp.exemple.tech', 'www.evoliz-mcp.exemple.tech']);
 });
 
-// --- ce que la console SAIT n'est pas redemandé (§38.6.5) --------------------
+test('un libellé à PLUSIEURS niveaux se compose dans la zone (SPK-149, §38.6.6)', () => {
+  // Révisé le 2026-10-06 : il était refusé comme ambigu. La zone s'affiche en
+  // suffixe du champ et l'aperçu montre le nom complet avant d'écrire : le
+  // refus interdisait un cas ordinaire sans rien protéger.
+  assert.equal(dansLaZone('mcp.evoliz', 'exemple.tech'), 'mcp.evoliz.exemple.tech');
+  const vu = composer('site-web',
+                      { domain: 'mcp.evoliz', address: '203.0.113.7', port: '8080' },
+                      { zone: 'exemple.tech' });
+  assert.deepEqual(vu.records.map((r) => r.name), ['mcp.evoliz', 'www.mcp.evoliz']);
+  assert.deepEqual(vu.routes.map((r) => r.domain),
+                   ['mcp.evoliz.exemple.tech', 'www.mcp.evoliz.exemple.tech']);
+});
+
+test('le suffixe de la zone tapé par habitude n’est pas doublé, à plusieurs niveaux aussi', () => {
+  assert.equal(dansLaZone('mcp.evoliz.exemple.tech', 'exemple.tech'),
+               'mcp.evoliz.exemple.tech');
+  assert.equal(dansLaZone('MCP.Evoliz.', 'exemple.tech'), 'mcp.evoliz.exemple.tech',
+               'la casse et le point final de la racine ne changent pas le nom');
+});
+
+test('un niveau vide ou mal formé est REFUSÉ, et la règle est nommée (§38.6.6)', () => {
+  // Accepter les points oblige à refuser ce qu'ils permettent de mal écrire :
+  // `mcp..evoliz` composerait un nom que ni le fournisseur ni `sparkd` n'acceptent.
+  for (const faux of ['mcp..evoliz', '.evoliz', '-mcp', 'mcp-', 'mc_p', 'mc p',
+                      'évoliz', 'a'.repeat(64), '*']) {
+    assert.throws(() => dansLaZone(faux, 'exemple.tech'),
+                  (e) => e instanceof DnsError && /1 à 63 lettres, chiffres ou tirets/.test(e.message),
+                  `« ${faux} » doit être refusé`);
+  }
+  assert.equal(dansLaZone('a'.repeat(63), 'exemple.tech'), `${'a'.repeat(63)}.exemple.tech`);
+  assert.equal(dansLaZone('9-a', 'exemple.tech'), '9-a.exemple.tech');
+});
+
+test('la garde du libellé tient aussi pour le relais transactionnel', () => {
+  const vu = composer('relais-transactionnel',
+                      { domain: 'envoi.noreply', selector: 'projet-1' },
+                      { zone: 'exemple.tech' });
+  assert.deepEqual(vu.records.map((r) => r.name),
+                   ['envoi.noreply', 'envoi.noreply', '_dmarc.envoi.noreply']);
+  assert.throws(() => composer('relais-transactionnel',
+                               { domain: 'envoi..noreply', selector: 'projet-1' },
+                               { zone: 'exemple.tech' }), DnsError);
+});
+
+test('le rôle de chaque ligne dit « sous-domaine » quand le nom n’est pas l’apex (SPK-149)', () => {
+  // Vu en capture le 2026-10-06 : « Le domaine nu est servi par ce Spark » à
+  // côté de `route evoliz-mcp.exemple.tech` — faux à l'écran, et c'est la
+  // phrase qui fait croire que la racine est visée.
+  const sous = composer('site-web', { domain: 'evoliz-mcp', address: '203.0.113.7' },
+                        { zone: 'exemple.tech' });
+  assert.ok([...sous.records, ...sous.routes].every((l) => !/domaine (nu|lui-même)/.test(l.role)));
+  assert.match(sous.records[0].role, /sous-domaine/);
+  assert.match(sous.routes[0].role, /sous-domaine/);
+  const nu = composer('site-web', { domain: '', address: '203.0.113.7' },
+                      { zone: 'exemple.tech' });
+  assert.match(nu.records[0].role, /domaine lui-même/);
+  assert.match(nu.routes[0].role, /domaine nu/);
+});
+
+test('l’aide du champ dit qu’un sous-domaine peut avoir plusieurs niveaux', () => {
+  const p = catalogue()[0].parametres.find((x) => x.nom === 'domain');
+  assert.match(p.aide, /plusieurs niveaux/);
+  // Vu en capture : « et « mcp.api » se séparaient en fin de ligne. Les espaces
+  // intérieures des guillemets sont insécables.
+  assert.ok(p.aide.includes('«\u00a0mcp.api\u00a0»'));
+});
+
+// --- ce que la console SAIT n'est pas redemandé (§38.6.6) --------------------
 
 test('l’adresse de la Forge est pré-remplie depuis le serveur courant', () => {
   const p = catalogue({ adresseForge: '203.0.113.7' })[0]
@@ -211,7 +295,7 @@ test('une Forge locale ou déclarée par alias n’a pas d’adresse publique', 
 });
 
 test('l’adresse DECLAREE prime sur celle qu’on deduirait du transport (SPK-77)', () => {
-  // §38.8.5 : c'est ce qui leve la limite connue du §38.6.5 — un alias `ssh` et
+  // §38.8.5 : c'est ce qui leve la limite connue du §38.6.6 — un alias `ssh` et
   // une Forge locale n'avaient AUCUNE adresse connaissable.
   assert.equal(adressePublique({ kind: 'alias', sshHost: 'ma-forge',
                                  publicAddress: '203.0.113.10' }), '203.0.113.10');

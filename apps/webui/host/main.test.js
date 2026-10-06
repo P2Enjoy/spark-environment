@@ -1,5 +1,8 @@
 /**
  * @verifies docs/BACKLOG.md#SPK-16 · docs/DAT.md §6, §22.3
+ * @verifies docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (un sous-domaine à
+ *           plusieurs niveaux, la garde de chaque niveau) — par la route
+ *           `/api/dns/recipe` de l'hôte.
  *
  * Ce que ces tests gardent : une panne de tunnel remonte AVEC son motif, et la
  * console n'est jamais invitee a presenter des donnees anterieures comme
@@ -1029,6 +1032,51 @@ test('une valeur que l’exploitant doit fournir rend 422 en NOMMANT le champ', 
   assert.equal(corps.error, 'value_required');
   assert.equal(corps.field, 'selector');
   server.close();
+});
+
+test('un sous-domaine a PLUSIEURS niveaux s’ecrit dans la zone, un niveau vide est refuse sans appel (SPK-149)', async () => {
+  // §38.6.6 : `mcp.evoliz` dans `exemple.tech` vise `mcp.evoliz.exemple.tech`.
+  // Le chemin est celui de l'ecran : la recette passe par l'hote, qui compose.
+  const appels = [];
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async (url, options = {}) => {
+      appels.push({ url: String(url), method: options.method ?? 'GET',
+                    body: String(options.body ?? '') });
+      return new Response(JSON.stringify({ records: [] }), { status: 200 });
+    },
+  });
+  try {
+    const fait = await (await fetch(`${base}/api/dns/recipe`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
+                             params: { domain: 'mcp.evoliz', address: '203.0.113.7' } }),
+    })).json();
+    assert.deepEqual(fait.records.map((r) => r.name), ['mcp.evoliz', 'www.mcp.evoliz']);
+    assert.deepEqual(fait.routes.map((r) => r.domain),
+                     ['mcp.evoliz.exemple.tech', 'www.mcp.evoliz.exemple.tech']);
+    const ecrits = appels.filter((a) => a.method === 'PATCH')
+      .map((a) => JSON.parse(a.body).changes[0].set.id_fields.name);
+    assert.deepEqual(ecrits, ['mcp.evoliz', 'www.mcp.evoliz'],
+      'le fournisseur recoit le nom RELATIF a la zone, niveaux compris');
+
+    // La garde parle AVANT tout appel : un refus ne coute aucune requete sortante.
+    const avant = appels.length;
+    const r = await fetch(`${base}/api/dns/recipe/preview`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
+                             params: { domain: 'mcp..evoliz', address: '203.0.113.7' } }),
+    });
+    assert.equal(r.status, 422);
+    const corps = await r.json();
+    assert.equal(corps.error, 'dns_refused');
+    assert.match(corps.message, /1 à 63 lettres, chiffres ou tirets/);
+    assert.equal(appels.length, avant, 'aucune requete vers le fournisseur');
+  } finally {
+    // Un échec ne doit pas laisser le serveur ouvert : la suite entière
+    // attendrait alors sans fin, au lieu de dire ce qui a rougi.
+    server.close();
+  }
 });
 
 test('sans jeton, les recettes se lisent mais ne s’ecrivent pas', async () => {

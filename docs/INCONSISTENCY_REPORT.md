@@ -70,3 +70,22 @@ rendu : il enregistre, ou montre le refus d'un champ inconnu.
 **Non résolu ici** : hors du périmètre de SPK-147. À arbitrer par le
 responsable : construire l'aperçu du rendu sur un événement d'exemple, ou
 retirer la promesse du DAT.
+
+## 2026-10-06 · Trois parcours rougissent en campagne et passent isolément
+
+**Constaté** en rejouant la campagne E2E pour SPK-149, **avant et après** le
+changement : « révoquer une clé malgré le gel, par la confirmation qui NOMME »,
+« un conteneur ARRÊTÉ montre son code de sortie, et son silence se distingue »
+et « un geste sensible envoie une alerte hors bande, un geste ordinaire non »
+sont rouges dans les deux séries (148 sur 151 après ; 145 sur 149 sur l'arbre
+committé, avec en plus « une page d'un autre site ne fait rien faire à la
+console »), et verts tous les trois joués seuls. Le premier et le dernier sont
+ceux que le journal du 2026-09-16 rattachait déjà à un ordre d'exécution. Le
+second est nouveau au relevé : son écran de diagnostic, pris après l'échec,
+porte bien « Code de sortie 137 » — le parcours lit `.principal` avant que
+l'inspection du conteneur soit rendue, son attente s'arrêtant sur un signal
+déjà vrai.
+
+**À arbitrer** : ces parcours tournent sur la pile factice, qui ne valide rien
+(DAT §28.7) ; corriger leurs attentes, ou les laisser à SPK-138 comme
+l'entrée du 2026-09-30.

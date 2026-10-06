@@ -9,6 +9,8 @@
  *       §38.6.2 (la garde élargie), §38.6.3 (le compte rendu),
  *       §38.6.4 (les deux premières recettes), §38.7 (ce que le DNS ne peut
  *       pas faire) · §38.2 (le produit ne supprime rien qu'il n'a pas posé)
+ * @spec docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (le nom se saisit dans la
+ *       zone, plusieurs niveaux, chaque niveau validé ; l'adresse pré-remplie)
  *
  * Une recette à moitié posée est pire qu'une recette absente : un `MX` sans SPF
  * fait recevoir du courrier qu'on ne peut pas renvoyer. D'où le compte rendu
@@ -34,32 +36,37 @@ export class ValeurManquante extends Error {
  * qu'elle NE PEUT PAS faire — le §38.7 veut que ces trois choses soient dites
  * ensemble, pas seulement la deuxième.
  */
+/** Un niveau de nom d'hôte : lettres, chiffres, tirets, ni en tête ni en fin. */
+const NIVEAU = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+
 /**
- * Nom complet d'un paramètre déclaré `dansLaZone`.
+ * Nom complet d'un paramètre déclaré `dansLaZone` (§38.6.6).
  *
  * La zone est déjà choisie : le champ ne porte que le libellé, et vide vaut
  * l'apex. Un libellé qui porte DÉJÀ le suffixe de la zone est accepté tel quel —
  * c'est une saisie par habitude, elle ne peut vouloir dire qu'une chose, et la
- * refuser ferait perdre une saisie juste pour une raison de forme (§38.6.5).
+ * refuser ferait perdre une saisie juste pour une raison de forme.
+ *
+ * SPK-149 : un libellé peut avoir PLUSIEURS niveaux — `mcp.api` compose
+ * `mcp.api.<zone>`. Il était refusé comme ambigu ; mais la zone s'affiche en
+ * suffixe du champ, et l'aperçu montre le nom complet avant d'écrire. Accepter
+ * les points oblige en revanche à refuser ce qu'ils permettent de mal écrire :
+ * chaque niveau est validé ici, avant tout appel, plutôt que refusé après coup
+ * par le fournisseur ou par `sparkd` (§38.6.2).
  */
 export function dansLaZone(libelle, zone) {
   const nu = normaliser(zone);
   if (!nu) return '';
   const brut = normaliser(libelle);
-  if (!brut) return nu;
-  if (brut === nu || brut.endsWith(`.${nu}`)) return brut;
-  // Un libellé qui porte un point et ne finit PAS par la zone est ambigu : on ne
-  // sait pas si l'on visait « autre.fr » — donc une autre zone — ou le
-  // sous-domaine « autre.fr.zone ». Le composer en silence ferait écrire, dans
-  // cette zone-ci, un nom que personne n'a voulu ; c'est exactement la porte
-  // dérobée que la garde ferme. On refuse, en disant comment nommer un
-  // sous-domaine à plusieurs niveaux.
-  if (brut.includes('.')) {
+  if (!brut || brut === nu) return nu;
+  const relatif = brut.endsWith(`.${nu}`) ? brut.slice(0, -(nu.length + 1)) : brut;
+  if (!relatif.split('.').every((niveau) => NIVEAU.test(niveau))) {
     throw new DnsError(
-      `« ${brut} » n'est pas dans la zone « ${nu} ». Pour un sous-domaine à `
-      + `plusieurs niveaux, écrire le nom complet : « ${brut}.${nu} ».`);
+      `« ${brut} » n'est pas un sous-domaine valide : chaque niveau, séparé par un `
+      + `point, porte de 1 à 63 lettres, chiffres ou tirets, sans tiret en tête ni `
+      + `en fin.`);
   }
-  return `${brut}.${nu}`;
+  return `${relatif}.${nu}`;
 }
 
 export const RECETTES = {
@@ -69,13 +76,16 @@ export const RECETTES = {
     description: "Fait répondre le domaine lui-même et son « www » sur cette Forge. "
       + "Deux enregistrements, aucune valeur extérieure.",
     parametres: [
-      // §38.6.5 : la ZONE est déjà choisie. Redemander le domaine entier faisait
+      // §38.6.6 : la ZONE est déjà choisie. Redemander le domaine entier faisait
       // ressaisir ce que l'écran sait, et l'aide invitait à taper un nom d'une
       // AUTRE zone — que le serveur refuse aussitôt. Le champ ne porte donc plus
       // que le libellé, et vide vaut le domaine lui-même.
       { nom: 'domain', label: 'Sous-domaine', dansLaZone: true, facultatif: true,
-        aide: 'Laisser vide pour le domaine lui-même.' },
-      // §38.6.5 : la console SAIT à quelle Forge elle est reliée. Redemander son
+        // Espaces insécables dans les guillemets : vu en capture, « et le nom se
+        // séparaient en fin de ligne.
+        aide: 'Laisser vide pour le domaine lui-même. Un point sépare plusieurs '
+          + 'niveaux\u00a0: «\u00a0mcp.api\u00a0».' },
+      // §38.6.6 : la console SAIT à quelle Forge elle est reliée. Redemander son
       // adresse à chaque recette, c'est faire ressaisir ce que l'inventaire
       // porte déjà — et une recette existe pour simplifier, pas pour interroger.
       { nom: 'address', label: 'Adresse publique de la Forge', adresseForge: true,
@@ -92,8 +102,12 @@ export const RECETTES = {
       const nu = dansLaZone(domain, zone);
       if (!nu) throw new DnsError('Aucune zone choisie.');
       return [
+        // SPK-149 : le rôle dit ce que la ligne vise. « Le domaine lui-même »
+        // à côté d'un sous-domaine faisait croire que la racine était visée.
         { domain: nu, type: 'A', data: address,
-          role: 'Le domaine lui-même répond sur cette Forge.' },
+          role: nu === normaliser(zone)
+            ? 'Le domaine lui-même répond sur cette Forge.'
+            : 'Ce sous-domaine répond sur cette Forge.' },
         { domain: `www.${nu}`, type: 'A', data: address,
           role: 'Le « www » y répond aussi.' },
       ];
@@ -114,7 +128,9 @@ export const RECETTES = {
       }
       return [
         { domain: nu, port: cible, tls: true,
-          role: 'Le domaine nu est servi par ce Spark.' },
+          role: nu === normaliser(zone)
+            ? 'Le domaine nu est servi par ce Spark.'
+            : 'Ce sous-domaine est servi par ce Spark.' },
         { domain: `www.${nu}`, port: cible, tls: true,
           role: 'Le « www » aussi.' },
       ];
@@ -146,7 +162,7 @@ export const RECETTES = {
       + 'chez l’hébergeur.',
     ],
     composer({ domain, selector, dkim, policy }, zone) {
-      // Le champ ne porte que le libellé : la zone est déjà choisie (§38.6.5).
+      // Le champ ne porte que le libellé : la zone est déjà choisie (§38.6.6).
       // Ici, à la différence du site web, l'apex n'a pas de sens — un domaine qui
       // ÉMET sans recevoir ne doit pas être le domaine principal.
       if (!normaliser(domain)) throw new DnsError('Aucun sous-domaine fourni.');
@@ -200,7 +216,7 @@ export function catalogue({ adresseForge = null } = {}) {
     // La valeur par défaut est POSÉE ICI, au moment où le catalogue est servi :
     // elle dépend du serveur courant, pas de la recette. L'écrire dans la
     // définition en ferait une constante, et elle mentirait au changement de
-    // Forge (§38.6.5).
+    // Forge (§38.6.6).
     parametres: r.parametres.map((p) => (p.adresseForge && adresseForge
       ? { ...p, defaut: adresseForge,
           aide: `${p.aide} Pré-rempli depuis le serveur courant.` }
@@ -227,7 +243,7 @@ export function adressePublique(serveur) {
   // transport ne porte pas toujours l'adresse publique — un alias `ssh` la cache
   // dans le `ssh_config`, et une Forge locale est atteinte par une boucle
   // locale alors que la machine, elle, peut très bien avoir une adresse
-  // publique. C'est ce qui lève la limite connue du §38.6.5.
+  // publique. C'est ce qui lève la limite connue du §38.6.6.
   const declaree = String(serveur.publicAddress ?? '').trim();
   if (declaree) return declaree;
   if (serveur.kind === 'local') return null;
@@ -252,7 +268,7 @@ export function composer(id, params = {}, { zone, ttl, motif = null,
   // Les valeurs par défaut sont appliquées ICI, du même côté que celui qui les
   // propose. Les poser à l'affichage seulement ferait diverger ce que l'écran
   // MONTRE de ce que la requête PORTE — le champ afficherait l'adresse de la
-  // Forge, et l'aperçu se plaindrait qu'elle manque. Mesuré (§38.6.5).
+  // Forge, et l'aperçu se plaindrait qu'elle manque. Mesuré (§38.6.6).
   const complets = { ...params };
   for (const p of recette.parametres) {
     if (complets[p.nom] !== undefined && String(complets[p.nom]).trim() !== '') continue;

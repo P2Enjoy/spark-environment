@@ -1545,6 +1545,36 @@ ordre :
 - la fiche du Spark (*Infos → Ressources*) montre **les deux**, avec ces mêmes
   libellés.
 
+### SPK-DS-38 · Une recette ne s'écrit que sur l'aperçu de la saisie courante
+
+**Date** : 2026-10-06 · SPK-149 · `DAT.md` §38.6.6 · `DESIGN_SYSTEM.md` §6.27,
+§7.1, §9.7, §14.3 · SPK-DS-08
+
+L'aperçu de la modale « Appliquer une recette DNS » se relit au `change` d'un
+champ, donc au clic sur « Écrire la recette ». Quand le clic arrive avant
+l'aperçu de la saisie courante :
+
+- **rien n'est écrit**, et la modale le dit dans son bloc `.refus`, près du
+  bouton d'engagement, `role="alert"` : « Rien n'a été écrit : l'aperçu ne
+  montrait pas encore votre dernière saisie. Vérifiez-le, puis écrivez la
+  recette. » C'est le rouge du SPK-DS-08 : un geste a été tenté et n'a pas eu
+  lieu — le même canal que les autres refus de cette garde (« Choisissez une
+  zone. ») ;
+- l'aperçu se relit **sur place** ; la saisie reste dans ses champs (§7.1) ;
+- le focus revient au **bouton d'engagement**, et non au premier champ comme
+  à l'ouverture (§6.27) : c'est le geste à refaire une fois l'aperçu relu, au
+  clavier comme à la souris (§14.3).
+
+Le rôle d'une ligne dit ce qu'elle vise : « Ce sous-domaine répond sur cette
+Forge » à côté d'un sous-domaine, « Le domaine lui-même » à l'apex seulement.
+Vu en capture : « Le domaine nu est servi par ce Spark » s'affichait à côté de
+`route evoliz-mcp.exemple.test`.
+
+Preuves observées le 2026-10-06 (pile jetable, diagnostic au sens du `DAT.md`
+§28.7) : `e2e/captures/spk149-apercu-relu`, `-apercu-relu-mobile`,
+`-compte-rendu`, `-niveau-vide`, `-deux-niveaux-apercu`,
+`-deux-niveaux-compte-rendu`.
+
 ### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
 
 **Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus

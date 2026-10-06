@@ -33,6 +33,21 @@
   et §37.7.4 révisés ; SPK-DS-35 ; manuels M8 et M6 ; OP-31.
 
 ### Corrigé
+- **Une recette DNS déclarait les routes d'un nom et écrivait le DNS d'un autre**
+  (SPK-149). Signalé sur `evoliz-mcp.<zone>` : les routes du domaine NU étaient
+  déclarées, le DNS du sous-domaine écrit. Le tiret n'y était pour rien. L'aperçu
+  se relit à la perte du focus, donc au clic sur « Écrire la recette », et
+  l'écriture prenait les routes de l'aperçu encore affiché — celui d'avant la
+  saisie. Désormais rien ne part tant que l'aperçu n'a pas été lu pour la saisie
+  courante : la fenêtre dit « Rien n'a été écrit », relit l'aperçu, et rend le
+  focus au bouton. Les rôles des lignes disent « ce sous-domaine » au lieu de
+  « le domaine nu » quand le nom n'est pas l'apex. DAT §38.6.6 ; SPK-DS-38 ;
+  manuel M7. Aucune variable, aucune migration, rien à redéployer sur une Forge :
+  la correction vit dans la console, qu'il faut redémarrer.
+- **Un sous-domaine à plusieurs niveaux est accepté par les recettes DNS**
+  (SPK-149). `mcp.evoliz` dans la zone choisie était refusé comme ambigu ; il
+  compose désormais `mcp.evoliz.<zone>`, chaque niveau validé comme un nom
+  d'hôte avant tout appel. DAT §38.6.6.
 - **« La pile lira la nouvelle valeur à son prochain démarrage » était faux**
   (SPK-132). L'onglet Environnement, le DAT §43.7 et §44.9.7, les manuels M8 et
   M6 et le dossier pour un agent le disaient, et le §43.7 renvoyait au geste

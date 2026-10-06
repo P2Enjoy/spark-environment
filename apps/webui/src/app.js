@@ -30,7 +30,7 @@ import { INVENTAIRE_VIDE, renderSessionRegistry } from './components/session-reg
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
   from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zonePour,
-         renderVerification, refusEcritureRecette }
+         renderVerification, refusEcritureRecette, cleApercuRecette, apercuAJour }
   from './components/spark-admin.js';
 import { renderForgeView, UPDATE_VIDE, REBOOT_VIDE, ISOLATION_VIDE, RESEAUX_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
@@ -2837,7 +2837,8 @@ async function lireApercuRecette() {
   // paramètre —, et la dernière ARRIVÉE n'est pas la dernière DEMANDÉE. Sans
   // cette clé, un refus immédiat « Aucun domaine fourni » écrasait l'aperçu
   // complet obtenu après un aller-retour réseau.
-  const cle = `${v.recette}|${v.recette_zone}|${JSON.stringify(v.recette_params ?? {})}`;
+  // SPK-149 · §38.6.6 : la MÊME clé que la garde de l'écriture, qui la compare.
+  const cle = cleApercuRecette(v);
   // Relire des valeurs IDENTIQUES n'apprend rien et coûte une requête. Surtout,
   // `change` se déclenche à la perte du focus — donc au moment du clic sur le
   // bouton d'engagement (§38.5.2, même mesure).
@@ -2940,20 +2941,42 @@ async function etatDesRoutes(routes) {
   });
 }
 
-/** Écrit la recette, et rend le sort de chaque ligne (§38.6.3). */
+/**
+ * Écrit la recette, et rend le sort de chaque ligne (§38.6.3).
+ *
+ * @spec docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (ce qui est écrit est ce
+ *       que l'aperçu a montré) · docs/DESIGN_SYSTEM.md §6.27, §14.3
+ */
 async function ecrireRecette() {
   const v = etat.admin.values;
-  // §38.6.4 bis : les routes de l'APERÇU, celui-là même qui a été relu et
-  // montré. Les recomposer ici ferait diverger ce qui a été montré de ce qui est
-  // écrit — c'est la mesure du §38.6.5.
-  const routesVisees = etat.admin.recettes.apercu?.routes ?? [];
   // §38.6.4 bis : sans aperçu, on n'écrirait que le DNS — donc un nom qui pointe
   // vers une Forge qui ne le sert pas. Mieux vaut ne rien faire et le dire.
+  // SPK-149 · §38.6.6 : et un aperçu lu pour une AUTRE saisie ne vaut pas mieux.
   const empeche = refusEcritureRecette(etat.admin.recettes, v);
   if (empeche) {
+    const enRetard = !apercuAJour(etat.admin.recettes, v);
     etat.admin.refusal = { panel: 'recette', message: empeche };
-    return peindre();
+    peindre();
+    if (enRetard) {
+      // Le geste à refaire est CE bouton, une fois l'aperçu relu : le focus y
+      // revient, plutôt qu'au premier champ de la modale (§14.3). La relecture
+      // est déjà partie si `change` l'a lancée ; sinon elle part ici — une
+      // validation par Entrée ne passe pas toujours par `change`.
+      racine.querySelector('[data-engage="recette"]')?.focus();
+      lireApercuRecette();
+    }
+    return;
   }
+  // Ce que l'aperçu a montré, et la saisie pour laquelle il a été lu : figés
+  // ICI. Une frappe pendant l'écriture ne doit pas faire partir un DNS autre
+  // que celui des routes déjà déclarées (§38.6.6).
+  const recette = v.recette;
+  const zone = v.recette_zone;
+  const params = { ...(v.recette_params ?? {}) };
+  // §38.6.4 bis : les routes de l'APERÇU, celui-là même qui a été relu et
+  // montré. Les recomposer ici ferait diverger ce qui a été montré de ce qui est
+  // écrit — c'est la mesure du §38.6.6.
+  const routesVisees = etat.admin.recettes.apercu?.routes ?? [];
   const resultat = await agir('recette', async () => {
     // LA ROUTE D'ABORD (§38.6.4 bis). Les deux effets vivent sur deux systèmes,
     // et l'ordre choisit le mode de panne : un DNS posé sans route laisse un nom
@@ -2975,8 +2998,7 @@ async function ecrireRecette() {
     }
     const reponse = await fetch('/api/dns/recipe', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ recipe: v.recette, zone: v.recette_zone,
-                             params: v.recette_params ?? {} }),
+      body: JSON.stringify({ recipe: recette, zone, params }),
     });
     const corps = await reponse.json().catch(() => null);
     // Une écriture DNS refusée n'efface pas les routes déjà posées : on ne
@@ -2990,7 +3012,7 @@ async function ecrireRecette() {
     // La zone voyage AVEC le compte rendu : `values` est remis à zéro entre
     // deux gestes, et la vérification du §38.9.1 doit savoir quoi relire.
     etat.admin.recettes = { ...etat.admin.recettes,
-                            resultat: { ...resultat.corps, zone: v.recette_zone },
+                            resultat: { ...resultat.corps, zone },
                             verification: null, verificationErreur: null };
     peindre();
   }

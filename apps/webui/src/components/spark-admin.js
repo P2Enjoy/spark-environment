@@ -8,6 +8,8 @@
  *       docs/DESIGN_SYSTEM.md §3.1, §6.9, §6.19, §6.22, §6.23, §6.24, §6.27
  *       (la saisie est recueillie par une modale limitée à la section), §14.7 ·
  *       docs/DESIGN_SYSTEM_APP.md
+ * @spec docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (le nom dans la zone ; ce qui
+ *       est écrit est ce que l'aperçu a montré) · docs/DESIGN_SYSTEM.md §6.27
  * @spec docs/BACKLOG.md#SPK-50 · docs/DAT.md §38.6 (les recettes DNS),
  *       §38.6.3 (le compte rendu ligne à ligne) · docs/DESIGN_SYSTEM.md §6.13
  *       (« résultat partiel » est un état à traiter)
@@ -380,7 +382,7 @@ function renderRecetteModale(ui) {
       ${renderZonesVides(etat)}
     </div>`;
 
-  // §38.6.5 : un paramètre `dansLaZone` ne redemande PAS ce que la zone dit
+  // §38.6.6 : un paramètre `dansLaZone` ne redemande PAS ce que la zone dit
   // déjà. Le champ ne porte que le libellé, la zone est affichée en suffixe, et
   // vide vaut le domaine lui-même. Sans la zone choisie, le suffixe n'a rien à
   // montrer et le champ reste nu.
@@ -466,19 +468,57 @@ export function renderZonesVides(etat) {
 }
 
 /**
+ * La saisie dont un aperçu a été lu : recette, zone et chaque paramètre.
+ *
+ * @spec docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (ce qui est écrit est ce
+ *       que l'aperçu a montré)
+ *
+ * Une seule fonction pour la lecture de l'aperçu et pour la garde de
+ * l'écriture : deux clés calculées à deux endroits finiraient par diverger, et
+ * la garde comparerait deux choses différentes.
+ */
+export function cleApercuRecette(values) {
+  return `${values?.recette}|${values?.recette_zone}|`
+    + JSON.stringify(values?.recette_params ?? {});
+}
+
+/**
+ * L'aperçu affiché a-t-il été lu pour la saisie COURANTE, sans relecture en
+ * cours ? (SPK-149, §38.6.6)
+ *
+ * `change` part à la perte du focus, donc au clic sur « Écrire la recette » :
+ * la relecture est lancée au moment même où l'écriture part, et l'aperçu encore
+ * affiché est celui d'AVANT la saisie. Mesuré le 2026-10-06 — les routes de
+ * l'apex étaient déclarées, et le DNS du sous-domaine écrit.
+ */
+export function apercuAJour(recettes, values) {
+  return !recettes?.chargement && recettes?.lu === cleApercuRecette(values);
+}
+
+/**
  * Peut-on écrire cette recette ? Rend le refus MOTIVÉ, ou `null` (§38.6.4 bis).
  *
  * @spec docs/BACKLOG.md#SPK-88 · docs/DAT.md §38.6.4 bis (la route AVANT le DNS)
+ * @spec docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (l'écriture ne part que sur
+ *       un aperçu lu pour la saisie courante)
  *
  * Une recette qui pose des routes les prend de l'APERÇU — celui-là même qui a
  * été relu et montré. Sans aperçu, on n'écrirait que le DNS : le nom pointerait
  * vers une Forge qui ne le sert pas, et c'est exactement l'ordre que le
  * §38.6.4 bis refuse. Mieux vaut ne rien faire et le dire.
+ *
+ * Et cet aperçu doit être celui de la saisie COURANTE (§38.6.6), pour toutes
+ * les recettes : l'hôte compose le DNS depuis la saisie, les routes viennent de
+ * l'aperçu, et les deux doivent viser le même nom — celui qu'on a montré.
  */
 export function refusEcritureRecette(recettes, values) {
   const choisie = (recettes?.catalogue ?? []).find((r) => r.id === values?.recette);
   if (!choisie) return 'Choisissez une recette.';
   if (!values?.recette_zone) return 'Choisissez une zone.';
+  if (!apercuAJour(recettes, values)) {
+    return "Rien n'a été écrit : l'aperçu ne montrait pas encore votre dernière "
+      + 'saisie. Vérifiez-le, puis écrivez la recette.';
+  }
   if (choisie.poseDesRoutes && !recettes?.apercu) {
     return "L'aperçu n'a pas pu être lu : cette recette déclare des routes, et "
       + "les écrire sans elles ferait pointer un nom vers une Forge qui ne le "

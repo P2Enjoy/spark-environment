@@ -13670,3 +13670,14 @@ désormais écrits au §38.6.6 ; les renvois du code le suivent, avec le code.
 **Ce qui reste ouvert** : la vérification sur VM. La console du banc (§51.6) lit
 le `.env` du poste et ne porte aucun doublon DNS ; une épreuve de recette y
 écrirait dans le compte réel. À arbitrer.
+
+**Livré le même jour, non vérifié sur VM.** Preuves rouges avant, vertes après :
+la composition (plusieurs niveaux, niveaux invalides), la garde de l'écran
+(aperçu d'une autre saisie, relecture en cours, recette sans route), la route
+`/api/dns/recipe`, et le parcours E2E « tapé puis écrit aussitôt », rejoué sur
+le code d'avant : il y retrouve « route exemple.test déclarée ». Deux défauts
+vus en capture et corrigés dans le même changement : le rôle « Le domaine nu
+est servi par ce Spark » à côté d'un sous-domaine — la phrase même qui fait
+croire que la racine est visée —, et l'aide du champ coupée entre « et son
+contenu. Campagne complète 148 sur 151 ; rejouée sur l'arbre committé, 145 sur
+149 avec les trois mêmes rouges et un quatrième : étrangers à l'unité.
