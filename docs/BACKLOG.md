@@ -8647,9 +8647,11 @@ garde son effet face à une autre cellule.
 (SPK-143) : `memory_enforce=soft` pose `memory.high`, et une cellule qui le
 dépasse est freinée jusqu'au blocage — ce n'est pas un débordement.
 
-- Spécification : **à écrire** (DAT §7.6 ; SCHEMA §2) avant le code.
-- Portée : la création refuse `soft` en le nommant ; ce que deviennent les
-  Sparks existants qui le porteraient se relève d'abord au registre.
+- Spécification : `docs/DAT.md` **§7.6** (« La mémoire est un plafond strict »).
+- Portée : la création refuse `soft` en le nommant, en `422`. Les Sparks
+  existants gardent leur valeur ; le relevé du registre de production — y en
+  a-t-il ? — revient au responsable : sa lecture est refusée à l'agent par sa
+  garde de permissions.
 
 ### [~] SPK-147 · L'aide du gabarit d'alerte et le manuel nomment les dix champs
 

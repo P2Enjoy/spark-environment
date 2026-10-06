@@ -730,6 +730,18 @@ cette primitive. `network.reservation` est un concept de registre servant à
 l'admission control ; `network.burst` est la seule valeur réellement appliquée.
 La console doit présenter cette distinction, pas la masquer.
 
+**La mémoire est un plafond strict, et seulement cela (SPK-146).** Mesuré le
+2026-10-01 sur la VM du banc (SPK-143, `docs/EXPLORATION_QUOTAS.md`) :
+`limits.memory.enforce=soft` pose `memory.high`, et une cellule qui le dépasse
+est **freinée jusqu'au blocage** — rien n'aboutit, rien n'est tué, la cellule
+se fige. Ce n'est pas le débordement que le mot laisse attendre. **Arbitré le
+2026-10-03** : la création **refuse** `memory_enforce=soft`, en `422
+quota_incoherent` avec le champ en cause, et le dit ; `hard` reste le seul mode
+— la valeur par défaut, inchangée. Un Spark existant qui porterait `soft` garde
+sa valeur — rien ne la réécrit ; s'il en existe sur une Forge, c'est au registre
+de cette Forge de le dire. La colonne et sa contrainte (SCHEMA §2) restent :
+aucune migration.
+
 ### 7.7 Admission control : ce qui compte, et contre quoi
 
 Le §7.3 donne l'invariant. Cette section fixe les deux points qu'il laissait
