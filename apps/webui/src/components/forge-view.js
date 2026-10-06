@@ -990,13 +990,22 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
   // SPK-68 · §50.1 : l'assistant doit rester visible quand /healthz manque ;
   // le cacher derrière l'erreur du plan de contrôle rendrait son cas d'usage
   // inatteignable.
-  if (status === 'loading') return renderHostSkeleton() + renderForgeInstaller(installer);
-  if (status === 'not-synced') return renderNotSynced(error, syncing) + renderForgeInstaller(installer);
-  if (status === 'control-unavailable') {
-    return renderControlUnavailable() + renderForgeInstaller(installer);
+  //
+  // @spec docs/BACKLOG.md#SPK-148 · docs/DAT.md §50.1 bis : le panneau dit ce
+  // qu'on sait de `sparkd` — rien
+  // pendant le chargement, « en service » quand il répond, la phrase d'une
+  // machine nue quand il ne répond pas.
+  if (status === 'loading') {
+    return renderHostSkeleton() + renderForgeInstaller(installer, { sparkd: null });
   }
-  if (status === 'error') return renderHostError(error) + renderForgeInstaller(installer);
-  if (!host) return renderHostError(null) + renderForgeInstaller(installer);
+  if (status === 'not-synced') {
+    return renderNotSynced(error, syncing) + renderForgeInstaller(installer, { sparkd: true });
+  }
+  if (status === 'control-unavailable') {
+    return renderControlUnavailable() + renderForgeInstaller(installer, { sparkd: false });
+  }
+  if (status === 'error') return renderHostError(error) + renderForgeInstaller(installer, { sparkd: false });
+  if (!host) return renderHostError(null) + renderForgeInstaller(installer, { sparkd: false });
 
   const garantie = GARANTIES[host.reservation_guarantee];
 
@@ -1034,7 +1043,7 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
     ${renderAddresses(host.addresses)}
   </div>
 </div>
-${renderForgeInstaller(installer)}`;
+${renderForgeInstaller(installer, { sparkd: true })}`;
 }
 
 export function renderHostSkeleton() {

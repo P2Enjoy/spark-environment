@@ -9,6 +9,11 @@ place.
 Déclarez d'abord le serveur dans **Serveurs**, puis ouvrez **Forge** et cliquez
 sur **Diagnostiquer la Forge** dans *Installer cette Forge*.
 
+Avant tout diagnostic, le panneau dit ce que la console sait déjà : « Forge en
+service » quand `sparkd` répond derrière le tunnel — le diagnostic relira alors
+sa conformité, sans rien écrire —, ou que la destination peut accepter SSH sans
+encore porter `sparkd` quand il ne répond pas.
+
 Le relevé est strictement en lecture seule. Il distingue trois faits qui ne se
 remplacent pas : le transport SSH, le plan de contrôle `sparkd`, puis la
 disponibilité que prouvera plus tard `/readyz`. Ainsi, **SSH établi** avec

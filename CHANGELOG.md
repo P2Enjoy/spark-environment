@@ -313,6 +313,11 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-148 — le panneau « Installer cette Forge » dit la vérité sur une Forge
+  en service.** Il y disait « peut accepter SSH sans encore porter `sparkd` »,
+  accents graves compris. Il garde son diagnostic de conformité, et dit
+  « Forge en service » quand `sparkd` répond ; la phrase d'une machine nue ne
+  vient que quand il ne répond pas. DAT §50.1 bis ; manuel M2.
 - **SPK-144 — la fenêtre « Ressources » n'envoie que ce qu'on a changé.** Elle
   pré-remplissait la mémoire arrondie au gibioctet, puis renvoyait tous les
   réglages : un Spark de 512 Mio dont on ne changeait que le réseau en

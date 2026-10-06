@@ -8667,7 +8667,7 @@ n'en nommaient que huit.
   rouge sur l'aide d'avant (huit champs), verte après. **Reste `[~]`** : la voir
   dans la console branchée sur la VM.
 
-### [ ] SPK-148 · Le panneau « Installer cette Forge » dit la vérité sur une Forge en service
+### [~] SPK-148 · Le panneau « Installer cette Forge » dit la vérité sur une Forge en service
 
 **Constaté le 2026-10-01** (capture `spk135-vm-forge-virtio`), **arbitré le
 2026-10-03** : « le cacher quand sparkd répond ». Sur une Forge installée, le
@@ -8685,6 +8685,9 @@ compris.
   `sparkd` ne répond pas ; rien n'est affirmé pendant le chargement ; noms en
   `<code>` ; preuve de composant rouge avant ; vérification par la console sur
   la VM.
+- **Codé le 2026-10-06** : trois preuves de composant, rouges sur le panneau
+  d'avant, vertes après ; console 1 595 sur 1 595 — des diagnostics. **Reste
+  `[~]`** : la vérification par la console sur la VM.
 
 ### [~] SPK-149 · Une recette DNS écrit ce que son aperçu a montré, et accepte un sous-domaine à plusieurs niveaux
 

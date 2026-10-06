@@ -382,8 +382,30 @@ function executionView(execution) {
   </section>`;
 }
 
-/** Panneau présent même si /healthz est absent : c'est son cas d'usage. */
-export function renderForgeInstaller(installer = INSTALLER_VIDE) {
+/**
+ * Ce que le panneau dit avant tout diagnostic, selon ce qu'on sait de `sparkd`.
+ *
+ * @spec docs/BACKLOG.md#SPK-148 · docs/DAT.md §50.1 bis
+ *
+ * Une Forge EN SERVICE recevait la phrase d'une machine nue — « sans encore
+ * porter `sparkd` », accents graves compris. Le panneau reste, parce qu'il est
+ * le chemin de la conformité constatée (manuel M2) ; sa phrase dit ce qui est su.
+ */
+function phraseDeDepart(sparkd) {
+  if (sparkd === true) {
+    return '<p>Forge en service : le diagnostic relit sa conformité, sans rien écrire.</p>';
+  }
+  if (sparkd === false) {
+    return `<p>Cette destination peut accepter SSH sans encore porter <code>sparkd</code>.
+           Le diagnostic distingue ces deux faits avant toute décision de stockage.</p>`;
+  }
+  return '';
+}
+
+/** Panneau présent même si /healthz est absent : c'est son cas d'usage.
+ *  `sparkd` : `true` s'il répond derrière le tunnel, `false` s'il ne répond
+ *  pas, `null` tant qu'on ne le sait pas (SPK-148, §50.1 bis). */
+export function renderForgeInstaller(installer = INSTALLER_VIDE, { sparkd = null } = {}) {
   // `null` est la valeur qu'une vue parente emploie tant que son état n'est pas
   // initialisé : elle signifie le même « pas encore lancé » que `undefined`.
   installer = installer ?? INSTALLER_VIDE;
@@ -401,8 +423,7 @@ export function renderForgeInstaller(installer = INSTALLER_VIDE) {
                                    (installer.values ?? INSTALLER_VIDE.values).poolName))
           + (executionRunning ? '' : planForm(installer))
           + planView(installer.plan, installer)
-        : `<p>Cette destination peut accepter SSH sans encore porter ` + '`sparkd`' + `.
-           Le diagnostic distingue ces deux faits avant toute décision de stockage.</p>`;
+        : phraseDeDepart(sparkd);
   // Le titre ne change pas : c'est le point d'entrée, conforme ou non. La note,
   // elle, dit ce que le dernier relevé a constaté — annoncer « préparation » à
   // qui vient de voir dix contrôles verts ferait douter du verdict.

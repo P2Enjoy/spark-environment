@@ -1,4 +1,6 @@
-/** @verifies docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.1, §50.3 */
+/** @verifies docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.1, §50.3
+ *  @verifies docs/BACKLOG.md#SPK-148 · docs/DAT.md §50.1 bis (le panneau d'une
+ *            Forge en service dit la vérité ; noms en <code>) */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -216,4 +218,26 @@ test('une Forge muette retombe sur le contrat, et le DIT', () => {
   // §8.5 révisé : plus aucun repli n'est offert, le refus est nommé.
   assert.match(html, /n’est pas une Forge\s+installable/);
   assert.ok(!/pool fichier|sur fichier/i.test(html));
+});
+
+
+// --- SPK-148 · §50.1 bis : la phrase dit ce qu'on sait de `sparkd` ------------
+
+test('Forge EN SERVICE : le diagnostic reste, et la phrase dit qu’elle est en service', () => {
+  const html = renderForgeInstaller(undefined, { sparkd: true });
+  assert.match(html, /Forge en service : le diagnostic relit sa conformité, sans rien écrire\./);
+  assert.doesNotMatch(html, /sans encore porter/);
+  assert.match(html, /data-action="diagnostiquer-forge"/, 'le geste du manuel M2 reste');
+});
+
+test('sparkd ne répond pas : la phrase d’une machine nue, le nom en <code>', () => {
+  const html = renderForgeInstaller(undefined, { sparkd: false });
+  assert.match(html, /sans encore porter <code>sparkd<\/code>/);
+  assert.doesNotMatch(html, /`/, 'aucun accent grave brut à l’écran');
+});
+
+test('pas encore su : rien n’est affirmé avant le relevé', () => {
+  const html = renderForgeInstaller(undefined, { sparkd: null });
+  assert.doesNotMatch(html, /sans encore porter|Forge en service/);
+  assert.match(html, /data-action="diagnostiquer-forge"/);
 });
