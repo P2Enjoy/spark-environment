@@ -13623,3 +13623,50 @@ Posés par questions fermées, et tranchés :
   (SPK-147) ;
 - le panneau « Installer cette Forge » : le cacher quand `sparkd` répond
   (SPK-148).
+
+## 2026-10-06 · SPK-149 : une recette écrivait les routes d'un nom et le DNS d'un autre
+
+**Problème**, signalé par le responsable : une recette appliquée à
+`evoliz-mcp.<zone>` « enregistre la racine et ignore le sous-domaine », et
+`mcp.evoliz.<zone>` ne peut pas être créé du tout.
+
+**Hypothèse de départ** : le tiret. Rien dans `dansLaZone`, `nomRelatif`, la
+garde de `preparerEnregistrement` ni l'expression des domaines de `sparkd` ne
+traite le tiret à part — les preuves unitaires composent `evoliz-mcp`
+correctement. Hypothèse écartée par la lecture, puis par la mesure.
+
+**Observation**, sur la pile jetable du harnais et le doublon DNS, au clavier
+comme un exploitant : recette `site-web`, zone, adresse, puis `evoliz-mcp` tapé
+et « Écrire la recette » cliqué aussitôt. Le compte rendu dit « route
+exemple.test déclarée », « route www.exemple.test déclarée », puis
+« evoliz-mcp A écrit », « www.evoliz-mcp A écrit ». Le même geste avec `evoliz`
+donne la même chose : **le tiret n'y est pour rien**. `mcp.evoliz` est refusé :
+« n'est pas dans la zone ».
+
+**Cause** : l'aperçu se relit au `change` du champ, donc à la perte du focus —
+au moment même du clic. `ecrireRecette` prenait les routes dans l'aperçu
+**encore affiché**, composé avant la saisie sur un libellé vide, donc sur
+l'apex ; l'hôte, lui, recomposait le DNS depuis la saisie courante. Le parcours
+E2E SPK-88 le savait à moitié : il attend « l'aperçu qui porte le port saisi »
+parce que s'arrêter avant « fait lire l'aperçu PRÉCÉDENT » — le harnais s'en
+protégeait, le produit non. Le parcours voisin, « route tenue par un autre
+Spark », s'arrête sur une ligne de route déjà présente avant la saisie : il ne
+passait que parce que le doublon répond plus vite que le clic.
+
+Le second défaut est une **règle écrite dans le code**, pas un bogue : un libellé
+pointé hors zone était refusé comme ambigu. Le motif ne tient pas — l'écran
+montre la zone en suffixe et l'aperçu montre le nom complet avant d'écrire.
+
+**Décision** (DAT §38.6.6) : l'écriture ne part que sur un aperçu lu pour la
+saisie courante, sinon elle relit l'aperçu et le dit ; un libellé à plusieurs
+niveaux se compose dans la zone, chaque niveau validé comme un nom d'hôte. Les
+deux vont ensemble : lever le refus d'ambiguïté n'est sûr que si ce que montre
+l'aperçu est ce qui est écrit.
+
+**Vu en chemin** : le code rattachait le champ du nom et le pré-remplissage de
+l'adresse au §38.6.5, qui décrit la surface d'API et ne les porte pas. Ils sont
+désormais écrits au §38.6.6 ; les renvois du code le suivent, avec le code.
+
+**Ce qui reste ouvert** : la vérification sur VM. La console du banc (§51.6) lit
+le `.env` du poste et ne porte aucun doublon DNS ; une épreuve de recette y
+écrirait dans le compte réel. À arbitrer.

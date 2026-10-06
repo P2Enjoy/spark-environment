@@ -2941,7 +2941,7 @@ très bien avoir une adresse publique. Absente, elle est déduite comme avant :
 l'`host` d'un `ssh`, et rien pour les deux autres. Une **boucle locale** y est
 refusée — l'accepter ferait rapprocher l'inventaire DNS sur une adresse que
 personne ne peut atteindre, donc déclarer « servi » ce qui ne l'est pas. Ce champ
-lève la limite que le §38.6.5 constatait : une Forge par alias n'avait aucune
+lève la limite que le §38.6.6 constatait : une Forge par alias n'avait aucune
 adresse connaissable.
 
 #### 22.4.2 Le fichier porte sa version
@@ -7203,6 +7203,62 @@ l'écran qui enchaîne les deux effets, dans l'ordre que le §38.6.4 bis impose.
 
 Elle vit sur l'**hôte console**, comme le reste du §38 : le jeton n'atteint
 jamais la Forge.
+
+#### 38.6.6 Ce que la fenêtre demande, et ce qu'elle écrit
+
+**Écrit le 2026-10-06 (SPK-149).** Les deux premiers points décrivent le
+comportement livré le 2026-08-20 ; le code les rattachait au §38.6.5, qui ne les
+portait pas. Ils sont consignés ici, avec ce qui change.
+
+**Le nom se saisit dans la zone choisie.** La zone se choisit d'abord ; le champ
+du nom ne porte que le libellé, la zone s'affiche en suffixe, et un libellé vide
+vaut le domaine lui-même — pour `site-web` ; `relais-transactionnel` exige un
+sous-domaine. Un libellé qui porte déjà le suffixe de la zone est pris tel
+quel : c'est une saisie par habitude, et elle ne peut vouloir dire qu'une chose.
+
+**Un libellé peut avoir plusieurs niveaux — révisé le 2026-10-06.** `mcp.api`
+dans la zone `exemple.tech` compose `mcp.api.exemple.tech`. Un libellé pointé
+qui ne finissait pas par la zone était jusque-là **refusé**, au motif qu'il était
+ambigu : « autre.fr » visait peut-être une autre zone. Le motif ne tient pas.
+L'écran affiche la zone en suffixe du champ, et l'aperçu montre le nom de chaque
+ligne **avant** toute écriture (§38.6.3) — ce qu'il montre étant, depuis le
+dernier point de cette section, ce qui sera écrit. Le refus interdisait un cas
+ordinaire sans rien protéger. **Constat du responsable, 2026-10-06** : un
+sous-domaine à deux niveaux ne pouvait pas être créé du tout ; arbitré :
+corriger.
+
+**Chaque niveau est un nom d'hôte.** Un niveau porte de 1 à 63 lettres, chiffres
+ou tirets, sans tiret en tête ni en fin ; un niveau vide — `mcp..api`, `.api` —
+est refusé. La garde le dit avant tout appel, plutôt que de laisser le
+fournisseur, ou `sparkd` pour la route, refuser après coup (§38.6.2).
+
+**L'adresse de la Forge est pré-remplie** depuis le serveur courant : son
+adresse déclarée (`publicAddress`, §22.4.1), sinon l'`host` d'une entrée `ssh`.
+Quand elle n'est pas connaissable, le champ reste vide plutôt que faux. Une
+entrée déclarée par alias n'en avait aucune ; c'est `publicAddress` (SPK-77) qui
+a levé cette limite. Les valeurs par défaut sont appliquées du côté qui les
+propose — l'hôte console — et non à l'affichage seul : posées au seul rendu,
+l'écran montrait l'adresse pendant que la requête partait sans elle.
+
+**Ce qui est écrit est ce que l'aperçu a montré — constat du 2026-10-06.**
+Signalé par le responsable : une recette appliquée à `evoliz-mcp` écrivait le
+DNS de `evoliz-mcp`, mais déclarait les routes du domaine **nu**. Reproduit à
+l'écran sur la pile jetable : le tiret n'y est pour rien, `evoliz` fait de même.
+L'aperçu se relit au `change` du champ, donc à la perte du focus — au moment
+même du clic sur « Écrire la recette ». L'écriture prenait les routes de l'aperçu
+**encore affiché**, celui d'avant la saisie, composé sur un libellé vide donc sur
+l'apex, pendant que l'hôte recomposait le DNS depuis la saisie courante. Les deux
+moitiés d'une même recette visaient deux noms, et le compte rendu le montrait
+sans que rien ne l'ait annoncé.
+
+**Règle** : l'écriture ne part que si l'aperçu affiché a été lu pour la saisie
+**courante** — même recette, même zone, mêmes paramètres — et qu'aucune relecture
+n'est en cours. Sinon rien n'est écrit, ni route ni enregistrement ; l'aperçu
+est relu, et la fenêtre le dit près du bouton d'engagement : on vérifie, puis on
+écrit. C'est un clic de plus dans ce cas, et c'est le prix du §38.6.3 : on
+n'écrit pas ce qu'on n'a pas montré. La règle vaut pour toutes les recettes,
+routes ou non : une recette sans route écrirait sinon un DNS que l'aperçu n'a
+pas montré.
 
 ### 38.6 bis Envoyer et recevoir sont deux produits, et le relais les réunit
 

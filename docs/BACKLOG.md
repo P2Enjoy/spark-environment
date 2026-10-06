@@ -8669,6 +8669,37 @@ compris.
 - Portée : le panneau ne se rend que quand `sparkd` ne répond pas derrière le
   tunnel ; le nom s'écrit en `<code>` ; preuve de composant rouge avant ;
   vérification par la console sur la VM.
+
+### [ ] SPK-149 · Une recette DNS écrit ce que son aperçu a montré, et accepte un sous-domaine à plusieurs niveaux
+
+**Signalé le 2026-10-06** par le responsable : une recette appliquée à
+`evoliz-mcp.<zone>` « enregistre la racine et ignore le sous-domaine » ;
+`mcp.evoliz.<zone>` « ne peut pas être créé du tout ». **Arbitré le même jour** :
+expliquer, corriger.
+
+- Spécification : `docs/DAT.md` **§38.6.6** (le nom dans la zone, plusieurs
+  niveaux, chaque niveau validé, l'aperçu fait foi) · §38.6.3, §38.6.4 bis ·
+  manuel M7 (« Appliquer une recette DNS ») · `docs/DESIGN_SYSTEM.md` §6.27 (le
+  message dans la modale, près de l'engagement, sans effacer la saisie), §14.3.
+- Dépend de : SPK-50, SPK-88.
+- Constat, reproduit à l'écran le 2026-10-06 sur la pile jetable et le doublon
+  DNS : `evoliz-mcp` saisi au clavier, puis « Écrire la recette » cliqué
+  aussitôt, déclare les routes `exemple.test` et `www.exemple.test` et écrit le
+  DNS de `evoliz-mcp` et `www.evoliz-mcp`. `evoliz` fait de même : **le tiret
+  n'y est pour rien**. `mcp.evoliz` est refusé par la garde du libellé.
+- Portée : l'écriture refuse un aperçu qui n'a pas été lu pour la saisie
+  courante, le relit, et le dit ; un libellé à plusieurs niveaux compose son nom
+  dans la zone ; chaque niveau est validé ; preuves unitaires rouges sur le code
+  d'avant ; parcours E2E au clavier, sans attente entre la saisie et le clic ; le
+  parcours SPK-88 « route tenue par un autre Spark » attend l'aperçu de SA
+  saisie — il s'arrêtait sur l'aperçu précédent, le défaut même de cette unité ;
+  vérification visuelle.
+- **Vérification sur VM à arbitrer** : la console du banc (§51.6) lit le `.env`
+  du poste et ne porte aucun doublon DNS ; une épreuve de recette y écrirait dans
+  le compte réel du fournisseur.
+- **Hors de cette unité** : `site-web` pose aussi le `www` du nom choisi, y
+  compris sous un sous-domaine (`www.evoliz-mcp`) — c'est sa définition
+  (§38.6.4), inchangée.
 ---
 
 ## Lot 6 — Réseau entre Sparks
