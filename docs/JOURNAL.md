@@ -13858,3 +13858,19 @@ hunk de SPK-151) ; une modification non commitée d'une autre session (§38.6.4,
 SPK-153) a été perdue, et réappliquée par elle. L'outil est remplacé par un
 indexeur qui ne touche jamais l'arbre de travail, et les fichiers partagés ne se
 modifient plus que par remplacements ciblés, après lecture.
+
+## 2026-10-06 · Second incident : un commit a emporté le travail indexé d'une autre session
+
+Le commit `2b12f05` (« valider SPK-151 sur VM… ») contient, en plus de ses
+fichiers, ceux que la session de SPK-153 venait d'**indexer** — recettes, M7,
+parcours, captures : l'index Git est **commun** aux sessions qui partagent le
+dépôt, et `git commit` emporte tout ce qui y est. Rien n'est perdu ; le travail
+de SPK-153 est commité sous un message qui n'est pas le sien. La session
+concernée est prévenue ; l'historique n'est pas réécrit sans instruction du
+responsable.
+
+**Désormais** : les commits de cette session passent par un **index privé**
+(`GIT_INDEX_FILE` temporaire, `read-tree HEAD`, les seuls fichiers de la
+session, `commit-tree`, puis `update-ref` conditionnel). Ni l'index commun ni
+l'arbre de travail ne sont écrits pour construire le commit, et un chemin
+qu'une autre session a indexé est refusé.
