@@ -1555,7 +1555,7 @@ def create_app(config: Config) -> FastAPI:
         """
         mode = spark.get("cpu_mode")
         plafonne = mode == "capped"
-        # Les QUATRE modes du §7.2, et non deux. Le registre interdit a
+        # Les CINQ modes du §7.2, et non deux. Le registre interdit a
         # `cpu_reservation` d'exister en mode `dedicated` (SCHEMA §4) : ne lire
         # qu'elle laissait un Spark a coeurs dedies SANS aucune reference — sa
         # courbe de CPU flottait alors sans rien a quoi se comparer, ce que le
@@ -1681,7 +1681,10 @@ def create_app(config: Config) -> FastAPI:
         taux = app.state.rates.observe(
             spark["id"], metrics_service.read_sample(etat)
         )
-        return {"spark": name, **metrics_service.usage(spark, etat, taux)}
+        # SPK-152 · §49.8 : le plafond en vigueur se RELIT dans le cgroup de la
+        # cellule ; Incus peut l'avoir remis à `max` sans que rien ne le dise.
+        relu = cgroup_service.plafond_en_vigueur(spark["name"])
+        return {"spark": name, **metrics_service.usage(spark, etat, taux, relu)}
 
     @app.get("/v1/sparks/{name}/snapshots", tags=["instantanes"])
     def list_snapshots(name: str) -> dict:

@@ -225,6 +225,15 @@ def _cpu(spark: dict[str, Any]) -> dict[str, Any]:
     elif mode == "capped":
         semantic = "Plafond CPU appliqué par le noyau."
         value = spark["cpu_max"]
+    elif mode == "shared-capped":
+        # @spec docs/BACKLOG.md#SPK-152 · docs/DAT.md §7.2 quater : le plancher est la valeur, le plafond la
+        # borne du burst — tous deux dits, avec leur sens.
+        semantic = (
+            "Réservation garantie sous contention ; le Spark peut dépasser ce "
+            f"plancher quand la Forge est libre, jamais au-delà de son plafond "
+            f"de {spark['cpu_max']:g} CPU."
+        )
+        value = spark["cpu_reservation"]
     else:
         semantic = "Cœurs physiques dédiés à ce Spark."
         value = spark["cpu_cores"]

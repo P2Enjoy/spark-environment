@@ -2,7 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-06 · docs/DAT.md §7.4 (le pool dédié se découpe
       dynamiquement), §7.4 bis (ce que reconfigurer veut dire), §7.4 ter (choix
-      et ordre), §7.5 (SMT) · docs/SCHEMA.md §3, §5
+      et ordre), §7.5 (SMT) · docs/SCHEMA.md §3, §5 · docs/BACKLOG.md#SPK-152 ·
+      docs/DAT.md §7.2 quater (le mode partagé plafonné vit dans le pool partagé)
 
 Le traducteur refuse de choisir les cœurs : c'est ici qu'ils sont alloués. La
 séparation est délibérée — traduire est sans état, allouer ne l'est pas.
@@ -16,7 +17,7 @@ from dataclasses import dataclass, field
 from .db import transaction
 from .translate import allowance_percent
 
-SHARED_MODES = ("shared", "shared-pinned", "capped")
+SHARED_MODES = ("shared", "shared-pinned", "capped", "shared-capped")
 
 
 class CoreAllocationError(RuntimeError):
@@ -68,9 +69,15 @@ def shared_cpus(connection: sqlite3.Connection) -> list[int]:
     )
 
 
-def shared_capacity(connection: sqlite3.Connection) -> float:
-    """Capacité du pool partagé, en cœurs PHYSIQUES (docs/DAT.md §7.7)."""
-    return float(sum(1 for core in _cores(connection) if core.spark_id is None))
+def shared_capacity(connection: sqlite3.Connection, sauf: str | None = None) -> float:
+    """Capacité du pool partagé, en cœurs PHYSIQUES (docs/DAT.md §7.7).
+
+    `sauf` compte aussi les cœurs que ce Spark tient en dédié : un
+    redimensionnement qui le fait quitter le mode dédié les rend au pool
+    (§49.1), et c'est contre ce pool-là que sa nouvelle demande se mesure.
+    """
+    return float(sum(1 for core in _cores(connection)
+                     if core.spark_id is None or (sauf and core.spark_id == sauf)))
 
 
 def dedicated_cpus(connection: sqlite3.Connection, spark_id: str) -> list[int]:

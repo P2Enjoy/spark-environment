@@ -6,6 +6,8 @@
       réglés séparément ; les trois contrôles de cohérence)
 @spec docs/BACKLOG.md#SPK-146 · docs/DAT.md §7.6 (la mémoire est un plafond strict ;
       la création refuse le mode souple)
+@spec docs/BACKLOG.md#SPK-152 · docs/DAT.md §7.2 quater (les contrôles de cohérence du
+      mode partagé plafonné), §49.8
 
 C'est ici que les pièces se rejoignent : admission control, registre, traducteur
 et machine à états. Le module orchestre ; il ne réimplémente aucune de ces règles.
@@ -23,11 +25,13 @@ from secrets import token_hex
 from .addressing import AddressPoolExhausted, allocate
 from .admission import DEFAULT_METADATA_MARGIN, Request, admit, pools
 from . import audit
+from . import cores as core_pool
 from . import images
 from .db import transaction
 from .lifecycle import (
     TRANSIENT, Command, State, TransitionError, allowed, next_state, reconcile, settle,
 )
+from .translate import plafond_rendu_exactement
 
 NAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
@@ -80,6 +84,50 @@ def verifier_reseau(connection: sqlite3.Connection, reservation, plafond) -> Non
             "network_burst_bps",
             f"Le plafond réseau ({_mbit(plafond)}) dépasse la capacité réseau de la "
             f"Forge ({_mbit(capacite)}) : il ne limiterait rien.")
+
+
+def _cpu_positif(valeur) -> bool:
+    return (isinstance(valeur, (int, float)) and not isinstance(valeur, bool)
+            and valeur > 0)
+
+
+def verifier_cpu(connection: sqlite3.Connection, mode, reservation, plafond,
+                 sauf: str | None = None) -> None:
+    """Les quatre contrôles de cohérence du mode partagé plafonné (§7.2 quater).
+
+    Prononcés AVANT toute écriture, comme ceux du réseau : la base porterait le
+    deuxième en `CHECK`, mais un `CHECK` ne nomme ni le champ ni l'écart. Les
+    autres modes ne sont pas touchés ici.
+    """
+    if mode != "shared-capped":
+        return
+    if not _cpu_positif(reservation):
+        raise QuotaIncoherent(
+            "cpu_reservation",
+            "Le mode « partagé plafonné » demande une réservation CPU strictement "
+            "positive.")
+    if not _cpu_positif(plafond):
+        raise QuotaIncoherent(
+            "cpu_max",
+            "Le mode « partagé plafonné » demande un plafond CPU strictement positif.")
+    if plafond < reservation:
+        raise QuotaIncoherent(
+            "cpu_max",
+            f"Le plafond CPU ({plafond:g}) est sous la réservation ({reservation:g}) : "
+            "un plafond sous le plancher promettrait ce qu'il interdit.")
+    # Les cœurs PHYSIQUES du pool partagé (§7.7), ceux que ce Spark tient en
+    # dédié compris : il les rend en changeant de mode.
+    coeurs = core_pool.shared_capacity(connection, sauf=sauf)
+    if coeurs and plafond > coeurs:
+        raise QuotaIncoherent(
+            "cpu_max",
+            f"Le plafond CPU ({plafond:g}) dépasse les {coeurs:g} cœurs du pool "
+            "partagé : au-delà, il ne limiterait rien.")
+    if not plafond_rendu_exactement(plafond):
+        raise QuotaIncoherent(
+            "cpu_max",
+            f"Le plafond CPU {plafond:g} ne se rend pas en millisecondes entières "
+            "sur 100 ms : choisissez un multiple de 0,01 CPU.")
 
 
 class AdmissionRefused(SparkError):
@@ -180,6 +228,8 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str | None = 
     # plafond donné se contrôle avant toute écriture.
     plafond = spec.network_burst_bps if spec.network_burst_bps is not None else spec.network_bps
     verifier_reseau(connection, spec.network_bps, plafond)
+    # SPK-152 · §7.2 quater : la réservation et le plafond CPU, avant l'écriture.
+    verifier_cpu(connection, spec.cpu_mode, spec.cpu_reservation, spec.cpu_max)
 
     demande = Request(
         cpu_mode=spec.cpu_mode,
@@ -325,6 +375,8 @@ def resize(connection: sqlite3.Connection, name: str, champs: dict,
     vise = {**{c: spark[c] for c in CHAMPS_REDIMENSIONNABLES}, **champs}
     # SPK-142 · §49.7 : la cohérence des deux valeurs réseau, avant tout le reste.
     verifier_reseau(connection, vise["network_reservation_bps"], vise["network_burst_bps"])
+    verifier_cpu(connection, vise["cpu_mode"], vise["cpu_reservation"], vise["cpu_max"],
+                 sauf=spark["id"])
 
     # §49.3 : les refus de RÉTRÉCISSEMENT, avant l'admission. Ils portent sur ce
     # que la cellule occupe, pas sur ce que la Forge a de libre.

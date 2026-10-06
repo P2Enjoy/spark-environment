@@ -1,7 +1,8 @@
 """Moteur de migrations du registre.
 
 @spec docs/BACKLOG.md#SPK-04 · docs/SCHEMA.md §10 (schema_migration), §11 (Retour
-      arriere), §12 (Mecanique des migrations)
+      arriere), §12 (Mecanique des migrations) · docs/BACKLOG.md#SPK-152 ·
+      docs/SCHEMA.md §12.3 bis (cles etrangeres suspendues sur demande)
 
 Le moteur applique les fichiers `migrations/NNN_intitule.sql` dans l'ordre
 numerique, chacun dans une transaction unique qui englobe l'enregistrement de sa
@@ -14,9 +15,11 @@ from __future__ import annotations
 import hashlib
 import re
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterator
 
 from .db import execute_script, transaction
 
@@ -28,6 +31,10 @@ _FILENAME = re.compile(r"^(\d{3})_([a-z0-9_]+)\.sql$")
 _UP = "-- @up"
 _DOWN = "-- @down"
 _IRREVERSIBLE = "-- IRREVERSIBLE:"
+#: SPK-152 · SCHEMA §12.3 bis : la ligne par laquelle une section demande que
+#: les cles etrangeres soient suspendues le temps de reconstruire une table
+#: parente. Sans elle, le moteur ne suspend rien.
+_CLES_SUSPENDUES = "-- @cles-etrangeres: suspendues"
 
 SCHEMA_MIGRATION_DDL = """
 CREATE TABLE IF NOT EXISTS schema_migration (
@@ -54,6 +61,54 @@ class Migration:
     @property
     def reversible(self) -> bool:
         return _IRREVERSIBLE not in self.down
+
+    @property
+    def cles_suspendues_up(self) -> bool:
+        return _demande_la_suspension(self.up)
+
+    @property
+    def cles_suspendues_down(self) -> bool:
+        return _demande_la_suspension(self.down)
+
+
+def _demande_la_suspension(section: str) -> bool:
+    return any(ligne.strip() == _CLES_SUSPENDUES for ligne in section.splitlines())
+
+
+@contextmanager
+def _cles_etrangeres(connection: sqlite3.Connection, suspendues: bool,
+                     nom: str) -> Iterator[None]:
+    """Suspend les cles etrangeres AUTOUR de la transaction, puis les rend (§12.3 bis).
+
+    `PRAGMA foreign_keys` est sans effet dans une transaction : la suspension se
+    pose avant `BEGIN`, et se verifie, plutot que de croire qu'elle a pris. Les
+    cles reviennent dans tous les cas, echec compris : une connexion rendue sans
+    elles laisserait passer, plus tard, un `spark_id` pointant vers rien.
+    """
+    if not suspendues:
+        yield
+        return
+    connection.execute("PRAGMA foreign_keys = OFF")
+    try:
+        if connection.execute("PRAGMA foreign_keys").fetchone()[0] != 0:
+            raise MigrationError(
+                f"{nom} : les cles etrangeres n'ont pas pu etre suspendues — une "
+                "transaction etait deja ouverte. Rien n'est applique."
+            )
+        yield
+    finally:
+        connection.execute("PRAGMA foreign_keys = ON")
+
+
+def _verifier_les_references(connection: sqlite3.Connection, nom: str) -> None:
+    """`foreign_key_check` avant la validation : une ligne rendue annule tout."""
+    cassees = connection.execute("PRAGMA foreign_key_check").fetchall()
+    if cassees:
+        tables = sorted({ligne[0] for ligne in cassees})
+        raise MigrationError(
+            f"{nom} : {len(cassees)} reference(s) cassee(s) apres reconstruction, "
+            f"dans {', '.join(tables)}. La migration est annulee entiere."
+        )
 
 
 def _split(text: str, path: Path) -> tuple[str, str]:
@@ -184,8 +239,12 @@ def upgrade(connection: sqlite3.Connection, directory: Path | None = None) -> li
     verify(connection, directory)
     done: list[int] = []
     for migration in pending(connection, directory):
-        with transaction(connection):
+        suspendues = migration.cles_suspendues_up
+        with _cles_etrangeres(connection, suspendues, migration.path.name), \
+                transaction(connection):
             execute_script(connection, migration.up)
+            if suspendues:
+                _verifier_les_references(connection, migration.path.name)
             connection.execute(
                 "INSERT INTO schema_migration (version, applied_at, checksum) "
                 "VALUES (?, ?, ?)",
@@ -218,7 +277,11 @@ def downgrade(connection: sqlite3.Connection, directory: Path | None = None) -> 
             "irreversible. Le retour arriere est refuse plutot qu'execute a "
             "moitie."
         )
-    with transaction(connection):
+    suspendues = migration.cles_suspendues_down
+    with _cles_etrangeres(connection, suspendues, migration.path.name), \
+            transaction(connection):
         execute_script(connection, migration.down)
+        if suspendues:
+            _verifier_les_references(connection, migration.path.name)
         connection.execute("DELETE FROM schema_migration WHERE version = ?", (version,))
     return [version]

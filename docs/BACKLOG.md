@@ -8857,7 +8857,7 @@ d'enregistrer ; l'onglet Alertes n'en montre aucun. **Arbitré le 2026-10-06** :
   journal ni envoyé (preuves `pytest`, sur le doublon) ; capture observée.
   **Reste `[~]`** : OP-37.
 
-### [ ] SPK-152 · Un mode CPU qui porte une réservation ET un plafond
+### [~] SPK-152 · Un mode CPU qui porte une réservation ET un plafond
 
 **Arbitré le 2026-10-06**, sur la mesure de SPK-145 (`docs/EXPLORATION_QUOTAS.md`
 §1 : la part d'une cellule vaut le plus petit de son poids et de son plafond, et
@@ -8881,6 +8881,10 @@ un plafond n'efface pas la réservation) : « oui, le spécifier ».
   3. la console : création, modale « Ressources », fiche et annonce ;
   4. manuels, changelog, OP-38 ;
   5. épreuve sur la VM du banc, dans la peau de l'exploitant.
+- **Étapes 1 et 2 livrées le 2026-10-06** : moteur et migration `022`
+  (`test_migration_cles_suspendues`, `test_schema_partage_plafonne`), `sparkd`
+  (`test_partage_plafonne`) ; suite `sparkd` entière verte. Non vérifiées sur
+  la VM.
 - Ce qu'elle doit trancher : le nom du mode, ce que l'admission compte (la
   réservation, ou le plafond comme le mode `capped`), les contrôles de
   cohérence (plafond ≥ réservation, plafond ≤ cœurs partagés), le plafond posé

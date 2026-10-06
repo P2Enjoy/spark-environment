@@ -1,9 +1,10 @@
 """Traduction d'un manifeste Spark en configuration Incus.
 
-@spec docs/BACKLOG.md#SPK-08 · docs/DAT.md §7.2 (les quatre modes CPU),
+@spec docs/BACKLOG.md#SPK-08 · docs/DAT.md §7.2 (les cinq modes CPU),
       §7.2 bis (allowance → poids), §7.2 ter (rendu exact des valeurs),
       §7.5 (SMT), §7.6 (mémoire, réseau, stockage),
       §8.8 (la marge de métadonnées) · docs/BACKLOG.md#SPK-30 · docs/SCHEMA.md §4
+      · docs/BACKLOG.md#SPK-152 · §7.2 quater (le mode partagé plafonné)
 
 Ce module est la frontière entre le vocabulaire du produit — « 0,5 CPU
 partagé » — et celui d'Incus. Il ne parle à personne : il transforme. C'est
@@ -193,8 +194,8 @@ def cpu_weight(percent: int, priority: int) -> int:
     return percent - WEIGHT_OFFSET + priority
 
 
-def quota_allowance(cpu_max: float) -> str:
-    """Forme temporelle `<t>ms/100ms`, en millisecondes entières."""
+def _millisecondes(cpu_max: float) -> int:
+    """Un plafond en millisecondes entières sur 100 ms (§7.2 ter, règle 3)."""
     millisecondes = round(cpu_max * QUOTA_PERIOD_MS)
     if millisecondes < 1:
         raise TranslationError(
@@ -203,7 +204,26 @@ def quota_allowance(cpu_max: float) -> str:
             f"{1 / QUOTA_PERIOD_MS:g} CPU. Plafonner à 1ms donnerait au Spark "
             "davantage que ce qui a été vendu."
         )
-    return f"{millisecondes}ms/{QUOTA_PERIOD_MS}ms"
+    return millisecondes
+
+
+def quota_allowance(cpu_max: float) -> str:
+    """Forme temporelle `<t>ms/100ms`, en millisecondes entières."""
+    return f"{_millisecondes(cpu_max)}ms/{QUOTA_PERIOD_MS}ms"
+
+
+def plafond_rendu_exactement(cpu_max: float) -> bool:
+    """Le plafond tombe-t-il sur une milliseconde entière (§7.2 quater, contrôle 4) ?
+
+    `round` rendrait 1,234 CPU par 123 ms sans un mot : c'est l'approximation
+    silencieuse que le §7.2 ter interdit. Le contrôle se fait AVANT l'écriture.
+    """
+    return abs(cpu_max * QUOTA_PERIOD_MS - round(cpu_max * QUOTA_PERIOD_MS)) < 1e-6
+
+
+def cpu_max_quota_us(cpu_max: float) -> int:
+    """Le quota de `cpu.max`, en microsecondes sur la période de 100 ms (§7.2 quater)."""
+    return _millisecondes(cpu_max) * 1000
 
 
 def _cpuset(cpu_ids: list[int]) -> str:
@@ -267,6 +287,20 @@ def translate(
             raise TranslationError("Mode « capped » sans plafond.")
         config["limits.cpu"] = _cpuset(shared_cpus)
         config["limits.cpu.allowance"] = quota_allowance(manifest.cpu_max)
+
+    elif manifest.cpu_mode == "shared-capped":
+        # SPK-152 · §7.2 quater : la traduction de `shared`, plus le plafond dans
+        # `raw.lxc` — Incus ne sait pas poser un pourcentage ET un quota
+        # temporel. Le plafond ne prend donc effet qu'au démarrage (§49.8).
+        if manifest.cpu_reservation is None or manifest.cpu_max is None:
+            raise TranslationError(
+                "Mode « shared-capped » exige une réservation ET un plafond."
+            )
+        config["limits.cpu"] = _cpuset(shared_cpus)
+        config["limits.cpu.allowance"] = f"{allowance_percent(manifest.cpu_reservation, pool_capacity, manifest.cpu_priority)}%"
+        config["limits.cpu.priority"] = str(manifest.cpu_priority)
+        config["raw.lxc"] = cgroup.raw_lxc(
+            manifest.name, cpu_max_quota_us(manifest.cpu_max))
 
     elif manifest.cpu_mode == "dedicated":
         if not dedicated_cpus:

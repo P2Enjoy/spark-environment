@@ -6,6 +6,8 @@
       qui modifie une note écrite, en-tête recopié),
       docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3 (un démarrage hors du
       produit, repris par le veilleur),
+      docs/BACKLOG.md#SPK-152 · docs/DAT.md §7.2 quater (un Spark « partagé
+      plafonné », en marche),
       §28.3 (les mêmes chemins que l'application), §28.5 (ce qu'il démontre),
       §28.6 (rejouable à l'identique) · CLAUDE.md §8
 
@@ -153,6 +155,14 @@ def populate(client: TestClient, incus, caddy, sondes) -> dict[str, int]:
         "protocol": "tcp", "note": "réplication depuis l'extérieur"}),
         201, quoi="port publié « 15432 → 5432 »")
     compte["ports"] = compte.get("ports", 0) + 2
+
+    # --- SPK-152 · DAT §7.2 quater : un Spark « partagé plafonné », en marche.
+    # Sa fiche montre la réservation ET le plafond ; sans lui, le cinquième mode
+    # n'aurait aucun sujet à l'écran.
+    creer({"name": "api-plafonnee", "image": "images:debian/13",
+           "cpu_mode": "shared-capped", "cpu_reservation": 0.25, "cpu_max": 0.75,
+           "memory_bytes": 512 * MIO, "storage_bytes": 5 * GIO,
+           "network_bps": 50 * MBIT})
 
     # --- Spark « pending » : déclaré, pas encore appliqué. Il porte aussi la
     # route non appliquée ci-dessous, parce qu'il n'a pas encore d'adresse.

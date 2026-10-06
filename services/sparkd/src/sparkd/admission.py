@@ -3,7 +3,9 @@
 @spec docs/BACKLOG.md#SPK-05, docs/BACKLOG.md#SPK-30 · docs/DAT.md §7.3
       (invariant), §7.3 bis (ce que l'invariant ne garantit pas), §7.7 (ce qui
       compte et contre quoi), §8.8.2 règle 4 (la marge de métadonnées est
-      comptée au pool) · docs/SCHEMA.md §2 (host), §4 (spark)
+      comptée au pool) · docs/SCHEMA.md §2 (host), §4 (spark) ·
+      docs/BACKLOG.md#SPK-152 · §7.7 (le mode partagé plafonné compte sa
+      réservation)
 
 Le registre — et non le noyau — produit la garantie de réservation. Le noyau
 n'applique que des proportions ; c'est l'invariant
@@ -27,7 +29,7 @@ from enum import Enum
 
 # Le mode « capped » consomme son PLAFOND, pas zéro : un Spark plafonné à
 # 0,5 CPU peut réellement consommer 0,5 CPU en permanence (DAT §7.7).
-CPU_POOL_MODES = ("shared", "shared-pinned", "capped")
+CPU_POOL_MODES = ("shared", "shared-pinned", "capped", "shared-capped")
 
 #: Marge de métadonnées par défaut (docs/DAT.md §8.8.3), en octets. Elle est
 #: réellement prise sur le pool : la compter ferait promettre au registre ce
@@ -115,7 +117,9 @@ class Request:
         """Ce que la demande prend au pool CPU partagé (DAT §7.7)."""
         if self.cpu_mode == "capped":
             return self.cpu_max or 0.0
-        if self.cpu_mode in ("shared", "shared-pinned"):
+        # SPK-152 · §7.7 : le mode partagé plafonné compte sa RÉSERVATION, pas
+        # son plafond — le plafond borne un burst que `shared` ne compte pas.
+        if self.cpu_mode in ("shared", "shared-pinned", "shared-capped"):
             return self.cpu_reservation or 0.0
         return 0.0  # dedicated : réduit la capacité, ne consomme pas de réservation
 

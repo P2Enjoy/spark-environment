@@ -66,6 +66,8 @@ def test_le_seed_produit_les_cinq_etats_annonces(seede):
         # sur la Forge réelle, et l'écran qui retire Docker aucun sujet.
         "alpine-demo": "running",    # servie, sans Docker
         "busybox-demo": "running",   # aucune doctrine : refusée
+        # SPK-152 · §7.2 quater : le cinquième mode CPU, montrable à l'écran.
+        "api-plafonnee": "running",
     }
 
 

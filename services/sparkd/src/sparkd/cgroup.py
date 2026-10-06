@@ -3,7 +3,8 @@
 @spec docs/BACKLOG.md#SPK-29 · docs/DAT.md §32 (rendre la réservation CPU
       absolue), §32.1 (le mécanisme), §32.2 (le poids n'est pas une constante),
       §32.3 (la Forge garde une part), §32.4 (la tranche survit au redémarrage) ·
-      §7.2 bis, §7.3 bis
+      §7.2 bis, §7.3 bis · docs/BACKLOG.md#SPK-152 · §7.2 quater (le plafond du
+      mode partagé plafonné), §49.8 (le plafond en vigueur se relit)
 
 Incus place chaque Spark à la RACINE de cgroup v2, frère des tranches de la Forge.
 Le poids d'un Spark y est arbitré contre `system.slice` autant que contre les
@@ -20,6 +21,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 #: Nom de la tranche parente. Posée en unité systemd par l'installation : créée
 #: à la main elle disparaît au redémarrage, et les Sparks retomberaient à la
@@ -42,16 +44,60 @@ class CgroupError(RuntimeError):
     """La tranche n'est pas dans l'état que le produit suppose."""
 
 
-def raw_lxc(name: str) -> str:
+#: Période de `cpu.max`, en microsecondes : celle qu'Incus pose pour la forme
+#: temporelle de `capped` (§7.2 ter), reprise telle quelle pour le plafond du
+#: mode partagé plafonné.
+CPU_MAX_PERIOD_US = 100_000
+
+
+def raw_lxc(name: str, cpu_max_quota_us: int | None = None) -> str:
     """Directive `raw.lxc` plaçant un Spark dans la tranche (§32.1).
 
     Mesuré : la loi de poids du §7.2 bis s'applique inchangée à l'intérieur, et
     `cpu.max` reste `max` — le burst du mode partagé est donc préservé.
+
+    SPK-152 · §7.2 quater : en mode partagé plafonné, une troisième ligne pose le
+    plafond. MESURÉ le 2026-10-06 sur la VM du banc : elle tient après un
+    redémarrage, DANS la tranche ; elle ne prend effet qu'au démarrage.
     """
-    return (
+    lignes = (
         f"lxc.cgroup.dir.container = {SLICE}/{name}\n"
         f"lxc.cgroup.dir.monitor = {SLICE}/monitor-{name}\n"
     )
+    if cpu_max_quota_us is not None:
+        lignes += f"lxc.cgroup2.cpu.max = {cpu_max_quota_us} {CPU_MAX_PERIOD_US}\n"
+    return lignes
+
+
+class PlafondRelu(NamedTuple):
+    """Le `cpu.max` d'une cellule, relu (§49.8).
+
+    `lu` faux : le fichier n'a pas pu être lu — cellule arrêtée, hors de la
+    tranche, ou poste sans cgroup v2. `cpu` vaut `None` quand `cpu.max` dit
+    `max` : aucun plafond en vigueur.
+    """
+
+    lu: bool
+    cpu: float | None
+
+
+def plafond_en_vigueur(name: str, root: Path | None = None) -> PlafondRelu:
+    """Relit le plafond CPU RÉELLEMENT appliqué à une cellule (§49.8). Ne modifie rien.
+
+    C'est le seul témoin fiable : Incus remet `cpu.max` à `max` dès qu'il repose
+    une réservation à chaud (§7.2 quater), sans que rien d'autre ne le dise.
+    """
+    chemin = slice_path(root) / name / "cpu.max"
+    try:
+        quota, periode = chemin.read_text().split()
+    except (OSError, ValueError):
+        return PlafondRelu(False, None)
+    if quota == "max":
+        return PlafondRelu(True, None)
+    try:
+        return PlafondRelu(True, int(quota) / int(periode))
+    except (ValueError, ZeroDivisionError):
+        return PlafondRelu(False, None)
 
 
 @dataclass(frozen=True)

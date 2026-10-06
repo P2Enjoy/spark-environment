@@ -12857,7 +12857,10 @@ deux faits, et l'API les publie séparément.
 |---|---|
 | `ceiling` | le plafond que le registre promet : `cpu_max` en `capped` et `shared-capped`, `null` sinon |
 | `ceiling_in_force` | le plafond **relu** dans `cpu.max` du cgroup de la cellule (`spark.slice/<nom>`), en CPU ; `null` quand `cpu.max` vaut `max` |
-| `ceiling_status` | `applied` — relu, égal à la promesse ; `pending` — cellule en marche, relu, différent : il prendra effet au prochain démarrage ; `unread` — cellule arrêtée, ou cgroup illisible |
+| `ceiling_status` | `applied` — relu, égal à la promesse ; `pending` — relu, différent : il prendra effet au prochain démarrage ; `unread` — cgroup illisible (hors de la tranche, poste sans cgroup v2) |
+
+Le bloc `cpu` n'existe que sur une cellule **en marche** (§20.4) : une cellule
+arrêtée n'a pas de plafond en vigueur, et le sien s'appliquera à son démarrage.
 
 La comparaison vaut pour **tous** les modes : un passage de `shared-capped` à
 `shared` laisse l'ancien plafond en vigueur jusqu'au démarrage suivant, et la

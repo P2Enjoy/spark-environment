@@ -3,7 +3,9 @@
 @spec docs/BACKLOG.md#SPK-14 · docs/BACKLOG.md#SPK-93 · docs/DAT.md §20
       (Métriques d'usage), §20.1 (compteurs), §20.2 (seule eth0), §20.3 (à quoi
       ça se compare), §20.4 (un Spark arrêté) · §7.3 bis, §7.6 · §52.2
-      (l'historien emploie ce module, avec son PROPRE traqueur)
+      (l'historien emploie ce module, avec son PROPRE traqueur) ·
+      docs/BACKLOG.md#SPK-152 · §49.8 (le plafond promis, le plafond relu, et
+      leur écart)
 
 Un compteur n'est pas un taux. Ce module conserve le relevé précédent pour
 produire un taux **accompagné de sa fenêtre** — un taux sans fenêtre n'est pas
@@ -109,9 +111,38 @@ def instantanees(state: dict) -> tuple[int | None, int | None]:
     return memoire, disque
 
 
-def usage(spark: dict, state: dict, rates: dict) -> dict:
-    """Assemble l'usage d'un Spark, comparé à ce qui est RÉELLEMENT appliqué."""
+def plafond_promis(spark: dict) -> float | None:
+    """Le plafond CPU que le registre promet (§49.8) — `None` sans plafond."""
+    if spark.get("cpu_mode") in ("capped", "shared-capped"):
+        return spark.get("cpu_max")
+    return None
+
+
+def statut_du_plafond(promis: float | None, relu) -> str:
+    """`applied`, `pending` ou `unread` (§49.8).
+
+    La comparaison vaut pour TOUS les modes : un retour à `shared` laisse
+    l'ancien plafond en vigueur jusqu'au démarrage, et une réservation reposée à
+    chaud peut en effacer un. `relu` est un `cgroup.PlafondRelu`, ou `None`.
+    """
+    if relu is None or not relu.lu:
+        return "unread"
+    # Le plafond se pose en millisecondes entières sur 100 ms (§7.2 ter).
+    attendu = None if promis is None else round(promis * 100) / 100
+    if attendu is None or relu.cpu is None:
+        return "applied" if attendu is None and relu.cpu is None else "pending"
+    return "applied" if abs(relu.cpu - attendu) < 1e-6 else "pending"
+
+
+def usage(spark: dict, state: dict, rates: dict, plafond_relu=None) -> dict:
+    """Assemble l'usage d'un Spark, comparé à ce qui est RÉELLEMENT appliqué.
+
+    `plafond_relu` est le `cpu.max` relu de la cellule (`cgroup.PlafondRelu`) :
+    `applied: true` dit que la configuration est posée, pas que le plafond est
+    en vigueur (§49.8).
+    """
     mem_usage, disk_usage = instantanees(state)
+    promis = plafond_promis(spark)
 
     reservation = spark.get("cpu_reservation")
     if spark.get("cpu_mode") == "capped":
@@ -142,6 +173,11 @@ def usage(spark: dict, state: dict, rates: dict) -> dict:
                 bool(plafonne and utilise is not None and reservation is not None
                      and utilise > reservation * 1.05)
             ),
+            # SPK-152 · §49.8 : la promesse, le relevé, et leur écart.
+            "ceiling": promis,
+            "ceiling_in_force": (
+                plafond_relu.cpu if plafond_relu is not None and plafond_relu.lu else None),
+            "ceiling_status": statut_du_plafond(promis, plafond_relu),
         },
         "memory": {
             "used_bytes": mem_usage,
