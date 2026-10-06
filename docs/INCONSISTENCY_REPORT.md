@@ -17,17 +17,6 @@ code ne touche ni la Forge ni la navigation.
 pile factice, qui ne valide plus rien (DAT §28.7). Il est absorbé par SPK-138 et
 rejoué contre la VM ; l'entrée sort du rapport à ce moment.
 
-## 2026-10-03 · Le DAT promet un rendu du gabarit d'alerte avant l'enregistrement ; l'écran n'en montre aucun
-
-**Constaté** en spécifiant SPK-147 : le DAT §47.3.1 dit « L'écran montre le
-rendu **avant** d'enregistrer, sur un événement d'exemple. Un gabarit qu'on ne
-peut pas voir rendu se vérifie le jour où il sert, c'est-à-dire trop tard. »
-L'onglet Alertes (`apps/webui/src/components/forge-alertes.js`) n'a aucun
-rendu : il enregistre, ou montre le refus d'un champ inconnu.
-
-**Arbitré le 2026-10-06** : construire l'aperçu — unité SPK-151. L'entrée sort
-du rapport quand elle est livrée.
-
 ## 2026-10-06 · Trois parcours rougissent en campagne et passent isolément
 
 **Constaté** en rejouant la campagne E2E pour SPK-149, **avant et après** le

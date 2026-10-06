@@ -13841,3 +13841,20 @@ du texte ; à 390 px, elle se replie dans sa carte, sans débordement de page.
 **Ce qui reste** : la vérification sur la VM du banc, et OP-36. L'efficacité sur
 les agents, elle, ne se prouve pas ici : elle se lira sur les déploiements que
 le responsable observera.
+
+## 2026-10-06 · SPK-151 livré : l'aperçu du message d'alerte
+
+`POST /v1/notify/preview` rend le message par `texte_envoye` — le même choix et
+la même sérialisation que l'envoi réel —, sur un événement d'exemple que la
+liste fermée notifie ; rien n'est écrit, envoyé ni journalisé. L'onglet Alertes
+porte « Voir le message » sous le gabarit ; la zone se met à jour seule, pour ne
+pas effacer le mot de passe tapé. Vérifié sur VM : le rendu, le mot de passe qui
+survit, le champ inconnu signalé avant l'enregistrement.
+
+**Incident de la session, le même jour** : un outil d'indexation a vidé
+`docs/DAT.md` dans l'arbre de travail — il ouvrait le fichier en écriture avant
+de le relire. Le fichier a été restauré aussitôt depuis l'index (HEAD et le seul
+hunk de SPK-151) ; une modification non commitée d'une autre session (§38.6.4,
+SPK-153) a été perdue, et réappliquée par elle. L'outil est remplacé par un
+indexeur qui ne touche jamais l'arbre de travail, et les fichiers partagés ne se
+modifient plus que par remplacements ciblés, après lecture.

@@ -12,6 +12,8 @@
  *           colonnes, §55.9.3),
  *           docs/BACKLOG.md#SPK-149 (une recette écrit ce que son aperçu a
  *           montré ; un sous-domaine à plusieurs niveaux, §38.6.6),
+ *           docs/BACKLOG.md#SPK-153 (le « www » de la recette site web est
+ *           une case décochée par défaut, §38.6.4 ; SPK-DS-39),
  *           docs/BACKLOG.md#SPK-132 (recréer un conteneur de pile Compose,
  *           §37.7.5 ; l'onglet Environnement nomme ce geste, §43.7) ·
  *           docs/DAT.md §29 (éprouver le produit par où
@@ -2919,6 +2921,8 @@ test('appliquer une recette écrit TOUTES ses lignes, et rend le sort de chacune
     await page.selectOption('#recette-id', 'site-web');
     await page.selectOption('#recette-zone', 'exemple.test');
     await page.fill('[data-param="domain"]', 'exemple.test');
+    // SPK-153 : le « www » se demande — la case est décochée à l'ouverture.
+    await page.check('[data-param="www"]');
     await page.fill('[data-param="address"]', '198.51.100.7');
     await page.dispatchEvent('[data-param="address"]', 'change');
 
@@ -3064,6 +3068,8 @@ test('le compte rendu d’une recette se VÉRIFIE, et voit l’écart quand il y
     await page.selectOption('#recette-id', 'site-web');
     await page.selectOption('#recette-zone', 'exemple.test');
     await page.fill('[data-param="domain"]', 'exemple.test');
+    // SPK-153 : le « www » est demandé — c'est lui que la relecture verra absent.
+    await page.check('[data-param="www"]');
     await page.fill('[data-param="address"]', '203.0.113.10');
     await page.dispatchEvent('[data-param="address"]', 'change');
     await apercuDeLaSaisie();
@@ -3271,6 +3277,7 @@ test('une recette de site web pose sa ROUTE avant son enregistrement', async () 
     await page.selectOption('#recette-id', 'site-web');
     await page.selectOption('#recette-zone', 'staging.exemple.test');
     await page.fill('[data-param="domain"]', '');
+    await page.check('[data-param="www"]'); // SPK-153 : deux routes demandées
     await page.fill('[data-param="address"]', '203.0.113.10');
     // §26.3 : le port ne se devine d'aucun enregistrement DNS.
     await page.fill('[data-param="port"]', '9300');
@@ -3333,6 +3340,8 @@ test('une route déjà tenue par un AUTRE Spark est refusée, sans bloquer le re
     await page.selectOption('#recette-id', 'site-web');
     await page.selectOption('#recette-zone', 'exemple.test');
     await page.fill('[data-param="domain"]', 'prise');
+    // SPK-153 : la seconde route — celle qui passe — est le « www », demandé.
+    await page.check('[data-param="www"]');
     await page.fill('[data-param="address"]', '203.0.113.10');
     await page.fill('[data-param="port"]', '9400');
     await page.dispatchEvent('[data-param="port"]', 'change');
@@ -3428,22 +3437,19 @@ test('un sous-domaine tapé puis écrit AUSSITÔT : rien ne part sur l’aperçu
     await page.waitForSelector('#recette-resultat', { timeout: 20000 });
     const bilan = await page.textContent('#recette-resultat');
     assert.ok(bilan.includes('route evoliz-mcp.exemple.test'));
-    assert.ok(bilan.includes('route www.evoliz-mcp.exemple.test'));
+    assert.ok(!bilan.includes('www.evoliz-mcp'), 'sans la case, aucun « www » (SPK-153)');
     assert.ok(!bilan.includes('route exemple.test'), 'le domaine nu n’est pas visé');
     await capturer('spk149-compte-rendu', { hauteur: 1300 });
 
     // EFFETS : les routes et le DNS visent le MÊME nom ; le domaine nu n'a pas bougé.
     const { corps: apres } = await pile.lireSparkd('/v1/ingress');
-    for (const nom of ['evoliz-mcp.exemple.test', 'www.evoliz-mcp.exemple.test']) {
-      const r = apres.routes.find((x) => x.domain === nom);
-      assert.ok(r, `la route ${nom} doit exister`);
-      assert.equal(r.spark_name, 'boutique');
-    }
+    const r = apres.routes.find((x) => x.domain === 'evoliz-mcp.exemple.test');
+    assert.ok(r, 'la route evoliz-mcp.exemple.test doit exister');
+    assert.equal(r.spark_name, 'boutique');
     assert.deepEqual(tenues(apres.routes, NU), tenues(avant.routes, NU),
                      'aucune route du domaine nu n’a été déclarée ni changée');
     const zone = dns.enregistrements('exemple.test');
     assert.ok(zone.some((r) => r.name === 'evoliz-mcp' && r.type === 'A'));
-    assert.ok(zone.some((r) => r.name === 'www.evoliz-mcp' && r.type === 'A'));
   });
 });
 
@@ -3468,7 +3474,7 @@ test('un sous-domaine à DEUX niveaux s’écrit dans la zone ; un niveau vide e
       ?.textContent.includes('route mcp.evoliz.exemple.test'), null, { timeout: 15000 });
     await apercuDeLaSaisie();
     const apercu = await page.textContent('#recette-apercu');
-    assert.ok(apercu.includes('route www.mcp.evoliz.exemple.test'));
+    assert.ok(!apercu.includes('www.mcp.evoliz'), 'sans la case, aucun « www » (SPK-153)');
     assert.ok(apercu.includes('mcp.evoliz A'), 'le nom relatif garde ses deux niveaux');
     await capturer('spk149-deux-niveaux-apercu', { hauteur: 1300 });
 
@@ -3477,14 +3483,81 @@ test('un sous-domaine à DEUX niveaux s’écrit dans la zone ; un niveau vide e
     await capturer('spk149-deux-niveaux-compte-rendu', { hauteur: 1300 });
 
     const { corps } = await pile.lireSparkd('/v1/ingress');
-    for (const nom of ['mcp.evoliz.exemple.test', 'www.mcp.evoliz.exemple.test']) {
-      const r = corps.routes.find((x) => x.domain === nom);
-      assert.ok(r, `la route ${nom} doit exister`);
-      assert.equal(r.spark_name, 'boutique');
-    }
+    const r = corps.routes.find((x) => x.domain === 'mcp.evoliz.exemple.test');
+    assert.ok(r, 'la route mcp.evoliz.exemple.test doit exister');
+    assert.equal(r.spark_name, 'boutique');
     const zone = dns.enregistrements('exemple.test');
     assert.ok(zone.some((r) => r.name === 'mcp.evoliz' && r.type === 'A'));
-    assert.ok(zone.some((r) => r.name === 'www.mcp.evoliz' && r.type === 'A'));
+  });
+});
+
+// --- SPK-153 · LE « www » EST UNE OPTION, DÉCOCHÉE PAR DÉFAUT (DAT §38.6.4) ---
+
+test('la case « www » est décochée ; cochée au clavier, l’aperçu le suit ; décochée, un seul nom est écrit', async () => {
+  // Demandé le 2026-10-06 : la recette posait d'office le `www` du nom choisi,
+  // sous un sous-domaine aussi, avec sa route. Décochée, elle ne pose que le
+  // nom qu'on a tapé.
+  await parcours('spk153-www-optionnel', async () => {
+    await recetteSiteWebAuClavier();
+    await page.click('[data-param="domain"]');
+    await page.keyboard.type('vitrine');
+    // Tab quitte le nom — l'aperçu se relit — et entre dans la case qui le suit.
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.param), 'www',
+                 'la case suit le champ du nom dans l’ordre de tabulation');
+    assert.equal(await page.isChecked('[data-param="www"]'), false, 'décochée à l’ouverture');
+    // DESIGN_SYSTEM.md §6.10, MESURÉ (§13.3) : case de 24 px, ligne de 40 px au
+    // moins, et un seul écart de 8 px — la marge des cases de modale ne s'ajoute
+    // pas au `gap` du composant.
+    const mesure = await page.evaluate(() => {
+      const c = document.querySelector('[data-param="www"]').getBoundingClientRect();
+      const ligne = document.querySelector('label.case[for="recette-p-www"]');
+      const texte = ligne.querySelector('span').getBoundingClientRect();
+      return { cote: c.width, haut: c.height, ligne: ligne.getBoundingClientRect().height,
+               ecart: Math.round(texte.left - c.right) };
+    });
+    assert.deepEqual([mesure.cote, mesure.haut], [24, 24], 'la case mesure 24 px');
+    assert.ok(mesure.ligne >= 40, `la ligne atteint la cible de 40 px (${mesure.ligne})`);
+    assert.equal(mesure.ecart, 8, 'un seul écart entre la case et son libellé');
+    await page.waitForFunction(() => document.querySelector('#recette-apercu')
+      ?.textContent.includes('route vitrine.exemple.test'), null, { timeout: 15000 });
+    await apercuDeLaSaisie();
+    assert.ok(!(await page.textContent('#recette-apercu')).includes('www.vitrine'),
+              'sans la case, l’aperçu ne montre aucun « www »');
+    await capturer('spk153-sans-www', { hauteur: 1300 });
+    await capturer('spk153-sans-www-mobile', { largeur: 390, hauteur: 1400 });
+
+    // Espace coche : l'aperçu ajoute l'enregistrement ET la route du « www ».
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => document.querySelector('#recette-apercu')
+      ?.textContent.includes('route www.vitrine.exemple.test'), null, { timeout: 15000 });
+    await apercuDeLaSaisie();
+    assert.ok((await page.textContent('#recette-apercu')).includes('www.vitrine A'));
+    assert.equal(await page.isChecked('[data-param="www"]'), true);
+    await capturer('spk153-avec-www', { hauteur: 1300 });
+    await capturer('spk153-avec-www-mobile', { largeur: 390, hauteur: 1400 });
+
+    // Espace décoche : l'aperçu les retire, et c'est cet état qui est écrit.
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => !document.querySelector('#recette-apercu')
+      ?.textContent.includes('www.vitrine'), null, { timeout: 15000 });
+    await apercuDeLaSaisie();
+    await page.click('[data-engage="recette"]');
+    await page.waitForSelector('#recette-resultat', { timeout: 20000 });
+    const bilan = await page.textContent('#recette-resultat');
+    assert.ok(bilan.includes('route vitrine.exemple.test'));
+    assert.ok(!bilan.includes('www.vitrine'), 'le compte rendu ne porte aucun « www »');
+    await capturer('spk153-compte-rendu', { hauteur: 1300 });
+
+    // EFFETS : une route et un enregistrement, pour le seul nom tapé.
+    const { corps } = await pile.lireSparkd('/v1/ingress');
+    assert.equal(corps.routes.find((r) => r.domain === 'vitrine.exemple.test')?.spark_name,
+                 'boutique');
+    assert.ok(!corps.routes.some((r) => r.domain === 'www.vitrine.exemple.test'),
+              'aucune route « www » déclarée');
+    const zone = dns.enregistrements('exemple.test');
+    assert.ok(zone.some((r) => r.name === 'vitrine' && r.type === 'A'));
+    assert.ok(!zone.some((r) => r.name === 'www.vitrine'), 'aucun « www » chez le fournisseur');
   });
 });
 

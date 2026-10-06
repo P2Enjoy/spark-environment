@@ -15,6 +15,9 @@
  *           §18.5 (l'ecart reste visible)
  * @verifies docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (ce qui est écrit est
  *           ce que l'aperçu a montré) · docs/DESIGN_SYSTEM.md §6.27
+ * @verifies docs/BACKLOG.md#SPK-153 · docs/DAT.md §38.6.4 (le « www » est une
+ *           case, décochée par défaut ; elle entre dans la clé de l'aperçu) ·
+ *           docs/DESIGN_SYSTEM.md §6.10 · docs/DESIGN_SYSTEM_APP.md SPK-DS-39
  * @verifies docs/BACKLOG.md#SPK-88 · docs/DAT.md §38.6.4 bis (une recette pose
  *           AUSSI sa route), §38.6.4 ter (un seul gabarit pour trois blocs)
  * @verifies docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la
@@ -816,6 +819,38 @@ test('les parametres SUIVENT la recette choisie', () => {
   assert.ok(relais.includes('console du fournisseur'), 'l’aide doit dire OU lire la cle');
 });
 
+test('une option à cocher se rend en CASE, décochée tant qu’on ne la demande pas (SPK-153)', () => {
+  // SPK-DS-39 : une option qui ajoute des lignes est une case du composant
+  // `.case` (§6.10), et le produit ne la coche pas à la place de l'exploitant.
+  const catalogue = [{ ...CATALOGUE[0], parametres: [
+    CATALOGUE[0].parametres[0],
+    { nom: 'www', label: 'Poser aussi le «\u00a0www\u00a0»', aCocher: true,
+      aide: 'Un enregistrement et une route de plus.' },
+    CATALOGUE[0].parametres[1]] }];
+  const rendre = (params) => renderRoutesPanel(SPARK, [], recetteUi({ catalogue },
+    { recette: 'site-web', recette_zone: 'exemple.tech', recette_params: params }));
+
+  const vierge = rendre({});
+  const caseWww = vierge.match(/<input type="checkbox" id="recette-p-www"[^>]*>/)?.[0];
+  assert.ok(caseWww, 'la case est un vrai input de type checkbox');
+  assert.ok(caseWww.includes('data-param="www"'), 'elle voyage avec les autres paramètres');
+  assert.ok(!caseWww.includes('checked'), 'décochée à l’ouverture');
+  assert.ok(caseWww.includes('aria-describedby="recette-p-www-aide"'));
+  assert.ok(vierge.includes('id="recette-p-www-aide"'), 'l’aide est associée à la case');
+  assert.match(vierge, /<label class="case" for="recette-p-www">/,
+               'le libellé étend la cible de la case (§6.10)');
+  assert.ok(vierge.indexOf('data-param="domain"') < vierge.indexOf('data-param="www"')
+            && vierge.indexOf('data-param="www"') < vierge.indexOf('data-param="address"'),
+            'la case suit le champ du nom qu’elle prolonge');
+
+  assert.ok(/id="recette-p-www"[^>]* checked/.test(rendre({ www: true })),
+            'cochée quand la saisie dit `true`');
+  for (const pasOui of [false, 'true', 'on']) {
+    assert.ok(!/id="recette-p-www"[^>]* checked/.test(rendre({ www: pasOui })),
+              `« ${pasOui} » ne coche pas : seul \`true\` vaut « oui » pour l’hôte`);
+  }
+});
+
 test('les actions HUMAINES restantes sont montrees avec la recette', () => {
   // §38.7 : le produit fait sa part et dit precisement ou s'arrete son pouvoir.
   const rendu = renderRoutesPanel(SPARK, [], recetteUi({}, { recette: 'relais-transactionnel' }));
@@ -1228,6 +1263,20 @@ test('la clé d’un aperçu suit la recette, la zone ET chaque paramètre', () 
                        { ...base, recette_params: { domain: 'a', port: '9000' } }]) {
     assert.notEqual(cleApercuRecette(autre), cleApercuRecette(base));
   }
+});
+
+test('cocher la case « www » périme l’aperçu : rien ne part sur celui d’avant (SPK-153)', () => {
+  // La case ajoute un enregistrement et une route : un aperçu lu sans elle ne
+  // montre pas ce qu'une écriture avec elle poserait (§38.6.6).
+  const catalogue = [{ id: 'site-web', label: 'Site web', poseDesRoutes: true }];
+  const sans = { recette: 'site-web', recette_zone: 'exemple.tech',
+                 recette_params: { domain: 'boutique' } };
+  const avec = { ...sans, recette_params: { domain: 'boutique', www: true } };
+  assert.notEqual(cleApercuRecette(avec), cleApercuRecette(sans));
+  assert.equal(apercuAJour({ ...luPour(sans) }, avec), false);
+  assert.match(refusEcritureRecette(
+    { catalogue, apercu: { records: [], routes: [{ domain: 'boutique.exemple.tech' }] },
+      ...luPour(sans) }, avec), /aperçu/);
 });
 
 test('une ROUTE refusée compte dans le total des échecs du compte rendu', () => {

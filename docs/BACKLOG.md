@@ -8834,7 +8834,7 @@ environnements posés, et enregistrer les trois notes.
   - **Reste `[~]`** : la vérification sur la VM du banc (§51.6) et OP-36.
 
 
-### [ ] SPK-151 · L'onglet Alertes montre le message tel qu'il partirait, avant d'enregistrer
+### [~] SPK-151 · L'onglet Alertes montre le message tel qu'il partirait, avant d'enregistrer
 
 **Constaté le 2026-10-03** (rapport d'incohérences) : le DAT §47.3.1 promet que
 l'écran montre le rendu du gabarit sur un événement d'exemple avant
@@ -8847,6 +8847,12 @@ d'enregistrer ; l'onglet Alertes n'en montre aucun. **Arbitré le 2026-10-06** :
   — le même rendu, le même filtre des secrets que l'envoi réel — sur un
   événement d'exemple, sans rien enregistrer ni rien envoyer ; un champ inconnu
   y est dit avant l'enregistrement ; vérification par la console sur la VM.
+- **Vérifié le 2026-10-06 sur VM à installation fraîche** (épreuve
+  `spk140-alertes`) : « Voir le message » montre `{"content": "spark.unprotect
+  sur exemple"}` pour le gabarit tapé, le mot de passe déjà saisi reste en
+  place, un champ inconnu est signalé avant d'enregistrer ; rien n'est écrit au
+  journal ni envoyé (preuves `pytest`, sur le doublon) ; capture observée.
+  **Reste `[~]`** : OP-37.
 
 ### [ ] SPK-152 · Un mode CPU qui porte une réservation ET un plafond
 

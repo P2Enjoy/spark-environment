@@ -10,6 +10,9 @@
  *       docs/DESIGN_SYSTEM_APP.md
  * @spec docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (le nom dans la zone ; ce qui
  *       est écrit est ce que l'aperçu a montré) · docs/DESIGN_SYSTEM.md §6.27
+ * @spec docs/BACKLOG.md#SPK-153 · docs/DAT.md §38.6.4 (le « www » est une case,
+ *       décochée par défaut) · docs/DESIGN_SYSTEM.md §6.10 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-39 · docs/MANUAL_PLAN.md M7
  * @spec docs/BACKLOG.md#SPK-50 · docs/DAT.md §38.6 (les recettes DNS),
  *       §38.6.3 (le compte rendu ligne à ligne) · docs/DESIGN_SYSTEM.md §6.13
  *       (« résultat partiel » est un état à traiter)
@@ -389,6 +392,21 @@ function renderRecetteModale(ui) {
   const zoneChoisie = ui.values.recette_zone ?? '';
   const parametres = choisie
     ? choisie.parametres.map((p) => {
+        // SPK-153 · SPK-DS-39 : une option qui AJOUTE des lignes est une case
+        // (§6.10), décochée tant qu'on ne la demande pas. Seul `true` la coche :
+        // c'est la valeur que l'hôte accepte pour « oui ».
+        if (p.aCocher) {
+          const id = `recette-p-${echapper(p.nom)}`;
+          const cochee = (ui.values.recette_params?.[p.nom] ?? p.defaut) === true;
+          return `
+        <div class="champ">
+          <label class="case" for="${id}">
+            <input type="checkbox" id="${id}" data-param="${echapper(p.nom)}"${
+              cochee ? ' checked' : ''}${p.aide ? ` aria-describedby="${id}-aide"` : ''}>
+            <span>${echapper(p.label)}</span></label>
+          ${p.aide ? `<p class="champ__aide" id="${id}-aide">${echapper(p.aide)}</p>` : ''}
+        </div>`;
+        }
         const relatif = p.dansLaZone && zoneChoisie;
         // §6.9 bis : un port se SAISIT, avec ses bornes — il ne se fait pas
         // glisser, et une saisie libre laisserait passer « 70000 » jusqu'au

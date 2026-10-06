@@ -120,6 +120,27 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-37 · L'aperçu du message d'alerte : `sparkd` et la console (SPK-151)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable. SPK-151
+                est validé sur la VM du banc (SPK-137).
+Objectif      : servir `POST /v1/notify/preview` (docs/DAT.md §47.3.1) et
+                relancer la console qui l'affiche sous le gabarit de l'onglet
+                Alertes. Un calcul : aucune migration, aucune variable, rien au
+                journal, rien d'envoyé.
+Dépend de     : OP-34 (même chemin de mise à jour).
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) ;
+                3. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : `/healthz` rend le commit déployé ; dans l'onglet Alertes,
+                « Voir le message » rend le gabarit enregistré sur l'événement
+                d'exemple — une lecture, aucune alerte ne part.
+Retour arrière: réinstaller la build précédente (runbook A.2) et relancer la
+                console ; la console précédente n'appelle pas cette route.
+Risques       : aucun connu — la route ne lit que le nom de la Forge.
+```
+
 ### OP-36 · Le dossier pour un agent impose la configuration par la cellule et les trois notes (SPK-150)
 
 ```

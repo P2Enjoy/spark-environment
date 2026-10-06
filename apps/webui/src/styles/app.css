@@ -979,8 +979,10 @@ tbody tr:hover { background: var(--color-hover); }
 .champ-compte select.controle { width: 100%; max-width: 100%; }
 /* Une case a cocher precede son libelle : sans cet ecart elle le touche. La
    regle vivait sur `.formulaire-panneau`, classe du formulaire dans le flux que
-   la modale a remplace — elle n'avait donc plus de sujet. */
-.modale__corps .champ label input[type="checkbox"] { margin-right: var(--space-2); }
+   la modale a remplace — elle n'avait donc plus de sujet.
+   SPK-153 · SPK-DS-39 : une `.case` porte deja son ecart (`gap`) ; la marge s'y
+   ajouterait et doublerait l'espace entre la case et son libelle. */
+.modale__corps .champ label:not(.case) input[type="checkbox"] { margin-right: var(--space-2); }
 
 /* Sous 768 px elle occupe l'ecran entier, SANS changer de contrat (§6.27). */
 @media (max-width: 767px) {

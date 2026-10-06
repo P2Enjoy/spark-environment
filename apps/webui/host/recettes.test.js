@@ -4,6 +4,9 @@
  *           §38.6.3 (le compte rendu), §38.6.4 (les deux recettes) · §38.5
  * @verifies docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (le nom dans la zone,
  *           plusieurs niveaux, chaque niveau validé ; l'adresse pré-remplie)
+ * @verifies docs/BACKLOG.md#SPK-153 · docs/DAT.md §38.6.4 (le « www » est une
+ *           option décochée par défaut ; une valeur autre que vrai ou faux est
+ *           refusée) · §38.6.4 bis (une recette ne déclare que ce qu'elle écrit)
  *
  * Une recette à moitié posée est pire qu'une recette absente : un `MX` sans SPF
  * fait recevoir du courrier qu'on ne peut pas renvoyer. C'est ce que ces preuves
@@ -61,7 +64,7 @@ test('une recette n’est PAS une porte derobee : chaque ligne passe la garde', 
   // REVISE le 2026-10-06 (SPK-149, §38.6.6) : « autre.fr » etait refuse comme
   // hors zone. Un libelle a plusieurs niveaux se compose desormais DANS la zone
   // — un nom compose ne peut donc plus en sortir, par construction.
-  const vu = composer('site-web', { domain: 'autre.fr', address: '203.0.113.7' },
+  const vu = composer('site-web', { domain: 'autre.fr', address: '203.0.113.7', www: true },
                       { zone: 'exemple.tech' });
   assert.ok(vu.records.every((r) => r.zone === 'exemple.tech'));
   assert.deepEqual(vu.records.map((r) => r.name), ['autre.fr', 'www.autre.fr']);
@@ -88,16 +91,67 @@ test('le catalogue vient du CODE et decrit ce que chaque recette reclame', () =>
 
 // --- « site-web » (§38.6.4) --------------------------------------------------
 
-test('« site-web » pose le domaine NU et son www, et rien d’autre', () => {
+test('« site-web » sans la case pose le nom choisi SEUL : un enregistrement, une route (SPK-153)', () => {
+  // §38.6.4 révisé le 2026-10-06 : le `www` était posé d'office, sous un
+  // sous-domaine aussi — un nom que personne n'avait demandé, et une route qui
+  // l'occupait. Décochée, la recette ne pose que ce qu'on a nommé.
   const vu = composer('site-web',
-    { domain: 'exemple.tech', address: '203.0.113.7' }, { zone: 'exemple.tech' });
+    { domain: 'exemple.tech', address: '203.0.113.7', port: '8080' }, { zone: 'exemple.tech' });
+  assert.deepEqual(vu.records.map((r) => [r.name, r.type, r.data]), [
+    ['', 'A', '203.0.113.7'],
+  ]);
+  assert.deepEqual(vu.routes.map((r) => r.domain), ['exemple.tech'],
+                   'une recette ne déclare que ce qu’elle écrit (§38.6.4 bis)');
+  assert.equal(vu.records[0].apex, true, 'le domaine nu doit se signaler comme apex');
+  assert.ok(vu.records.every((r) => r.role), 'chaque ligne dit ce qu’elle fait');
+  assert.equal(vu.incomplete, null, 'elle ne depend d’aucune valeur exterieure');
+});
+
+test('« site-web » avec la case pose le nom ET son www, routes comprises (SPK-153)', () => {
+  const vu = composer('site-web',
+    { domain: 'exemple.tech', address: '203.0.113.7', port: '8080', www: true },
+    { zone: 'exemple.tech' });
   assert.deepEqual(vu.records.map((r) => [r.name, r.type, r.data]), [
     ['', 'A', '203.0.113.7'],
     ['www', 'A', '203.0.113.7'],
   ]);
-  assert.equal(vu.records[0].apex, true, 'le domaine nu doit se signaler comme apex');
-  assert.ok(vu.records.every((r) => r.role), 'chaque ligne dit ce qu’elle fait');
-  assert.equal(vu.incomplete, null, 'elle ne depend d’aucune valeur exterieure');
+  assert.deepEqual(vu.routes.map((r) => [r.domain, r.port]),
+                   [['exemple.tech', 8080], ['www.exemple.tech', 8080]]);
+  assert.ok([...vu.records, ...vu.routes].every((l) => l.role));
+});
+
+test('la case décochée, vide ou absente vaut « non » ; toute autre valeur est REFUSÉE (SPK-153)', () => {
+  const noms = (www) => composer('site-web',
+    { domain: 'boutique', address: '203.0.113.7', www }, { zone: 'exemple.tech' })
+    .records.map((r) => r.name);
+  for (const non of [false, undefined, null, '']) {
+    assert.deepEqual(noms(non), ['boutique'], `« ${non} » vaut « non »`);
+  }
+  // Un « oui » lu comme un « non » muet ferait croire à l'appelant qu'il a
+  // demandé le `www` sans que rien ne soit posé (§38.6.2).
+  for (const faux of ['oui', 'true', 'on', 1, 0, {}]) {
+    assert.throws(() => noms(faux),
+                  (e) => e instanceof DnsError && /« www »/.test(e.message)
+                         && /vrai ou faux/.test(e.message),
+                  `« ${JSON.stringify(faux)} » doit être refusé en nommant la case`);
+  }
+});
+
+test('le catalogue décrit la case « www », décochée, juste après le nom (SPK-153)', () => {
+  const p = catalogue()[0].parametres;
+  assert.equal(catalogue()[0].id, 'site-web');
+  const i = p.findIndex((x) => x.nom === 'www');
+  assert.equal(p[i - 1]?.nom, 'domain', 'la case suit le champ du nom qu’elle prolonge');
+  assert.equal(p[i].aCocher, true);
+  assert.notEqual(p[i].defaut, true, 'le produit ne coche pas à la place de l’exploitant');
+  assert.match(p[i].label, /www/);
+  assert.match(catalogue()[0].description, /si la case est cochée/,
+               'la description ne promet plus le « www » sans condition');
+  // Vu en capture à 390 px : « www et » se séparaient en fin de ligne. Les
+  // espaces intérieures des guillemets sont insécables, partout où la case parle.
+  for (const texte of [catalogue()[0].description, p[i].label, p[i].aide]) {
+    assert.ok(!/« | »/.test(texte), `espace sécable dans des guillemets : ${texte}`);
+  }
 });
 
 test('une adresse IPv6 donne un AAAA dans « site-web »', () => {
@@ -174,7 +228,7 @@ test('une recette inconnue est refusee', () => {
 
 test('la zone étant choisie, un libellé vide vaut le domaine lui-même', () => {
   // Redemander le domaine entier faisait ressaisir ce que l'écran sait déjà.
-  const vu = composer('site-web', { domain: '', address: '203.0.113.7' },
+  const vu = composer('site-web', { domain: '', address: '203.0.113.7', www: true },
                       { zone: 'exemple.tech' });
   assert.deepEqual(vu.records.map((r) => r.name), ['', 'www']);
   assert.equal(vu.records[0].apex, true, 'le premier enregistrement EST l’apex');
@@ -183,7 +237,7 @@ test('la zone étant choisie, un libellé vide vaut le domaine lui-même', () =>
 test('un libellé simple devient un sous-domaine de la zone', () => {
   const vu = composer('site-web', { domain: 'boutique', address: '203.0.113.7' },
                       { zone: 'exemple.tech' });
-  assert.deepEqual(vu.records.map((r) => r.name), ['boutique', 'www.boutique']);
+  assert.deepEqual(vu.records.map((r) => r.name), ['boutique']);
 });
 
 test('le nom COMPLET de la zone reste accepté : c’est une saisie par habitude', () => {
@@ -196,7 +250,7 @@ test('un libellé à tiret compose son nom dans la zone, routes comprises (SPK-1
   // Le défaut signalé le 2026-10-06 accusait le tiret : il n'y est pour rien.
   // La composition est juste ; c'est l'écran qui écrivait un aperçu périmé.
   const vu = composer('site-web',
-                      { domain: 'evoliz-mcp', address: '203.0.113.7', port: '8080' },
+                      { domain: 'evoliz-mcp', address: '203.0.113.7', port: '8080', www: true },
                       { zone: 'exemple.tech' });
   assert.deepEqual(vu.records.map((r) => r.name), ['evoliz-mcp', 'www.evoliz-mcp']);
   assert.deepEqual(vu.routes.map((r) => r.domain),
@@ -209,7 +263,7 @@ test('un libellé à PLUSIEURS niveaux se compose dans la zone (SPK-149, §38.6.
   // refus interdisait un cas ordinaire sans rien protéger.
   assert.equal(dansLaZone('mcp.evoliz', 'exemple.tech'), 'mcp.evoliz.exemple.tech');
   const vu = composer('site-web',
-                      { domain: 'mcp.evoliz', address: '203.0.113.7', port: '8080' },
+                      { domain: 'mcp.evoliz', address: '203.0.113.7', port: '8080', www: true },
                       { zone: 'exemple.tech' });
   assert.deepEqual(vu.records.map((r) => r.name), ['mcp.evoliz', 'www.mcp.evoliz']);
   assert.deepEqual(vu.routes.map((r) => r.domain),
@@ -251,7 +305,7 @@ test('le rôle de chaque ligne dit « sous-domaine » quand le nom n’est pas l
   // Vu en capture le 2026-10-06 : « Le domaine nu est servi par ce Spark » à
   // côté de `route evoliz-mcp.exemple.tech` — faux à l'écran, et c'est la
   // phrase qui fait croire que la racine est visée.
-  const sous = composer('site-web', { domain: 'evoliz-mcp', address: '203.0.113.7' },
+  const sous = composer('site-web', { domain: 'evoliz-mcp', address: '203.0.113.7', www: true },
                         { zone: 'exemple.tech' });
   assert.ok([...sous.records, ...sous.routes].every((l) => !/domaine (nu|lui-même)/.test(l.role)));
   assert.match(sous.records[0].role, /sous-domaine/);

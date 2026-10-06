@@ -3,6 +3,9 @@
  * @verifies docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (un sous-domaine à
  *           plusieurs niveaux, la garde de chaque niveau) — par la route
  *           `/api/dns/recipe` de l'hôte.
+ * @verifies docs/BACKLOG.md#SPK-153 · docs/DAT.md §38.6.4 (sans la case, le
+ *           seul nom choisi ; une case mal formée refusée sans appel) — par la
+ *           même route.
  *
  * Ce que ces tests gardent : une panne de tunnel remonte AVEC son motif, et la
  * console n'est jamais invitee a presenter des donnees anterieures comme
@@ -957,7 +960,8 @@ test('l’apercu d’une recette rend l’effet de CHAQUE ligne, sans rien ecrir
   const vu = await (await fetch(`${base}/api/dns/recipe/preview`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
-                           params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
+                           params: { domain: 'exemple.tech', address: '203.0.113.7',
+                                     www: true } }),
   })).json();
 
   assert.equal(vu.records.length, 2);
@@ -977,7 +981,8 @@ test('une recette ecrit ligne a ligne et rend LE SORT de chacune', async () => {
   const fait = await (await fetch(`${base}/api/dns/recipe`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
-                           params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
+                           params: { domain: 'exemple.tech', address: '203.0.113.7',
+                                     www: true } }),
   })).json();
   assert.equal(fait.written, 2);
   assert.equal(fait.failed, 0);
@@ -1006,7 +1011,8 @@ test('une ligne REFUSEE au milieu rend la recette INCOMPLETE, sans rien defaire'
   const fait = await (await fetch(`${base}/api/dns/recipe`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
-                           params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
+                           params: { domain: 'exemple.tech', address: '203.0.113.7',
+                                     www: true } }),
   })).json();
 
   assert.equal(fait.written, 1);
@@ -1050,7 +1056,8 @@ test('un sous-domaine a PLUSIEURS niveaux s’ecrit dans la zone, un niveau vide
     const fait = await (await fetch(`${base}/api/dns/recipe`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
-                             params: { domain: 'mcp.evoliz', address: '203.0.113.7' } }),
+                             params: { domain: 'mcp.evoliz', address: '203.0.113.7',
+                                       www: true } }),
     })).json();
     assert.deepEqual(fait.records.map((r) => r.name), ['mcp.evoliz', 'www.mcp.evoliz']);
     assert.deepEqual(fait.routes.map((r) => r.domain),
@@ -1075,6 +1082,50 @@ test('un sous-domaine a PLUSIEURS niveaux s’ecrit dans la zone, un niveau vide
   } finally {
     // Un échec ne doit pas laisser le serveur ouvert : la suite entière
     // attendrait alors sans fin, au lieu de dire ce qui a rougi.
+    server.close();
+  }
+});
+
+test('sans la case, la recette site web n’ecrit QUE le nom choisi ; une case mal formee est refusee sans appel (SPK-153)', async () => {
+  // §38.6.4 revise le 2026-10-06 : le `www` n'est plus pose d'office. Le chemin
+  // est celui de l'ecran : l'hote compose, et le fournisseur recoit les PATCH.
+  const appels = [];
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async (url, options = {}) => {
+      appels.push({ method: options.method ?? 'GET', body: String(options.body ?? '') });
+      return new Response(JSON.stringify({ records: [] }), { status: 200 });
+    },
+  });
+  try {
+    const fait = await (await fetch(`${base}/api/dns/recipe`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
+                             params: { domain: 'boutique', address: '203.0.113.7',
+                                       port: '8080' } }),
+    })).json();
+    assert.deepEqual(fait.records.map((r) => r.name), ['boutique']);
+    assert.deepEqual(fait.routes.map((r) => r.domain), ['boutique.exemple.tech'],
+      'une recette ne declare que ce qu’elle ecrit');
+    const ecrits = appels.filter((a) => a.method === 'PATCH')
+      .map((a) => JSON.parse(a.body).changes[0].set.id_fields.name);
+    assert.deepEqual(ecrits, ['boutique'], 'aucun « www » ne part chez le fournisseur');
+
+    // `"true"` n'est pas `true` : le lire comme un « non » muet ferait croire a
+    // l'appelant qu'il a demande le `www` (§38.6.2).
+    const avant = appels.length;
+    const r = await fetch(`${base}/api/dns/recipe`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
+                             params: { domain: 'boutique', address: '203.0.113.7',
+                                       www: 'true' } }),
+    });
+    assert.equal(r.status, 422);
+    const corps = await r.json();
+    assert.equal(corps.error, 'dns_refused');
+    assert.match(corps.message, /« www » attend vrai ou faux/);
+    assert.equal(appels.length, avant, 'aucune requete vers le fournisseur');
+  } finally {
     server.close();
   }
 });

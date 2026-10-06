@@ -11,6 +11,9 @@
  *       pas faire) · §38.2 (le produit ne supprime rien qu'il n'a pas posé)
  * @spec docs/BACKLOG.md#SPK-149 · docs/DAT.md §38.6.6 (le nom se saisit dans la
  *       zone, plusieurs niveaux, chaque niveau validé ; l'adresse pré-remplie)
+ * @spec docs/BACKLOG.md#SPK-153 · docs/DAT.md §38.6.4 (le « www » est une
+ *       option décochée par défaut ; une valeur autre que vrai ou faux est
+ *       refusée) · §38.6.4 bis (une recette ne déclare que ce qu'elle écrit)
  *
  * Une recette à moitié posée est pire qu'une recette absente : un `MX` sans SPF
  * fait recevoir du courrier qu'on ne peut pas renvoyer. D'où le compte rendu
@@ -69,12 +72,31 @@ export function dansLaZone(libelle, zone) {
   return `${relatif}.${nu}`;
 }
 
+/**
+ * Valeur d'un paramètre `aCocher` (SPK-153, §38.6.4).
+ *
+ * Absente, vide ou `null` vaut « non » : un appel qui ne porte pas la case ne
+ * coche rien. Toute autre valeur que `true` ou `false` est refusée — un
+ * « oui » lu comme un « non » muet ferait croire à l'appelant qu'il a demandé
+ * ce que rien ne posera (§38.6.2).
+ */
+function coche(valeur, libelle) {
+  if (valeur === true) return true;
+  if (valeur === false || valeur === undefined || valeur === null || valeur === '') {
+    return false;
+  }
+  throw new DnsError(`« ${libelle} » attend vrai ou faux, pas « ${String(valeur)} ».`);
+}
+
 export const RECETTES = {
   'site-web': {
     id: 'site-web',
     label: 'Site web sur le domaine nu',
-    description: "Fait répondre le domaine lui-même et son « www » sur cette Forge. "
-      + "Deux enregistrements, aucune valeur extérieure.",
+    // SPK-153 : le « www » n'est plus posé d'office. La description ne le
+    // promet donc qu'à la condition de la case. Espaces insécables dans les
+    // guillemets : vu en capture à 390 px, « www et » se séparaient.
+    description: 'Fait répondre le nom choisi sur cette Forge, et son « www » '
+      + 'si la case est cochée. Aucune valeur extérieure.',
     parametres: [
       // §38.6.6 : la ZONE est déjà choisie. Redemander le domaine entier faisait
       // ressaisir ce que l'écran sait, et l'aide invitait à taper un nom d'une
@@ -85,6 +107,12 @@ export const RECETTES = {
         // séparaient en fin de ligne.
         aide: 'Laisser vide pour le domaine lui-même. Un point sépare plusieurs '
           + 'niveaux\u00a0: «\u00a0mcp.api\u00a0».' },
+      // SPK-153 · §38.6.4 : le `www` ajoute un nom, une ligne et une route.
+      // Personne ne le tape sous un sous-domaine ; le produit ne le coche donc
+      // pas à la place de l'exploitant. La case suit le champ qu'elle prolonge.
+      { nom: 'www', label: 'Poser aussi le «\u00a0www\u00a0»', aCocher: true,
+        aide: 'Ajoute le même nom précédé de «\u00a0www.\u00a0»\u00a0: un '
+          + 'enregistrement et une route de plus.' },
       // §38.6.6 : la console SAIT à quelle Forge elle est reliée. Redemander son
       // adresse à chaque recette, c'est faire ressaisir ce que l'inventaire
       // porte déjà — et une recette existe pour simplifier, pas pour interroger.
@@ -98,42 +126,49 @@ export const RECETTES = {
           + "Forge. Aucun enregistrement DNS ne le dit." },
     ],
     actionsHumaines: [],
-    composer({ domain, address }, zone) {
+    composer({ domain, address, www }, zone) {
       const nu = dansLaZone(domain, zone);
       if (!nu) throw new DnsError('Aucune zone choisie.');
-      return [
+      const lignes = [
         // SPK-149 : le rôle dit ce que la ligne vise. « Le domaine lui-même »
         // à côté d'un sous-domaine faisait croire que la racine était visée.
         { domain: nu, type: 'A', data: address,
           role: nu === normaliser(zone)
             ? 'Le domaine lui-même répond sur cette Forge.'
             : 'Ce sous-domaine répond sur cette Forge.' },
-        { domain: `www.${nu}`, type: 'A', data: address,
-          role: 'Le « www » y répond aussi.' },
       ];
+      if (coche(www, 'www')) {
+        lignes.push({ domain: `www.${nu}`, type: 'A', data: address,
+                      role: 'Le « www » y répond aussi.' });
+      }
+      return lignes;
     },
     /**
      * Les routes qui rendent ces enregistrements utiles (§38.6.4 bis).
      *
-     * Les deux noms écrits pointent vers la Forge ; sans route, elle ne les sert
-     * pas. Ce sont donc les mêmes deux noms, et pas un de plus : une recette ne
-     * déclare que ce qu'elle a écrit.
+     * Les noms écrits pointent vers la Forge ; sans route, elle ne les sert
+     * pas. Ce sont donc les mêmes noms — le `www` seulement si la case l'a fait
+     * écrire (SPK-153) —, et pas un de plus : une recette ne déclare que ce
+     * qu'elle a écrit.
      */
-    routes({ domain, port }, zone) {
+    routes({ domain, port, www }, zone) {
       const nu = dansLaZone(domain, zone);
       if (!nu) throw new DnsError('Aucune zone choisie.');
       const cible = Number(port);
       if (!Number.isInteger(cible) || cible < 1 || cible > 65535) {
         throw new DnsError(`Port « ${port} » hors bornes : 1 à 65535.`);
       }
-      return [
+      const routes = [
         { domain: nu, port: cible, tls: true,
           role: nu === normaliser(zone)
             ? 'Le domaine nu est servi par ce Spark.'
             : 'Ce sous-domaine est servi par ce Spark.' },
-        { domain: `www.${nu}`, port: cible, tls: true,
-          role: 'Le « www » aussi.' },
       ];
+      if (coche(www, 'www')) {
+        routes.push({ domain: `www.${nu}`, port: cible, tls: true,
+                      role: 'Le « www » aussi.' });
+      }
+      return routes;
     },
   },
 

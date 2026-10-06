@@ -2020,12 +2020,22 @@ function brancherPanneaux() {
   // dépendent de la recette choisie —, d'où `data-param` plutôt qu'un `name`
   // fixe. Sans ces écoutes, l'aperçu restait sur « Aucun domaine fourni » quoi
   // qu'on saisisse. Mesuré par le parcours E2E.
+  // @spec docs/BACKLOG.md#SPK-153 · docs/DAT.md §38.6.4 · SPK-DS-39 : une case
+  // porte `checked`, pas `value` — sa `value` vaut « on » cochée ou non. Elle
+  // part en booléen, seule forme que l'hôte accepte, et son `change`, immédiat,
+  // relit l'aperçu.
+  const valeurDe = (controle) => (controle.type === 'checkbox'
+    ? controle.checked : controle.value);
   for (const controle of racine.querySelectorAll('[data-param]')) {
-    controle.addEventListener('input', () => {
+    const retenir = () => {
       admin.values.recette_params = { ...admin.values.recette_params,
-                                      [controle.dataset.param]: controle.value };
+                                      [controle.dataset.param]: valeurDe(controle) };
+    };
+    controle.addEventListener('input', retenir);
+    controle.addEventListener('change', () => {
+      retenir();
+      lireApercuRecette();
     });
-    controle.addEventListener('change', () => lireApercuRecette());
   }
 
   for (const bouton of racine.querySelectorAll('[data-dns-route]')) {

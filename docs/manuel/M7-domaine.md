@@ -273,9 +273,10 @@ elle : recommencez quand Caddy répond.
 
 ## Appliquer une recette DNS
 
-Certains usages ne tiennent pas en un enregistrement. Un site sur le domaine nu
-en demande deux ; une messagerie en demande quatre ou cinq, et **l'absence d'un
-seul suffit à faire classer tout le courrier en indésirable**.
+Certains usages ne tiennent pas en un enregistrement. Un site demande son
+adresse et sa route, et souvent aussi son `www` ; une messagerie demande quatre
+ou cinq enregistrements, et **l'absence d'un seul suffit à faire classer tout le
+courrier en indésirable**.
 
 Le bouton **Appliquer une recette DNS** pose ces jeux d'un geste.
 
@@ -291,6 +292,29 @@ Chaque niveau du nom porte de 1 à 63 lettres, chiffres ou tirets, sans tiret au
 début ni à la fin. Un nom mal formé — deux points de suite, un niveau vide, un
 caractère accentué — est refusé dans l'aperçu, avant que rien ne parte, avec la
 règle en toutes lettres.
+
+### Le `www` : seulement si vous le demandez
+
+Sous le champ du nom, la case **Poser aussi le « www »** est **décochée** quand
+la fenêtre s'ouvre. Décochée, la recette ne pose que le nom que vous avez tapé :
+un enregistrement et une route. Cochée, elle pose aussi `www.` suivi de ce nom,
+avec sa propre route : `boutique` donne alors `boutique.<zone>` et
+`www.boutique.<zone>`.
+
+Le `www` ajoute un nom de plus. Sur le domaine lui-même, on le veut souvent,
+parce que des visiteurs le tapent par habitude. Sous un sous-domaine
+(`www.mcp.<zone>`), presque personne ne le tape. Et une route occupe son nom :
+aucun autre de vos Sparks ne peut ensuite le servir. La recette ne le pose donc
+que si vous cochez la case.
+
+Cocher ou décocher la case met l'aperçu à jour tout de suite : les lignes du
+`www` y apparaissent ou en disparaissent. Au clavier, **Tab** depuis le champ du
+nom amène sur la case, et **Espace** la coche ou la décoche.
+
+Décocher la case ne supprime rien. Un `www` posé lors d'une application
+précédente reste dans votre zone et dans vos routes. Pour vous en défaire,
+retirez sa route (« Retirer », plus haut) ; son enregistrement apparaît alors
+dans « Nettoyer ce qui s'est perdu », plus bas, qui peut l'effacer.
 
 ### Ce que la fenêtre vous montre avant d'écrire
 
@@ -311,8 +335,9 @@ ne vivent pas dans la zone et qu'aucun enregistrement ne réglera.
 
 ### Les deux recettes disponibles
 
-**Site web sur le domaine nu** — fait répondre le domaine lui-même et son `www`
-sur cette Forge. Deux enregistrements, aucune valeur à aller chercher ailleurs.
+**Site web sur le domaine nu** — fait répondre le nom choisi sur cette Forge :
+le domaine lui-même ou un sous-domaine, et son `www` si vous cochez la case. Un
+enregistrement, ou deux avec le `www` ; aucune valeur à aller chercher ailleurs.
 
 **Émission par le relais transactionnel** — fait émettre un sous-domaine par le
 relais de votre fournisseur. **Attention** : ce sous-domaine *émet* et *ne reçoit

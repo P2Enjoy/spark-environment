@@ -3,6 +3,14 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-151 — l'onglet Alertes montre le message tel qu'il partirait.** Le DAT
+  le promettait, l'écran ne le faisait pas. Sous le gabarit, « Voir le message »
+  rend, par la Forge et par le même chemin que l'envoi réel, le message sur un
+  événement d'exemple — la levée d'une protection —, sans rien enregistrer ni
+  envoyer ; un champ inconnu et un message qui n'est pas du JSON y sont signalés.
+  Le mot de passe déjà tapé reste en place. `POST /v1/notify/preview` ; DAT
+  §47.3.1 ; SPK-DS-40 ; manuel M11. Vérifié sur VM ; **sur la Forge avec
+  OP-37.**
 - **SPK-150 — le dossier pour un agent impose la configuration par la cellule
   et les trois notes.** Signalé par le responsable : la plupart des agents qui
   déployaient à partir du texte pour le LLM poussaient un `.env` ou écrivaient

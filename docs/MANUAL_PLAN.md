@@ -85,9 +85,10 @@ Unités : SPK-11, SPK-12.
 
 Déclaration d'une route, émission du certificat, vérification, retrait. Que se
 passe-t-il lorsqu'un domaine est déjà pris. Une route servie **sans TLS** : ce
-que dit sa pastille, et le bouton qui l'active.
+que dit sa pastille, et le bouton qui l'active. Une recette DNS : ce qu'elle
+pose, et le `www` qu'elle ne pose que si on coche la case.
 
-Unités : SPK-12, SPK-112.
+Unités : SPK-12, SPK-112, SPK-153.
 
 ## M8 · Exploiter au quotidien
 
