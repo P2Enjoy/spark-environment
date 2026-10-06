@@ -6,6 +6,8 @@
       échouer un geste), §47.6 (l'échec est dit), §47.7 (ce qu'elle ne prétend
       pas) · §45.4 (elle ne prévient pas, elle DÉTECTE) · §21.2 (aucun secret) ·
       §37.4.5 (une panne de traçabilité ne devient pas une panne d'exploitation)
+@spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 (l'aperçu : `texte_envoye`,
+      `EXEMPLE`, `apercu` — le même rendu que l'envoi)
 
 **Ce que cette fonction est, et ce qui décide de tout son code** : elle ne
 prévient rien. Le geste a déjà eu lieu quand le message part. Elle sert à
@@ -23,6 +25,7 @@ import queue
 import threading
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 LOG = logging.getLogger("sparkd.notification")
 
@@ -155,6 +158,58 @@ def rendre(gabarit: str, charge: dict) -> str:
     return PLACEHOLDER.sub(remplacer, gabarit)
 
 
+def _serialiser(charge: "dict | str") -> str:
+    """Le texte qui part : le rendu d'un gabarit tel quel, le corps en JSON."""
+    return charge if isinstance(charge, str) else json.dumps(charge, ensure_ascii=False)
+
+
+def texte_envoye(gabarit: str, charge: dict) -> str:
+    """Le texte EXACT que l'envoi poserait pour cette charge.
+
+    @spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 (l'aperçu)
+
+    Le choix est celui de `Canal._tenter` — le gabarit rendu s'il y en a un, le
+    corps du §47.4 sinon —, puis la sérialisation d'`envoyer`. L'aperçu passe
+    par ici : il ne peut pas montrer autre chose que ce qui partirait.
+    """
+    return _serialiser(rendre(gabarit, charge) if gabarit else charge)
+
+
+#: SPK-151 · §47.3.1 : l'événement de l'aperçu. Un geste que la liste fermée
+#: NOTIFIE (§47.2) — sans quoi l'aperçu montrerait un message qui ne part jamais —,
+#: décrit comme le journal le décrirait. Fixe : un aperçu se compare d'un essai à
+#: l'autre.
+EXEMPLE = {
+    "action": "spark.unprotect", "actor": "console/local", "actor_class": "human",
+    "target_type": "spark", "target_id": "exemple", "result": "ok",
+    "message": "Protection levée sur « exemple ».",
+}
+
+
+def apercu(gabarit: str, forge: str, *, maintenant=None) -> dict:
+    """Le message tel qu'il partirait, sur l'événement d'exemple (SPK-151).
+
+    @spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 (l'aperçu)
+
+    Ne lit, n'écrit et n'envoie rien : c'est un calcul. Un champ inconnu n'est
+    pas une erreur ici — il est NOMMÉ, et rien n'est rendu : c'est ce que
+    l'enregistrement refuserait.
+    """
+    instant = maintenant or datetime.now(timezone.utc)
+    charge = corps({**EXEMPLE, "ts": instant.isoformat(timespec="seconds")}, forge)
+    inconnus = list(champs_inconnus(gabarit))
+    if inconnus:
+        return {"rendered": None, "unknown_fields": inconnus, "valid_json": None,
+                "event": charge}
+    texte = texte_envoye(gabarit, charge)
+    try:
+        json.loads(texte)
+        valide = True
+    except ValueError:
+        valide = False
+    return {"rendered": texte, "unknown_fields": [], "valid_json": valide, "event": charge}
+
+
 def envoyer(url: str, charge: "dict | str", *, ouvrir=urllib.request.urlopen,
             delai: float = DELAI_S) -> None:
     """Un `POST` de JSON. Lève en cas d'échec — c'est l'appelant qui absorbe.
@@ -164,8 +219,8 @@ def envoyer(url: str, charge: "dict | str", *, ouvrir=urllib.request.urlopen,
     repasser par `json` en changerait la forme, qui est précisément ce que le
     destinataire exige.
     """
-    corps_brut = (charge if isinstance(charge, str)
-                  else json.dumps(charge, ensure_ascii=False))
+    # SPK-151 : la même sérialisation que l'aperçu (`texte_envoye`).
+    corps_brut = _serialiser(charge)
     requete = urllib.request.Request(
         url,
         data=corps_brut.encode("utf-8"),

@@ -39,7 +39,7 @@ import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE,
 import { DEPOT_VIDE, libelleEngagement, libelleIndication }
   from './components/forge-depot.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
-import { ALERTES_VIDE, renderAlertes, saisieAlertes } from './components/forge-alertes.js';
+import { ALERTES_VIDE, renderAlertes, renderApercu, saisieAlertes } from './components/forge-alertes.js';
 import { PROPOSITIONS_FORGE_VIDE, renderPropositionsForge }
   from './components/forge-propositions.js';
 import { ongletsSparks, renderProjetsGestion, PROJETS_UI_VIDE, ADRESSE_GESTION,
@@ -559,6 +559,9 @@ function brancher() {
       evenement.preventDefault();
       enregistrerAlertes(formulaireAlertes);
     });
+    // SPK-151 · SPK-DS-40 : l'aperçu du message, sans soumettre ni repeindre.
+    formulaireAlertes.querySelector('[data-alertes-apercu]')
+      ?.addEventListener('click', () => apercuAlertes(formulaireAlertes));
   }
   const acceptationInstallation = racine.querySelector('[data-installation-accepted]');
   const confirmationInstallation = racine.querySelector('#confirmation-stockage-forge');
@@ -4941,6 +4944,33 @@ async function chargerAlertes() {
     etat.alertes = { ...ALERTES_VIDE, status: 'error', error: erreur.message };
   }
   peindre();
+}
+
+/**
+ * L'aperçu du message, sur le gabarit TAPÉ (SPK-151).
+ *
+ * @spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-40 · docs/DESIGN_SYSTEM.md §14.3
+ *
+ * La zone se met à jour SEULE : repeindre le formulaire effacerait le mot de
+ * passe déjà tapé, qui n'est jamais réécrit dans la page (SPK-140). Le focus
+ * reste sur le bouton ; la zone, `role="status"`, annonce le résultat.
+ */
+async function apercuAlertes(formulaire) {
+  const zone = formulaire.querySelector('#alerte-apercu');
+  const template = String(new FormData(formulaire).get('webhook_template') ?? '').trim();
+  const montrer = (apercu) => {
+    etat.alertes.apercu = apercu;
+    if (!zone) return;
+    zone.innerHTML = renderApercu(apercu);
+    if (apercu.status === 'loading') zone.setAttribute('aria-busy', 'true');
+    else zone.removeAttribute('aria-busy');
+  };
+  montrer({ status: 'loading' });
+  const { ok, statut, corps } = await appel('POST', '/v1/notify/preview', { template });
+  montrer(ok ? { status: 'ready', ...corps }
+    : { status: 'error', error: corps?.detail?.message
+      ?? `La Forge a répondu ${statut ?? '?'} sans donner de raison.` });
 }
 
 /**

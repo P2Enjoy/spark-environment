@@ -186,6 +186,13 @@ la raison s'affiche sous le formulaire, et le gabarit, l'adresse et la case « L
 canal veille » gardent ce que vous aviez tapé : corrigez, puis enregistrez de
 nouveau. Seul le mot de passe est à redonner, comme à chaque modification.
 
+**Voir le message avant de l'enregistrer.** Sous le gabarit, **Voir le message**
+montre ce que la Forge enverrait, sur un événement d'exemple — la levée de la
+protection d'un Spark —, avec le gabarit tel que vous l'avez tapé. Rien n'est
+enregistré, rien n'est envoyé. Un champ inconnu y est signalé avant que vous
+n'enregistriez ; un message qui n'est pas un document JSON aussi, parce que la
+plupart des services le refuseraient. Le mot de passe déjà tapé reste en place.
+
 ## Toute règle d'accès est appliquée côté serveur
 
 Un bouton masqué ou un champ désactivé n'est qu'une aide visuelle. Les refus que

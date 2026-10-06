@@ -22,6 +22,8 @@
  *       §6.11, §7.1 (un refus garde la saisie, sauf le mot de passe)
  * @spec docs/BACKLOG.md#SPK-147 · docs/DAT.md §47.3.1 (l'aide nomme les dix
  *       champs que la Forge accepte)
+ * @spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-40 (l'aperçu du message, sous le gabarit)
  */
 
 const echapper = (v) =>
@@ -36,7 +38,36 @@ export const ALERTES_VIDE = {
   // SPK-140 · §47.3.0 bis : ce qu'un refus a laissé dans le formulaire, ou
   // `null` — le formulaire montre alors la configuration relue.
   saisie: null,
+  // SPK-151 · SPK-DS-40 : le dernier aperçu du message, ou `null`.
+  apercu: null,
 };
+
+/**
+ * L'aperçu du message, tel que la Forge le rend (SPK-151).
+ *
+ * @spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-40 · docs/DESIGN_SYSTEM.md §6.13, §14.6
+ *
+ * Un champ inconnu n'est pas un refus — rien n'a été tenté — : il se dit en
+ * avertissement, avec ce que l'enregistrement en ferait.
+ */
+export function renderApercu(apercu) {
+  if (!apercu) return '';
+  if (apercu.status === 'loading') return '<p class="note">Calcul du message…</p>';
+  if (apercu.status === 'error') {
+    return `<p class="refus">${echapper(apercu.error)}</p>`;
+  }
+  if (apercu.unknown_fields?.length) {
+    return `<p class="avertissement">Champ inconnu : ${apercu.unknown_fields
+      .map((c) => `<code>${echapper(c)}</code>`).join(', ')}. Ce gabarit serait refusé à
+      l’enregistrement.</p>`;
+  }
+  return `<p class="note">Sur un événement d’exemple — la levée d’une protection :</p>
+    <pre class="fragment technique bloc-cle" tabindex="0">${echapper(apercu.rendered)}</pre>${
+    apercu.valid_json === false
+      ? `<p class="avertissement">Ce message n’est pas un document JSON : la plupart des
+         services le refuseront.</p>` : ''}`;
+}
 
 /**
  * Les QUATRE états d'un canal, jamais confondus (§14.6).
@@ -175,6 +206,8 @@ export function renderAlertes(etat = ALERTES_VIDE) {
     <code>result</code>, <code>message</code>.
     <strong>Un champ inconnu est refusé ici</strong>, et non le jour de
     l’incident. Vide, le message part en JSON structuré.</p>
+    <p class="formulaire__actions"><button type="button" class="bouton" data-alertes-apercu>Voir le message</button></p>
+    <div id="alerte-apercu" role="status">${renderApercu(etat.apercu)}</div>
   </div>
 
   <div class="champ">

@@ -1629,6 +1629,52 @@
         ]
       }
     },
+    "/v1/notify/preview": {
+      "post": {
+        "description": "Le message tel qu'il partirait, sur un événement d'exemple (SPK-151).\n\n@spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 (l'aperçu)\n\nUn CALCUL, pas un geste : rien n'est écrit, rien n'est envoyé, rien\nn'entre au journal (§36.7). Le rendu est celui de l'envoi —\n`notification.texte_envoye` — sur le gabarit TAPÉ, pas sur celui\nenregistré. Le nom de la Forge est celui que le canal porte.",
+        "operationId": "preview_channel_message_v1_notify_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Preview Channel Message V1 Notify Preview Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Channel Message",
+        "tags": [
+          "alertes"
+        ]
+      }
+    },
     "/v1/ports": {
       "get": {
         "description": "Les ports publiés de la FORGE. C'est une liste de la machine, pas\nd'un Spark : un port public est une ressource unique sur la machine.",

@@ -2632,6 +2632,24 @@ def create_app(config: Config) -> FastAPI:
             return {**canaux_service.etat(connection),
                     "live": app.state.notify.etat()}
 
+    @app.post("/v1/notify/preview", tags=["alertes"])
+    def preview_channel_message(body: dict = Body(...)) -> dict:
+        """Le message tel qu'il partirait, sur un événement d'exemple (SPK-151).
+
+        @spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 (l'aperçu)
+
+        Un CALCUL, pas un geste : rien n'est écrit, rien n'est envoyé, rien
+        n'entre au journal (§36.7). Le rendu est celui de l'envoi —
+        `notification.texte_envoye` — sur le gabarit TAPÉ, pas sur celui
+        enregistré. Le nom de la Forge est celui que le canal porte.
+        """
+        gabarit = (body or {}).get("template", "")
+        if not isinstance(gabarit, str):
+            raise HTTPException(status_code=422, detail={
+                "error": "template_invalide",
+                "message": "Le gabarit est un texte."})
+        return notification_service.apercu(gabarit.strip(), app.state.notify.forge)
+
     @app.put("/v1/notify/channels", tags=["alertes"])
     def set_channels(body: dict = Body(...)) -> dict:
         """Règle les canaux. Exige le mot de passe du §47.3.3.

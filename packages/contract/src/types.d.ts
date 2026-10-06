@@ -683,6 +683,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/notify/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Channel Message
+         * @description Le message tel qu'il partirait, sur un événement d'exemple (SPK-151).
+         *
+         *     @spec docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 (l'aperçu)
+         *
+         *     Un CALCUL, pas un geste : rien n'est écrit, rien n'est envoyé, rien
+         *     n'entre au journal (§36.7). Le rendu est celui de l'envoi —
+         *     `notification.texte_envoye` — sur le gabarit TAPÉ, pas sur celui
+         *     enregistré. Le nom de la Forge est celui que le canal porte.
+         */
+        post: operations["preview_channel_message_v1_notify_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ports": {
         parameters: {
             query?: never;
@@ -2641,6 +2668,43 @@ export interface operations {
         };
     };
     set_channels_v1_notify_channels_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_channel_message_v1_notify_preview_post: {
         parameters: {
             query?: never;
             header?: never;

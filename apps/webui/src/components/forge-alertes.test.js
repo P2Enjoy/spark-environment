@@ -6,6 +6,8 @@
  *           gabarit), §47.3.3 (le mot de passe à chaque écriture),
  *           §14.6 (les états se distinguent), §43.3 (un secret ne s'affiche
  *           pas) · docs/DESIGN_SYSTEM.md §6.13, §1.5 bis
+ * @verifies docs/BACKLOG.md#SPK-151 · docs/DAT.md §47.3.1 · docs/DESIGN_SYSTEM_APP.md
+ *           SPK-DS-40 (l'aperçu du message, sous le gabarit)
  * @verifies docs/BACKLOG.md#SPK-147 · docs/DAT.md §47.3.1 (les dix champs offerts)
  * @verifies docs/BACKLOG.md#SPK-140 · docs/DAT.md §47.3.0 bis (un refus garde
  *           la saisie, sauf le mot de passe) · docs/DESIGN_SYSTEM.md §6.11, §7.1
@@ -14,7 +16,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ALERTES_VIDE, etatDuCanal, renderAlertes, saisieAlertes } from './forge-alertes.js';
+import { ALERTES_VIDE, etatDuCanal, renderAlertes, renderApercu, saisieAlertes } from './forge-alertes.js';
 
 const pret = (config, live) => renderAlertes({
   ...ALERTES_VIDE, status: 'ready', config, live });
@@ -214,4 +216,42 @@ test('l’aide du gabarit nomme les dix champs, ni plus ni moins', () => {
     .map((m) => m[1]).filter((n) => !['champ'].includes(n));
   assert.deepEqual(nommes, ['version', 'ts', 'forge', 'action', 'actor', 'actor_class',
                             'target_type', 'target_id', 'result', 'message']);
+});
+
+// --- SPK-151 · SPK-DS-40 : l'aperçu du message, sous le gabarit ---------------
+
+test('le formulaire porte « Voir le message » et sa zone d’aperçu, annoncée', () => {
+  const html = pret(CONFIG({ enabled: true, configured: true }), {});
+  assert.match(html, /<button type="button" class="bouton" data-alertes-apercu>Voir le message<\/button>/);
+  assert.match(html, /id="alerte-apercu" role="status"/);
+});
+
+test('l’aperçu montre le message dans un bloc à chasse fixe, sur l’événement d’exemple', () => {
+  const html = renderApercu({ status: 'ready', rendered: '{"text": "a <b>"}',
+                              unknown_fields: [], valid_json: true });
+  assert.match(html, /Sur un événement d’exemple — la levée d’une protection/);
+  assert.match(html, /<pre class="fragment technique bloc-cle" tabindex="0">\{&quot;text&quot;: &quot;a &lt;b&gt;&quot;\}<\/pre>/);
+  assert.doesNotMatch(html, /avertissement/);
+});
+
+test('un champ inconnu est un AVERTISSEMENT, pas un refus', () => {
+  const html = renderApercu({ status: 'ready', rendered: null,
+                              unknown_fields: ['inconnu'], valid_json: null });
+  assert.match(html, /class="avertissement"[^>]*>Champ inconnu : <code>inconnu<\/code>/);
+  assert.doesNotMatch(html, /class="refus"/);
+  assert.doesNotMatch(html, /<pre/);
+});
+
+test('un message qui n’est pas du JSON le dit, sous le message', () => {
+  const html = renderApercu({ status: 'ready', rendered: 'Alerte : x',
+                              unknown_fields: [], valid_json: false });
+  assert.match(html, /<pre[^>]*>Alerte : x<\/pre>/);
+  assert.match(html, /n’est pas un document JSON/);
+});
+
+test('le calcul en cours et l’échec se disent', () => {
+  assert.match(renderApercu({ status: 'loading' }), /Calcul du message…/);
+  assert.match(renderApercu({ status: 'error', error: 'tunnel fermé' }),
+               /class="refus"[^>]*>tunnel fermé/);
+  assert.equal(renderApercu(null), '');
 });
