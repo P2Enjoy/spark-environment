@@ -8608,7 +8608,7 @@ pas ». Le disque sort donc du périmètre.
   laisser déborder. Non mesurés : le poids sous contention, le plancher sous
   pression de la Forge. **La décision revient au responsable.**
 
-### [ ] SPK-144 · La fenêtre « Ressources » pré-remplit les valeurs exactes et n'envoie que ce qui change
+### [~] SPK-144 · La fenêtre « Ressources » pré-remplit les valeurs exactes et n'envoie que ce qui change
 
 **Constaté le 2026-10-01** sur la VM du banc (capture
 `spk142-vm-reservation-et-plafond`), **arbitré le 2026-10-03** : « oui, corriger
@@ -8621,6 +8621,12 @@ modale arrondissait la mémoire au gibioctet, puis renvoyait la valeur arrondie.
 - Portée : chaque champ est pré-rempli à sa valeur exacte, sur la grille de son
   curseur ; seuls les réglages que l'exploitant a changés partent ; preuve
   rouge sur le code d'avant ; vérification par la console sur la VM.
+- **Codé le 2026-10-03** — le code est parti par erreur dans le commit
+  `e7a5002` (journal du 2026-10-06) : `valeursDesQuotas` pré-remplit les
+  valeurs exactes, `corpsDesQuotas` n'envoie que les réglages changés ; cinq
+  preuves de composant, dont le cas constaté (512 Mio, seul le réseau changé →
+  la mémoire ne part pas). **Reste `[~]`** : la vérification par la console sur
+  la VM.
 
 ### [ ] SPK-145 · Mesurer si la réservation CPU garde son effet sous contention quand un plafond est posé
 

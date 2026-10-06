@@ -313,6 +313,11 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-144 — la fenêtre « Ressources » n'envoie que ce qu'on a changé.** Elle
+  pré-remplissait la mémoire arrondie au gibioctet, puis renvoyait tous les
+  réglages : un Spark de 512 Mio dont on ne changeait que le réseau en
+  ressortait à 1 Gio. Les valeurs sont désormais exactes, et seuls les réglages
+  modifiés partent. DAT §49.2 bis ; manuel M8.
 - **SPK-147 — l'aide du gabarit d'alerte nomme les dix champs.** L'onglet
   Alertes et le manuel M11 n'en nommaient que huit ; la Forge en accepte dix,
   `version` et `actor_class` compris. DAT §47.3.1, dont un paragraphe périmé
