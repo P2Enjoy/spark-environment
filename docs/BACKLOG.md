@@ -8456,6 +8456,8 @@ réponse : « oui ».
   (`FakeIncus`, `FakeCaddy`) sont dans le périmètre — la question posée ne
   visait que la pile de développement.
 - Dépend de : SPK-137 (la VM qui remplace la pile factice).
+- **Arbitré le 2026-10-06** : « oui, la spécifier » — la spécification est
+  écrite et soumise au responsable avant tout code.
 - **Absorbe** (arbitré le 2026-10-01) le parcours « les trois degrés
   s'atteignent au clavier », rouge une fois sur deux campagnes sur la pile
   factice : il n'est pas corrigé à part, il est rejoué contre la VM quand la
@@ -8766,6 +8768,34 @@ expliquer, corriger.
     quatrième en plus) : étrangers à cette unité, consignés au rapport
     d'incohérences.
   - **Reste `[~]`** : la vérification sur VM, à arbitrer (ci-dessus).
+
+### [ ] SPK-151 · L'onglet Alertes montre le message tel qu'il partirait, avant d'enregistrer
+
+**Constaté le 2026-10-03** (rapport d'incohérences) : le DAT §47.3.1 promet que
+l'écran montre le rendu du gabarit sur un événement d'exemple avant
+d'enregistrer ; l'onglet Alertes n'en montre aucun. **Arbitré le 2026-10-06** :
+« construire l'aperçu ».
+
+- Spécification : **à écrire** (DAT §47.3.1 ; SPK-DS ; manuel M11) avant le
+  code.
+- Portée : sous le gabarit, le message tel qu'il partirait, rendu par la Forge
+  — le même rendu, le même filtre des secrets que l'envoi réel — sur un
+  événement d'exemple, sans rien enregistrer ni rien envoyer ; un champ inconnu
+  y est dit avant l'enregistrement ; vérification par la console sur la VM.
+
+### [ ] SPK-152 · Un mode CPU qui porte une réservation ET un plafond
+
+**Arbitré le 2026-10-06**, sur la mesure de SPK-145 (`docs/EXPLORATION_QUOTAS.md`
+§1 : la part d'une cellule vaut le plus petit de son poids et de son plafond, et
+un plafond n'efface pas la réservation) : « oui, le spécifier ».
+
+- Spécification : **à écrire, puis soumise au responsable avant le code** (DAT
+  §7.2, §7.7, §49 ; SCHEMA ; SPK-DS).
+- Ce qu'elle doit trancher : le nom du mode, ce que l'admission compte (la
+  réservation, ou le plafond comme le mode `capped`), les contrôles de
+  cohérence (plafond ≥ réservation, plafond ≤ cœurs partagés), le plafond posé
+  par `raw.lxc` et le redémarrage qu'il demande pour changer — annoncé, jamais
+  caché.
 ---
 
 ## Lot 6 — Réseau entre Sparks

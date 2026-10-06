@@ -25,9 +25,8 @@ peut pas voir rendu se vérifie le jour où il sert, c'est-à-dire trop tard. »
 L'onglet Alertes (`apps/webui/src/components/forge-alertes.js`) n'a aucun
 rendu : il enregistre, ou montre le refus d'un champ inconnu.
 
-**Non résolu ici** : hors du périmètre de SPK-147. À arbitrer par le
-responsable : construire l'aperçu du rendu sur un événement d'exemple, ou
-retirer la promesse du DAT.
+**Arbitré le 2026-10-06** : construire l'aperçu — unité SPK-151. L'entrée sort
+du rapport quand elle est livrée.
 
 ## 2026-10-06 · Trois parcours rougissent en campagne et passent isolément
 

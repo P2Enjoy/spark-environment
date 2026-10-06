@@ -13706,3 +13706,17 @@ par Incus, il faut `0-0` ; sans épinglage commun, pas de contention. Détail da
 
 Côté produit, la même campagne a validé SPK-144, SPK-146, SPK-147 et SPK-148 par
 la console branchée sur la VM — OP-34 attend la décision du responsable.
+
+## 2026-10-06 · Quatre arbitrages : un mode CPU à spécifier, OP-34, l'aperçu des alertes, SPK-138
+
+- **mode CPU « réservation + plafond »** : « oui, le spécifier » — SPK-152,
+  spécification soumise avant le code ;
+- **OP-34** : la jouer maintenant ;
+- **l'aperçu du gabarit d'alerte** promis par le DAT : le construire — SPK-151 ;
+- **SPK-138** (la pile de développement sans pilote factice) : la spécifier,
+  et la soumettre avant le code.
+
+Deux autres sessions travaillent dans le même arbre de travail
+(`spark-environment-8f`, `spark-environment-fd`, dont SPK-150 au DAT §44).
+Elles ont été prévenues des numéros et des sections que cette session prend ;
+chaque commit nomme ses fichiers, et le DAT n'est indexé que hunk par hunk.
