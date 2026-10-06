@@ -12139,6 +12139,26 @@ L'écran montre le rendu **avant** d'enregistrer, sur un événement d'exemple. 
 gabarit qu'on ne peut pas voir rendu se vérifie le jour où il sert, c'est-à-dire
 trop tard.
 
+**L'aperçu (SPK-151).** Constaté le 2026-10-03 : l'écran ne le faisait pas.
+
+- `POST /v1/notify/preview` avec `{"template": "…"}` rend
+  `{"rendered", "unknown_fields", "valid_json", "event"}`. Le rendu passe par les
+  **mêmes** fonctions que l'envoi — `corps()` puis `rendre()` —, sur un
+  **événement d'exemple** fixe : la levée de la protection d'un Spark
+  `exemple`, par `console/local`, sur la Forge courante. Le gabarit vide rend le
+  corps structuré du §47.4, tel qu'il partirait ;
+- un champ inconnu n'est pas une erreur ici : `unknown_fields` le nomme, et
+  `rendered` est `null` — c'est ce que l'enregistrement refuserait ;
+  `valid_json` dit si le message est un document JSON, ce que les services
+  attendent ;
+- **rien n'est écrit, rien n'est envoyé, rien n'entre au journal** : c'est un
+  calcul, pas un geste (§36.7), et le registre n'est pas lu au-delà du nom de la
+  Forge ;
+- l'onglet porte un bouton **« Voir le message »** sous le champ du gabarit, et
+  la zone de l'aperçu se met à jour **sans repeindre le formulaire** — le mot de
+  passe déjà tapé n'est pas effacé. Contrat d'écran : `DESIGN_SYSTEM_APP.md`
+  SPK-DS-40.
+
 **Où il vit.** Au registre, avec l'URL, posé depuis l'onglet Alertes (§47.3,
 §47.3.0 bis, SPK-62) : un gabarit qui nomme un champ inconnu est refusé à
 l'enregistrement. `SPARKD_NOTIFY_TEMPLATE` reste le repli d'une Forge dont la
