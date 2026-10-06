@@ -14002,3 +14002,29 @@ antérieur : un refus de création sans manque chiffré (`422`) n'affichait que
 « Le serveur a refusé cette création », sans raison.
 
 Reste OP-38, sur instruction du responsable.
+
+## 2026-10-06 · Les illustrations du manuel avaient pris quatre unités de retard
+
+**Constat**, en reproduisant `m8-dossier` pour SPK-150 : `make manuel` re-rend
+les 45 illustrations, et trente diffèrent de celles du dépôt. Mesuré pixel par
+pixel : une dizaine ne bougent que d'un horodatage (moins de 0,1 %) ; une
+quinzaine changent de 1 à 8 %, parce que l'interface a changé depuis leur
+dernière production — les deux curseurs réseau (SPK-142), « Forge en service »
+(SPK-148), le parc du seed avec `api-plafonnee` (SPK-152), le diagnostic des
+routes (SPK-130), l'annonce du dossier (SPK-150). Aucune de ces unités n'avait
+relancé `make manuel`.
+
+**Deux illustrations étaient fausses, pas seulement datées.** `m5-formulaire`
+coupait le bouton « Créer le Spark » : le formulaire a grandi d'un curseur.
+`m5-refus`, légendée « un refus du serveur, avec la saisie conservée », ne
+montrait aucun refus — il vivait sous le cadre de 900 px, et l'image du dépôt
+avait déjà ce défaut. Le harnais cadre le formulaire sur 1 300 px et amène le
+refus dans l'image ; vérifié à l'œil.
+
+**Décision du responsable** : ne pas rétablir les images — d'autres sessions
+travaillent en parallèle —, les reproduire sur HEAD et les committer.
+
+**Vu, laissé tel quel** : le formulaire de création par défaut affiche
+désormais « pourrait manquer » sur le CPU, parce que le seed de SPK-152 ne
+laisse que 0,25 CPU libre. C'est le comportement réel de ce seed, pas un défaut
+d'illustration.

@@ -83,6 +83,14 @@
   aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
 
 ### Corrigé
+- **Les illustrations du manuel montrent l'interface courante.** Une quinzaine
+  dataient d'avant SPK-130, SPK-142, SPK-148, SPK-150 et SPK-152 : elles
+  montraient encore le curseur « Débit » unique, l'ancien texte d'« Installer
+  cette Forge », le parc sans `api-plafonnee`, les routes sans leur diagnostic.
+  `make manuel` les reproduit toutes. `m5-formulaire` coupait le bouton de
+  création, et `m5-refus` ne montrait **aucun refus** — le message vivait sous
+  le cadre de 900 px : le harnais cadre désormais le formulaire entier et amène
+  le refus dans l'image. Manuel, aucun changement de comportement.
 - **Une recette DNS déclarait les routes d'un nom et écrivait le DNS d'un autre**
   (SPK-149). Signalé sur `evoliz-mcp.<zone>` : les routes du domaine NU étaient
   déclarées, le DNS du sous-domaine écrit. Le tiret n'y était pour rien. L'aperçu

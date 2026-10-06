@@ -175,9 +175,10 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await accueil();
     await page.click('.titre-vue .bouton--primaire');
     await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
-    // Depuis les curseurs (SPK-59) le formulaire est plus haut : sans cette
-    // hauteur, l'illustration coupe le bouton de création.
-    await capturer('m5-formulaire', { hauteur: 1150 });
+    // Depuis les curseurs (SPK-59) le formulaire est plus haut, et SPK-142 y a
+    // ajouté le plafond réseau : sans cette hauteur, l'illustration coupe le
+    // bouton de création.
+    await capturer('m5-formulaire', { hauteur: 1300 });
 
     await page.fill('#name', 'demande-trop-grande');
     // SPK-59 : la mémoire est un curseur. « Fin » le pousse à la capacité
@@ -185,7 +186,11 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await auMaximum('#memory_gib');
     await page.click('button[type="submit"]');
     await page.waitForSelector('.refus', { timeout: 10000 });
-    await capturer('m5-refus');
+    // Le chapitre montre « un refus du serveur, avec la saisie conservée ». Le
+    // refus vit sous le bouton, hors d'un écran de 900 px depuis SPK-142 : on
+    // l'amène dans le cadre, et la hauteur garde la saisie au-dessus de lui.
+    await page.locator('.refus').scrollIntoViewIfNeeded();
+    await capturer('m5-refus', { hauteur: 1300 });
 
     // Le catalogue, puisque M5 renvoie à ce geste sans dire où il vit. On y va
     // par la navigation : Forge, puis l'onglet Images.
