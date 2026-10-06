@@ -36,11 +36,26 @@ plafond — `limits.cpu.allowance` est l'un ou l'autre. Mais les deux réglages 
 noyau **coexistent** sur une même cellule quand le plafond passe par `raw.lxc`,
 et le plafond s'applique.
 
+**Sous contention — mesuré le 2026-10-06 (SPK-145).** Deux cellules jetables
+épinglées sur le **même** cœur (`limits.cpu=0-0` ; `0` seul est refusé par
+Incus), une boucle occupée chacune, les deux parts lues dans un même script sur
+la VM, rapportées au temps réellement écoulé
+(`e2e/forge-vm/epreuves/mesures-cpu-concurrence.mjs`) :
+
+| A | B | Part de A | Part de B |
+|---|---|---|---|
+| poids 75 | poids 25 | **0,75** | **0,25** |
+| poids 75 + plafond 0,5 | poids 25 | **0,50** — le plafond l'emporte | **0,50** — le reste lui revient |
+| poids 25 + plafond 0,6 | poids 75 | **0,25** — le poids décide | **0,75** |
+
+La part d'une cellule vaut **le plus petit** de ce que son poids lui donne et de
+son plafond ; ce que le plafond retient revient aux autres. Un plafond posé
+**au-dessus** de la part d'une cellule n'efface pas sa réservation. Première
+passe ratée le même jour par le script — `limits.cpu=0` refusé, les deux cellules
+sur des cœurs différents, aucune contention : rejouée.
+
 **Ce qui ne l'est pas** :
 
-- que le **poids** garde son effet sous contention quand un plafond est posé —
-  il faudrait deux cellules en concurrence ; le noyau traite les deux réglages
-  indépendamment, mais ce n'est pas mesuré ici ;
 - la pose **à chaud** : `raw.lxc` ne s'applique qu'au démarrage de la cellule —
   changer ce plafond demanderait un redémarrage, à moins d'écrire le fichier du
   cgroup en direct, ce qu'Incus ne garderait pas ;
@@ -71,8 +86,9 @@ cellule de la récupération ; il faudrait saturer la VM pour le voir.
 
 ## 3. Ce que le responsable a décidé, le 2026-10-03
 
-1. **CPU** : « mesurer d'abord la concurrence » — SPK-145, avant toute décision
-   sur un mode « réservation + plafond ».
+1. **CPU** : « mesurer d'abord la concurrence » — SPK-145, mesuré le
+   2026-10-06 (§1) : réservation et plafond se composent comme attendu. La
+   décision d'un mode « réservation + plafond » revient au responsable.
 2. **Mémoire** : « non, un seul plafond » — pas de plancher garanti.
 3. **`memory_enforce=soft`** : « le retirer de l'API » — SPK-146.
 

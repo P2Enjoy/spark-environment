@@ -13693,3 +13693,16 @@ SPK-144 renvoie donc à `e7a5002` pour son code.
 Une autre session travaille dans le même dépôt (SPK-149, commits `6c674b7`,
 `b769b8c`). Les commits de celle-ci nomment désormais leurs fichiers un par un :
 un `git add -A` pourrait embarquer le travail en cours de l'autre.
+
+## 2026-10-06 · SPK-145 mesuré : la réservation CPU tient sous contention, plafond ou non
+
+Deux cellules jetables sur un même cœur de la VM du banc. Poids 75/25 → parts
+0,75/0,25 ; le plus lourd plafonné à 0,5 → 0,50/0,50 ; le plus léger plafonné à
+0,6 → 0,25/0,75. Le poids et le plafond se composent : la part est le plus petit
+des deux, et un plafond posé au-dessus de la part d'une cellule ne retire rien à
+sa réservation. Une première passe ne mesurait rien — `limits.cpu=0` est refusé
+par Incus, il faut `0-0` ; sans épinglage commun, pas de contention. Détail dans
+`docs/EXPLORATION_QUOTAS.md` §1.
+
+Côté produit, la même campagne a validé SPK-144, SPK-146, SPK-147 et SPK-148 par
+la console branchée sur la VM — OP-34 attend la décision du responsable.

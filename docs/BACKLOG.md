@@ -8631,7 +8631,7 @@ modale arrondissait la mémoire au gibioctet, puis renvoyait la valeur arrondie.
   mémoire, non touchée, reste 512 Mio après « Appliquer les quotas ». **Reste
   `[~]`** : OP-34.
 
-### [ ] SPK-145 · Mesurer si la réservation CPU garde son effet sous contention quand un plafond est posé
+### [x] SPK-145 · Mesurer si la réservation CPU garde son effet sous contention quand un plafond est posé
 
 **Arbitré le 2026-10-03** : avant de décider d'un mode CPU « réservation +
 plafond », « mesurer d'abord la concurrence ». SPK-143 a montré que les deux
@@ -8643,6 +8643,12 @@ garde son effet face à une autre cellule.
 - À mesurer : deux cellules en concurrence sur les mêmes cœurs, l'une avec un
   poids et un plafond, l'autre avec un poids seul ; la part de chacune, avec et
   sans plafond.
+- **Mesuré le 2026-10-06** (`make forge-vm ARGS="--epreuve
+  mesures-cpu-concurrence"`), consigné dans `docs/EXPLORATION_QUOTAS.md` §1 : sur
+  un même cœur, poids 75/25 → 0,75/0,25 ; le plus lourd plafonné à 0,5 →
+  0,50/0,50 ; le plus léger plafonné à 0,6 → 0,25/0,75. La part vaut le plus
+  petit du poids et du plafond ; un plafond n'efface pas la réservation. **La
+  décision d'un mode « réservation + plafond » revient au responsable.**
 
 ### [~] SPK-146 · Le mode mémoire « souple » sort de l'API de création
 
