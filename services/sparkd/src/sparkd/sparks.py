@@ -4,6 +4,8 @@
       s'écrit avant Incus), §7.7 (admission control) · docs/SCHEMA.md §4, §9
 @spec docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 (réservation et plafond réseau,
       réglés séparément ; les trois contrôles de cohérence)
+@spec docs/BACKLOG.md#SPK-146 · docs/DAT.md §7.6 (la mémoire est un plafond strict ;
+      la création refuse le mode souple)
 
 C'est ici que les pièces se rejoignent : admission control, registre, traducteur
 et machine à états. Le module orchestre ; il ne réimplémente aucune de ces règles.
@@ -162,6 +164,17 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str | None = 
     # corrigera le registre à l'observation (§42.9).
     docker = (images.capacites_de_alias(entree["alias"])["docker"]
               if spec.docker_enabled is None else bool(spec.docker_enabled))
+
+    # SPK-146 · §7.6 : la mémoire est un plafond STRICT. Mesuré le 2026-10-01
+    # (SPK-143) : le mode souple pose `memory.high`, et une cellule qui le
+    # dépasse est freinée jusqu'au blocage — pas le débordement que le mot promet.
+    if spec.memory_enforce != "hard":
+        raise QuotaIncoherent(
+            "memory_enforce",
+            f"Le mode mémoire « {spec.memory_enforce} » est refusé : seul le plafond "
+            "strict (« hard ») est offert. En mode souple, une cellule qui dépasse "
+            "son plafond n'est pas servie mais freinée, jusqu'au blocage — mesuré "
+            "(docs/DAT.md §7.6).")
 
     # SPK-142 · §49.7 : un plafond absent vaut la réservation, comme avant ; un
     # plafond donné se contrôle avant toute écriture.

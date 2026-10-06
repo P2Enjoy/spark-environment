@@ -8641,7 +8641,7 @@ garde son effet face à une autre cellule.
   poids et un plafond, l'autre avec un poids seul ; la part de chacune, avec et
   sans plafond.
 
-### [ ] SPK-146 · Le mode mémoire « souple » sort de l'API de création
+### [~] SPK-146 · Le mode mémoire « souple » sort de l'API de création
 
 **Arbitré le 2026-10-03** : « le retirer de l'API ». Mesuré le 2026-10-01
 (SPK-143) : `memory_enforce=soft` pose `memory.high`, et une cellule qui le
@@ -8652,6 +8652,10 @@ dépasse est freinée jusqu'au blocage — ce n'est pas un débordement.
   existants gardent leur valeur ; le relevé du registre de production — y en
   a-t-il ? — revient au responsable : sa lecture est refusée à l'agent par sa
   garde de permissions.
+- **Codé le 2026-10-06** : la création refuse `soft` en `422 quota_incoherent`
+  (champ `memory_enforce`) ; deux preuves, rouges puis vertes ; suite `sparkd`
+  1 619 sur 1 619 — des diagnostics. **Reste `[~]`** : le refus constaté sur la
+  `sparkd` de la VM, puis la mise en production.
 
 ### [~] SPK-147 · L'aide du gabarit d'alerte et le manuel nomment les dix champs
 

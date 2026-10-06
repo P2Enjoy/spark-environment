@@ -313,6 +313,11 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-146 — la création refuse le mode mémoire « souple ».** Mesuré sur la VM
+  du banc : `memory_enforce=soft` pose `memory.high`, et une cellule qui le
+  dépasse est freinée jusqu'au blocage — pas le débordement que le mot promet.
+  La création le refuse désormais en le disant (`422`) ; le plafond strict reste
+  le seul mode, par défaut. Les Sparks existants gardent leur valeur. DAT §7.6.
 - **SPK-148 — le panneau « Installer cette Forge » dit la vérité sur une Forge
   en service.** Il y disait « peut accepter SSH sans encore porter `sparkd` »,
   accents graves compris. Il garde son diagnostic de conformité, et dit
