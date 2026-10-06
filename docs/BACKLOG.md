@@ -8879,6 +8879,10 @@ un plafond n'efface pas la réservation) : « oui, le spécifier ».
   directe s'applique aussitôt, mais Incus la remet à `max` dès qu'il repose une
   réservation à chaud ; `raw.lxc` tient après un redémarrage, dans la tranche.
   Le choix revient au responsable.
+- **Arbitré le 2026-10-06** : « au redémarrage, avec bouton » — le plafond va
+  dans `raw.lxc` ; tant que la cellule ne l'a pas, l'écran dit qu'il prendra
+  effet au prochain démarrage et offre « Redémarrer pour l'appliquer ». Rien ne
+  peut l'effacer en silence.
 
 ### [~] SPK-153 · La recette « site-web » ne pose le « www » que sur demande
 

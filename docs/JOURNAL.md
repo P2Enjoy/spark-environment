@@ -13947,3 +13947,17 @@ s'efface (2,00 CPU). Par `raw.lxc` ajouté aux lignes de la tranche, le plafond
 tient après un redémarrage (0,50 CPU). Un plafond « à chaud » demanderait donc
 au produit de le reposer après chaque geste d'Incus sur le CPU. Choix soumis au
 responsable.
+
+## 2026-10-06 · SPK-152 : le plafond s'applique au redémarrage, avec un bouton
+
+Arbitrage du responsable sur la mesure du même jour : un nouveau plafond CPU va
+dans `raw.lxc` et prend effet au prochain démarrage de la cellule ; l'écran le
+dit tant que la cellule ne l'a pas, et offre « Redémarrer pour l'appliquer ».
+L'écriture directe de `cpu.max`, qu'Incus efface à chaque réservation reposée,
+est écartée : un oubli effacerait le plafond sans bruit.
+
+Pour la spécification, une contrainte relevée : le mode demande d'élargir les
+`CHECK` de la table `spark`, mère d'une quinzaine de tables en
+`ON DELETE CASCADE`. La reconstruire comme une table ordinaire effacerait leurs
+lignes ; la migration passera par la procédure que SQLite documente pour
+modifier une contrainte sans toucher aux données.
