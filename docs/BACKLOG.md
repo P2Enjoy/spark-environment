@@ -8741,9 +8741,10 @@ expliquer, corriger.
 - **Vérification sur VM à arbitrer** : la console du banc (§51.6) lit le `.env`
   du poste et ne porte aucun doublon DNS ; une épreuve de recette y écrirait dans
   le compte réel du fournisseur.
-- **Hors de cette unité** : `site-web` pose aussi le `www` du nom choisi, y
-  compris sous un sous-domaine (`www.evoliz-mcp`) — c'est sa définition
-  (§38.6.4), inchangée.
+- **Hors de cette unité** : `site-web` posait aussi le `www` du nom choisi, y
+  compris sous un sous-domaine (`www.evoliz-mcp`) — c'était sa définition
+  (§38.6.4). SPK-153 la révise : ce `www` devient une option, décochée par
+  défaut.
 - **Corrigé le 2026-10-06, non vérifié sur VM.** La garde de l'écriture compare
   l'aperçu lu à la saisie courante (`cleApercuRecette`, `apercuAJour`) ; refusée,
   l'écriture relit l'aperçu et rend le focus au bouton (SPK-DS-38) ; la saisie
@@ -8842,6 +8843,29 @@ un plafond n'efface pas la réservation) : « oui, le spécifier ».
   cohérence (plafond ≥ réservation, plafond ≤ cœurs partagés), le plafond posé
   par `raw.lxc` et le redémarrage qu'il demande pour changer — annoncé, jamais
   caché.
+
+### [ ] SPK-153 · La recette « site-web » ne pose le « www » que sur demande
+
+**Demandé le 2026-10-06** par le responsable : « dans la recette, rendre la pose
+du `www.` optionnelle, décochée par défaut ». La recette posait toujours le
+`www` du nom choisi, y compris sous un sous-domaine (`www.evoliz-mcp`), avec sa
+route.
+
+- Spécification : `docs/DAT.md` **§38.6.4** (le `www` est une option, décochée
+  par défaut ; une valeur autre que vrai ou faux est refusée ; rien n'est
+  retiré) · §38.6.4 bis (une recette ne déclare que ce qu'elle écrit) · §38.6.6
+  (la case entre dans la clé de l'aperçu) · manuel M7 (« Appliquer une recette
+  DNS ») · `docs/DESIGN_SYSTEM.md` §6.10 · `docs/DESIGN_SYSTEM_APP.md`
+  **SPK-DS-39**.
+- Dépend de : SPK-50, SPK-88, SPK-149.
+- Portée : un paramètre « case à cocher » dans le catalogue des recettes, rendu
+  par la modale avec le composant `.case` (§6.10) ; `site-web` décochée ne
+  compose qu'un enregistrement et qu'une route, cochée les deux comme avant ;
+  l'hôte refuse une valeur qui n'est ni `true` ni `false` ; cocher ou décocher
+  relit l'aperçu ; preuves unitaires rouges sur le code d'avant ; preuve de
+  route sur l'hôte ; parcours E2E au clavier — décochée, un seul nom écrit et
+  routé ; cochée, les deux — ; vérification visuelle 1440 px et 390 px ;
+  `docs/PROD_MIGRATIONS.md` OP-35 (relancer la console).
 ---
 
 ## Lot 6 — Réseau entre Sparks

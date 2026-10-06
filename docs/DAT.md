@@ -7092,15 +7092,43 @@ réel ; l'exploitant décide.
 
 #### 38.6.4 Les deux premières recettes
 
-**`site-web`** — le cas nommé par le responsable : un site sur le domaine nu.
+**`site-web`** — le cas nommé par le responsable : un site sur le domaine nu, ou
+sur un sous-domaine de la zone (§38.6.6).
 
 ```
-@     A  <adresse de la Forge>
-www   A  <adresse de la Forge>
+<nom>       A  <adresse de la Forge>
+www.<nom>   A  <adresse de la Forge>    ← seulement si la case « www » est cochée
 ```
 
-Deux enregistrements, aucune valeur extérieure. C'est la recette qui prouve le
-mécanisme de bout en bout sans dépendre de rien.
+Un enregistrement, et un second sur demande ; aucune valeur extérieure. C'est la
+recette qui prouve le mécanisme de bout en bout sans dépendre de rien.
+
+**Le `www` est une option, décochée par défaut — décision du responsable,
+2026-10-06 (SPK-153).** La recette posait jusque-là toujours le `www` du nom
+choisi, y compris sous un sous-domaine — `www.evoliz-mcp`, `www.mcp.api` —, où
+personne ne le tape. Elle écrivait donc d'office un enregistrement et une route
+que l'exploitant n'avait pas demandés, et la route occupe un nom que l'unicité
+du §18.4 refuse ensuite à tout autre Spark. Désormais :
+
+- une case *Poser aussi le « www »* suit le champ du nom ; elle est
+  **décochée** à l'ouverture ;
+- décochée, la recette pose le nom choisi **seul** : un enregistrement, une
+  route. Cochée, elle pose les deux noms, enregistrements et routes, comme
+  avant. Une recette ne déclare que ce qu'elle écrit (§38.6.4 bis), et
+  l'inverse vaut aussi ;
+- la case est un **paramètre** de la recette, comme le port : elle voyage dans
+  `params` (`www: true`), entre dans la clé de l'aperçu (§38.6.6), et un
+  changement d'état relit l'aperçu. Absente, elle vaut « non » : un appel qui ne
+  la porte pas ne pose plus le `www` ;
+- l'hôte console n'accepte que `true` ou `false` (absente, vide ou `null`
+  valent `false`). Toute autre valeur est **refusée** en la nommant, plutôt que
+  d'être lue comme un « non » silencieux : un `"oui"` ou un `"true"` ferait
+  croire à l'appelant qu'il a demandé le `www`, sans que rien ne soit posé
+  (§38.6.2).
+
+Rien de ce qui existe n'est retiré. Un `www` posé avant cette décision reste dans
+la zone et au registre ; réappliquer la recette sans la case ne le supprime pas.
+Le produit ne supprime rien qu'il n'a pas posé dans le geste courant (§38.2).
 
 **`relais-transactionnel`** — l'émission par le service transactionnel du
 fournisseur, mesurée sur `lelabs.tech` au §38.6 bis :

@@ -1575,6 +1575,23 @@ Preuves observées le 2026-10-06 (pile jetable, diagnostic au sens du `DAT.md`
 `-compte-rendu`, `-niveau-vide`, `-deux-niveaux-apercu`,
 `-deux-niveaux-compte-rendu`.
 
+### SPK-DS-39 · Une option de recette est une case, décochée tant qu'on ne la demande pas
+
+**Date** : 2026-10-06 · SPK-153 · `DAT.md` §38.6.4 · `DESIGN_SYSTEM.md` §1.2,
+§6.9, §6.10 · SPK-DS-38
+
+Un paramètre de recette qui **ajoute des lignes** à ce qui sera écrit — le `www`
+de `site-web` — est une case à cocher, rendue par le composant `.case` (§6.10 :
+case de 24 px, ligne de 40 px, le libellé étend la cible) :
+
+- elle suit le champ dont elle prolonge le sens — la case `www` vient sous le
+  champ du nom —, avec son libellé et une aide d'une ligne (§6.9) ;
+- elle est **décochée à l'ouverture**. Le produit ne coche pas à la place de
+  l'exploitant une option qui écrirait un nom de plus (§1.2) ;
+- cocher ou décocher relit l'aperçu aussitôt, à la barre d'espace comme à la
+  souris. L'aperçu ajoute ou retire les lignes, et la garde du SPK-DS-38 vaut
+  pour cette saisie comme pour les autres.
+
 ### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
 
 **Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus

@@ -13782,3 +13782,42 @@ déploiements que le responsable observera.
 Une autre session (`spark-environment-e3`) prend SPK-151, SPK-152 et SPK-138, et
 les DAT §7, §28, §47 et §49 ; celle-ci tient SPK-150 et le DAT §44. Chaque
 commit nomme ses fichiers et n'indexe que ses propres hunks.
+
+## 2026-10-06 · SPK-153 : le « www » de la recette site web devient une option
+
+**Problème**, demandé par le responsable : rendre la pose du `www.` optionnelle
+dans la recette, décochée par défaut. `site-web` posait toujours le `www` du nom
+choisi — enregistrement et route —, y compris sous un sous-domaine
+(`www.evoliz-mcp`, `www.mcp.evoliz`), où personne ne le tape. Le SPK-149 l'avait
+laissé hors de son périmètre : c'était la définition du §38.6.4.
+
+**Observations** : le catalogue ne connaît que des champs de texte et un champ
+de port ; aucune case. L'écran envoie les paramètres tels quels dans `params`,
+et la clé de l'aperçu (`cleApercuRecette`) les sérialise tous : une case y entre
+sans rien changer à la garde du SPK-149. La console a déjà un composant `.case`
+conforme au §6.10.
+
+**Solutions envisagées** :
+
+- *deux recettes*, « site web » et « site web avec www » — écarté : la même
+  composition en double, et deux entrées du catalogue qui ne diffèrent que d'une
+  ligne ;
+- *un champ texte « oui / non »* — écarté : une saisie libre pour une valeur à
+  deux états ;
+- **une case, paramètre de la recette** — retenu. Elle voyage comme le port,
+  entre dans la clé de l'aperçu, et l'hôte la valide.
+
+**Décision** (DAT §38.6.4 révisé, SPK-DS-39) : la case *Poser aussi le « www »*
+suit le champ du nom, décochée. Décochée, un enregistrement et une route ;
+cochée, les deux. L'hôte n'accepte que `true` ou `false` — une autre valeur est
+refusée, pour qu'un `"oui"` ne soit pas lu comme un « non » muet. Rien n'est
+retiré : un `www` déjà posé reste.
+
+**Conséquences** : un appel d'API qui ne porte pas la case ne pose plus le
+`www`. Les preuves qui attendaient deux lignes sans cocher passent à une ligne,
+ou cochent la case. La console change seule : OP-35 la relance, sans rien sur
+`sparkd`.
+
+Coordination : `spark-environment-e3` tient SPK-151, SPK-152, SPK-DS-40 et 41 ;
+une autre session tient SPK-150. Celle-ci tient SPK-153, SPK-DS-39, OP-35 et le
+DAT §38.6.4.
