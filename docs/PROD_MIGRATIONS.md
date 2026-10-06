@@ -123,8 +123,15 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-34 · Valeurs exactes des quotas, mode mémoire souple refusé, aide des alertes, panneau d'installation (SPK-144, SPK-146 à SPK-148)
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable. Les
-                quatre unités sont validées sur la VM du banc (SPK-137).
+État          : JOUÉE LE 2026-10-06, VÉRIFICATION INCOMPLÈTE — sur
+                instruction du responsable (« oui, maintenant »). Fait :
+                1. sauvegarde `/var/backups/sparkd/spark-20261006-111017.db`
+                (structure ok, journal 1 415 entrées, chaîne intacte) ;
+                2. runbook A.2 depuis `main`, préflight final 17 sur 17 ;
+                3. console relancée. **Non fait** : la relecture de `/healthz`
+                et le relevé de `memory_enforce = 'soft'` au registre —
+                refusés à l'agent par sa garde de permissions. Reste à
+                constater par le responsable avant de passer « APPLIQUÉ ».
 Objectif      : la fenêtre « Ressources » pré-remplit les valeurs exactes et
                 n'envoie que les réglages changés (SPK-144, §49.2 bis) ; la
                 création refuse `memory_enforce=soft` (SPK-146, §7.6) ; l'aide
