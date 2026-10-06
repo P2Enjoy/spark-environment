@@ -171,6 +171,28 @@ Risques       : aucun sur les données. Le `BRIEFING.md` d'une cellule n'est
                 (§44.8) : jusque-là, il garde l'ancien texte.
 ```
 
+### OP-35 · La recette « Site web » ne pose le « www » que sur demande : la console (SPK-153)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable.
+Objectif      : la case « Poser aussi le « www » » de la recette `site-web`,
+                décochée par défaut (DAT §38.6.4). Le changement vit dans la
+                console seule : rien sur `sparkd`, aucune migration, aucune
+                variable.
+Dépend de     : rien.
+Ordre         : 1. mettre à jour le dépôt du poste qui porte la console ;
+                2. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : Spark → Routes → « Appliquer une recette DNS » → « Site web
+                sur le domaine nu » : la case « Poser aussi le « www » » est
+                décochée, et l'aperçu ne montre que le nom saisi ; la cocher
+                ajoute la ligne et la route du `www`.
+Retour arrière: revenir au commit précédent du dépôt et relancer la console.
+Risques       : un script qui appelait `POST /api/dns/recipe` de la console
+                pour `site-web` sans `params.www` ne pose plus le `www` ; il
+                doit envoyer `"www": true`. Une valeur autre que `true` ou
+                `false` est refusée en 422. Les `www` déjà posés restent.
+```
+
 ### OP-34 · Valeurs exactes des quotas, mode mémoire souple refusé, aide des alertes, panneau d'installation (SPK-144, SPK-146 à SPK-148)
 
 ```

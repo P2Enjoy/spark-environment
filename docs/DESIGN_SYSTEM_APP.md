@@ -1593,8 +1593,8 @@ case de 24 px, ligne de 40 px, le libellé étend la cible) :
   pour cette saisie comme pour les autres.
 
 Dans une modale, la marge que reçoivent les cases d'un `label` de champ ne
-s'applique pas à une `.case` : elle s'ajoutait à l'écart du composant et le
-doublait. Mesuré au parcours : case de 24 px, ligne de 40 px au moins, un seul
+s'applique pas à une `.case` : elle s'ajouterait à l'écart du composant et le
+doublerait. Mesuré au parcours : case de 24 px, ligne de 40 px au moins, un seul
 écart de 8 px.
 
 Preuves observées le 2026-10-06 (pile jetable) : `e2e/captures/spk153-sans-www`,

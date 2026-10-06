@@ -8868,7 +8868,7 @@ un plafond n'efface pas la réservation) : « oui, le spécifier ».
   par `raw.lxc` et le redémarrage qu'il demande pour changer — annoncé, jamais
   caché.
 
-### [ ] SPK-153 · La recette « site-web » ne pose le « www » que sur demande
+### [~] SPK-153 · La recette « site-web » ne pose le « www » que sur demande
 
 **Demandé le 2026-10-06** par le responsable : « dans la recette, rendre la pose
 du `www.` optionnelle, décochée par défaut ». La recette posait toujours le
@@ -8890,6 +8890,28 @@ route.
   route sur l'hôte ; parcours E2E au clavier — décochée, un seul nom écrit et
   routé ; cochée, les deux — ; vérification visuelle 1440 px et 390 px ;
   `docs/PROD_MIGRATIONS.md` OP-35 (relancer la console).
+- **Codé le 2026-10-06.** Le catalogue porte un paramètre `aCocher` ; `site-web`
+  compose le `www` — enregistrement et route — seulement si `www` vaut `true` ;
+  `coche()` refuse toute autre valeur que vrai ou faux. La modale rend la case
+  avec `.case`, l'écran l'envoie en booléen (`checked`, pas `value`).
+  - Preuves unitaires **rouges sur le code d'avant**, vertes après : la
+    composition (décochée, cochée, valeurs refusées, catalogue) ; la route
+    `/api/dns/recipe` (un seul `PATCH` sans la case, `"true"` refusé en `422`
+    sans appel au fournisseur — rouge avant : `www.boutique` écrit) ; la case
+    rendue décochée, cochée par `true` seul. Console 1 607 sur 1 607.
+  - Parcours E2E contre le doublon DNS : le nouveau parcours au clavier —
+    Tab du nom à la case, Espace coche puis décoche, l'aperçu suit, un seul nom
+    écrit et routé — vert, avec les mesures du §6.10 (case 24 px, ligne de
+    40 px au moins, un seul écart de 8 px). Les cinq parcours qui attendaient
+    le `www` le cochent à la souris ou n'attendent plus que le nom : les huit
+    parcours de recette sont verts.
+  - Vérifié à l'écran sur la pile jetable, depuis l'accueil : captures
+    `spk153-sans-www`, `-avec-www`, leurs variantes à 390 px, et
+    `-compte-rendu` (« 1 écrit(s) », aucune route `www`) observées. Vu en
+    capture à 390 px et corrigé dans le même changement : la description de la
+    recette se coupait entre « www et » ; ses guillemets portent désormais des
+    espaces insécables, et une preuve le garde.
+  - **Reste `[~]`** : OP-35, la console relancée sur le poste du responsable.
 ---
 
 ## Lot 6 — Réseau entre Sparks

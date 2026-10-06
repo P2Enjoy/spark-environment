@@ -13822,6 +13822,20 @@ Coordination : `spark-environment-e3` tient SPK-151, SPK-152, SPK-DS-40 et 41 ;
 une autre session tient SPK-150. Celle-ci tient SPK-153, SPK-DS-39, OP-35 et le
 DAT §38.6.4.
 
+**Vérifications du même jour.** Preuves unitaires et de route rouges sur le code
+d'avant — la route écrivait `www.boutique` sans qu'on le demande —, vertes
+après ; console 1 607 sur 1 607. Les huit parcours E2E de recette sont verts,
+dont le nouveau, joué au clavier. Une première passe a rougi sur « le compte
+rendu se VÉRIFIE » : il prouve « absent » sur la ligne du `www`, qu'il ne
+demandait pas. Il coche désormais la case. Lu dans la feuille de style avant
+le premier rendu : la marge des cases de modale aurait doublé l'écart de la
+`.case` ; exclue, puis mesurée au parcours (§6.10). Vu en
+capture à 390 px : la description se coupait entre « www et » ; espaces
+insécables, gardées par une preuve, comme l'aide du nom au SPK-149. Pendant le
+travail, une autre session a vidé puis restauré `docs/DAT.md` depuis HEAD,
+emportant la révision non committée du §38.6.4 ; elle a été réappliquée et
+committée aussitôt.
+
 ## 2026-10-06 · SPK-150 livré, non vérifié sur VM
 
 Les trois règles ouvrent le dossier et le briefing de la cellule, par une seule

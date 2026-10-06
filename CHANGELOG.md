@@ -59,6 +59,18 @@
   composées par le code. Aucune variable, aucune migration. DAT §37.7.5, §37.7
   et §37.7.4 révisés ; SPK-DS-35 ; manuels M8 et M6 ; OP-31.
 
+### Modifié
+- **SPK-153 — la recette « Site web » ne pose le `www` que si on le demande.**
+  Elle posait toujours le `www` du nom choisi, y compris sous un sous-domaine
+  (`www.evoliz-mcp`), avec sa route. Une case *Poser aussi le « www »*, sous le
+  champ du nom, est désormais **décochée** à l'ouverture : décochée, un
+  enregistrement et une route ; cochée, les deux noms, comme avant. Cocher ou
+  décocher relit l'aperçu. Côté API, `params.www` vaut `true` ou `false` —
+  absent, il vaut `false`, donc **un appel qui ne le porte pas ne pose plus le
+  `www`** — et toute autre valeur est refusée en `422`. Rien n'est retiré : un
+  `www` déjà posé reste. DAT §38.6.4 ; SPK-DS-39 ; manuel M7. Aucune variable,
+  aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
+
 ### Corrigé
 - **Une recette DNS déclarait les routes d'un nom et écrivait le DNS d'un autre**
   (SPK-149). Signalé sur `evoliz-mcp.<zone>` : les routes du domaine NU étaient
