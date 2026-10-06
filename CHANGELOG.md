@@ -3,6 +3,25 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-150 — le dossier pour un agent impose la configuration par la cellule
+  et les trois notes.** Signalé par le responsable : la plupart des agents qui
+  déployaient à partir du texte pour le LLM poussaient un `.env` ou écrivaient
+  les variables dans l'`ENV` du `Dockerfile`, et presque aucun n'écrivait
+  `README.md.?`, `CONTRIBUTORS.md.?` ni `INSTALL.md.?`. Le texte se disait « des
+  faits » seulement, et se lisait comme du contexte. Il s'ouvre désormais sur une
+  **section 0** à l'impératif : la configuration vient de `/etc/spark/env` et
+  `/run/spark/secrets` seuls, cinq voies interdites (`.env`, `ENV`/`ARG` de
+  configuration, valeur ou redéclaration sous `environment:`, `--env-file`
+  ailleurs) ; les trois notes font partie du travail rendu, avec la commande
+  qui écrit un `.?` depuis le poste ; un compte rendu en cinq rubriques, qui
+  porte le bloc `.env` et le texte des notes quand l'agent n'a pas d'accès. Il
+  se termine par « Avant de dire que c'est fini », en cases à cocher. Mesuré sur
+  Compose 5.5.1 : un nom injecté redéclaré sous `environment:` arrive **vide**
+  dans le conteneur — un piège de plus, au modèle JSON et à côté du contrat
+  `env_file:`. `BRIEFING.md` ouvre sur les mêmes règles, par la même fonction.
+  L'annonce de la section *Dossier pour un agent* les nomme. Aucune variable,
+  aucune migration. DAT §44.11, §44.5, §44.6, §44.9.3, §44.9.7 et §54.7
+  révisés ; manuel M8 ; OP-36.
 - **SPK-137 — la console se vérifie sur une Forge de machine virtuelle à
   installation fraîche.** `make forge-vm ARGS="--garder"` garde la machine du
   banc et lance une console à part, branchée sur elle seule, jusqu'à `Ctrl-C` ;

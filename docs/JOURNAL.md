@@ -13821,3 +13821,23 @@ ou cochent la case. La console change seule : OP-35 la relance, sans rien sur
 Coordination : `spark-environment-e3` tient SPK-151, SPK-152, SPK-DS-40 et 41 ;
 une autre session tient SPK-150. Celle-ci tient SPK-153, SPK-DS-39, OP-35 et le
 DAT §38.6.4.
+
+## 2026-10-06 · SPK-150 livré, non vérifié sur VM
+
+Les trois règles ouvrent le dossier et le briefing de la cellule, par une seule
+fonction ; la liste finale clôt le dossier ; l'annonce de la console les nomme.
+Dix preuves unitaires, rouges toutes les dix sur le `briefing.py` d'avant —
+rejouées contre une copie de l'ancien module, sans toucher à l'arbre partagé —,
+vertes après ; le parcours E2E relit la section 0 dans le presse-papier.
+
+**Vu en chemin** : une première rédaction disait « dans chaque service qui en a
+besoin ». La preuve d'injection du §44.9.2 cherche `a b` dans tout le texte, et
+l'y trouvait — « qui en **a b**esoin ». La phrase a été reformulée plutôt que la
+preuve affaiblie : elle garde sa valeur contre une vraie injection.
+
+**Vu à la capture** : la commande qui écrit une note est la ligne la plus longue
+du texte ; à 390 px, elle se replie dans sa carte, sans débordement de page.
+
+**Ce qui reste** : la vérification sur la VM du banc, et OP-36. L'efficacité sur
+les agents, elle, ne se prouve pas ici : elle se lira sur les déploiements que
+le responsable observera.

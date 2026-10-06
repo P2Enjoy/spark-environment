@@ -5,6 +5,9 @@
  *           docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.2 (point 4), §44.9.7 ·
  *           docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.6, §44.2 quater (l'en-tête
  *           que l'ingress pose, le HTTP/3 qu'il ne sert pas) ·
+ *           docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.2 (les trois règles en
+ *           tête, la commande qui écrit un `.?`, la liste finale), §44.11.4
+ *           (l'annonce de la section) ·
  *           docs/DESIGN_SYSTEM_APP.md SPK-DS-19 ·
  *           docs/DESIGN_SYSTEM.md §13 (les captures sont une preuve), §13.1
  *           (desktop, mobile, état vide, contenu long, clavier) · CLAUDE.md §16
@@ -134,6 +137,23 @@ await defilerVers('Les visiteurs atteignent l');
 await page.locator('.dossier').scrollIntoViewIfNeeded();
 await capturer('spk128-01-ingress-http3');
 
+// 3 sexies. SPK-150 · §44.11.2 : la section 0, en tête du texte — les règles
+//           AVANT la cellule. Et l'annonce de la section, qui les nomme.
+await defilerVers('## 0. Ce que ce déploiement doit respecter');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk150-01-regles-en-tete');
+
+// 3 septies. La commande qui écrit une note : la ligne la plus longue du
+//            texte, et celle qu'un agent copiera telle quelle.
+await defilerVers('Depuis votre poste, un fichier');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk150-02-commande-note');
+
+// 3 octies. La liste qui clôt le texte : la règle, à cocher.
+await defilerVers('## 10. Avant de dire que c');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk150-03-liste-finale');
+
 // 4. Le focus clavier sur le bouton : l'anneau doit être visible (§9.5).
 await defilerVers('# Dossier de déploiement');
 await page.keyboard.press('Shift+Tab');
@@ -164,6 +184,12 @@ await capturer('spk99-03-bloc-variables-mobile');
 await defilerVers('Les visiteurs atteignent l');
 await page.locator('.dossier').scrollIntoViewIfNeeded();
 await capturer('spk128-02-ingress-http3-mobile');
+
+// 9. SPK-150 au format étroit : la commande de la règle 2 se replie au lieu de
+//    déborder, et l'annonce, plus longue, ne pousse rien hors de la carte.
+await defilerVers('Depuis votre poste, un fichier');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk150-04-commande-note-mobile');
 
 const debordement = await page.evaluate(
   () => document.documentElement.scrollWidth > document.documentElement.clientWidth);

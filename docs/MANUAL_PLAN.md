@@ -108,10 +108,14 @@ texte qu'elle remplacerait, en deux colonnes, avant de l'accepter. Une variable
 posée n'arrive dans un conteneur que lorsqu'il est **recréé** — pas redémarré —,
 et le geste *Recréer* de l'onglet Docker le fait. L'onglet
 **Propositions** de la Forge, qui liste ce qui attend dans tous les Sparks et
-mène à l'onglet où cela se décide.
+mène à l'onglet où cela se décide. Le **dossier pour un agent** : les trois
+règles qu'il lui impose — la configuration par la cellule seule, les trois
+notes, un compte rendu en cinq rubriques —, le piège d'un nom redéclaré sous
+`environment:`, et ce que l'agent rend, qu'il puisse entrer dans le Spark ou
+non.
 
 Unités : SPK-09, SPK-14, SPK-34, SPK-58, SPK-64, SPK-93, SPK-97, SPK-112,
-SPK-114, SPK-115, SPK-131, SPK-132.
+SPK-114, SPK-115, SPK-131, SPK-132, SPK-150.
 
 ## M9 · Sauvegarder et restaurer
 

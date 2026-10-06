@@ -5711,7 +5711,9 @@ test('l’ancre SIGNALE une histoire qui ne prolonge pas la précédente', async
 /**
  * @verifies docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.2
  *           (ce qu'il porte de plus), §44.9.3 (aucune valeur de secret),
- *           §44.9.5 (une section, pas une modale) · CLAUDE.md §15, §16
+ *           §44.9.5 (une section, pas une modale) · CLAUDE.md §15, §16 ·
+ *           docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.2 (les trois règles en
+ *           tête, la commande qui écrit un `.?`, la liste finale)
  *
  * Le presse-papier est RELU. Vérifier que le bouton affiche « copié » ne
  * prouverait que le rendu — or c'est ce qui est collé ailleurs qui est le
@@ -5827,6 +5829,32 @@ test('copier le dossier d’un Spark, et relire ce que le presse-papier a reçu'
     // 10. SPK-102 · §44.2 quinquies : la nuance qui désigne l'interlocuteur.
     assert.match(copie, /ne filtre AUCUN port sortant/);
     assert.match(copie, /fermé par l’hébergeur|fermé par l'hébergeur/);
+
+    // 11. SPK-150 · §44.11.2 : ce que le déploiement DOIT respecter et rendre,
+    //     en tête, avant même l'entrée. Les agents lisaient un texte « de
+    //     faits » comme du contexte : ils poussaient un `.env`, écrivaient
+    //     l'`ENV` du `Dockerfile`, et n'écrivaient aucune des trois notes.
+    const zero = copie.indexOf('## 0. Ce que ce déploiement doit respecter');
+    assert.ok(zero > 0 && zero < copie.indexOf('## 1. Entrer dans la cellule'),
+      `la section 0 doit précéder l’entrée : ${copie.slice(0, 600)}`);
+    assert.ok(!copie.includes('Il énonce des faits'),
+      'la phrase qui annonçait un texte de faits seulement doit être retirée');
+    assert.match(copie, /un fichier `\.env` créé, copié ou poussé dans la cellule/);
+    assert.match(copie, /une ligne `ENV` ou `ARG` du `Dockerfile`/);
+    assert.match(copie, /un nom injecté redéclaré sous `environment:`/);
+    // La commande qui écrit une note, prête à coller — servie SUR la Forge, la
+    // console n'a aucun rebond à sauter.
+    assert.ok(copie.includes(
+      `ssh root@${corps.ipv4_address} "cat > '/etc/spark/notes/README.md.?'" <<'EOF'`),
+      'la règle 2 doit donner la commande qui écrit une note depuis le poste');
+    // Le seed a écrit README et CONTRIBUTORS, et laissé INSTALL vide.
+    assert.match(copie, /`README\.md\.\?` — .*\(déjà écrite, recopiée en section 2\)/);
+    assert.match(copie, /`INSTALL\.md\.\?` — .*\(\*\*vide\*\*\)/);
+    assert.match(copie, /Règle 3 — Votre compte rendu final porte cinq rubriques/);
+    // Et le texte se TERMINE sur la liste à cocher.
+    assert.ok(copie.slice(copie.lastIndexOf('\n## '))
+      .startsWith("\n## 10. Avant de dire que c'est fini"),
+      `la dernière section doit être la liste finale : ${copie.slice(-600)}`);
   });
 });
 

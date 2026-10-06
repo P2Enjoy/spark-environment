@@ -2,7 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-60 · docs/DAT.md §44 (le briefing), §44.3 (ce qui ne
       doit pas y figurer), §44.4 (réécriture depuis l'état voulu), §44.5 (les
-      pièges), §44.6 (donnée et non consigne), §44.8 (modèle unique) ·
+      pièges), §44.6 (des faits et des conditions, jamais une autorisation),
+      §44.8 (modèle unique) ·
       docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier de déploiement),
       §44.9.2 (ce qu'il porte de plus), §44.9.3 (ce qu'il ne porte jamais) ·
       docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.7 (une variable n'entre pas par
@@ -13,6 +14,10 @@
       (le vide est une DEMANDE, et l'étiquette l'explique) · docs/SCHEMA.md §10 quinquies
 @spec docs/BACKLOG.md#SPK-112 · docs/DAT.md §44.2 bis (la pile sert « en HTTP
       simple »), §55.3.1 (le dernier mot d'une route règle son côté PUBLIC)
+@spec docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11 (les trois règles en tête du
+      dossier et du briefing, la liste finale), §44.5 (le piège de la
+      redéclaration sous `environment:`), §44.9.7 (révisé), §54.7 (révisé) ·
+      docs/MANUAL_PLAN.md M8
 
 Le JSON est le MODELE et le Markdown une présentation de ce même modèle. Les
 deux fichiers ne sont donc pas deux vérités qu'il faudrait garder en accord.
@@ -89,6 +94,11 @@ PIEGES = (
     "Rien ne s'expose depuis la cellule : une route se PROPOSE dans /etc/spark/routes.?, un port publié se demande au propriétaire.",
     "Un port SORTANT fermé vient de l'hébergeur : le plan de contrôle ne filtre que l'entrée vers la Forge.",
     "nproc et free décrivent la Forge : les quotas de ce briefing font foi pour cette cellule.",
+    # SPK-150 · §44.5, §44.11.1 : mesuré sur Compose 5.5.1. C'est le chemin
+    # naturel vers le `.env` — l'agent redéclare, voit vide, et crée le fichier
+    # qui fait résoudre `${NOM}`. « Docker » dans le texte le retire, avec les
+    # autres, d'une cellule qui n'en aura pas.
+    "Docker Compose : un nom injecté, redéclaré sous environment:, y arrive VIDE — environment: l'emporte sur env_file:, et ${NOM} ne se résout jamais dans l'env_file.",
 )
 
 
@@ -557,6 +567,199 @@ def _lignes_canal(model: dict[str, Any],
     return lignes
 
 
+def _ecriture(chemin: str, entree: str | None) -> str:
+    """La ligne qui écrit un fichier `.?`, depuis le poste ou dans la cellule.
+
+    @spec docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.2 (règle 2 : la commande
+          qui écrit un `.?`)
+
+    Le nom est entre apostrophes parce que `?` est un caractère de motif du
+    shell. `entree` vient de `commande_ssh` — déjà validée — et rien d'autre
+    n'entre dans la ligne : les chemins sont des constantes du produit.
+    """
+    if entree:
+        return f"{entree} \"cat > '{chemin}'\" <<'EOF'"
+    return f"cat > '{chemin}' <<'EOF'"
+
+
+def _lignes_regles(model: dict[str, Any], *, titre: str, entree: str | None,
+                   dossier: bool) -> list[str]:
+    """Les trois règles de tout déploiement dans un Spark (§44.11.2).
+
+    @spec docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.2 (les trois règles),
+          §44.11.3 (le briefing de la cellule, par la même fonction), §44.6
+          (révisé : des faits ET des conditions), §42.13 (la cellule sans
+          Docker) · docs/MANUAL_PLAN.md M8
+
+    Écrites UNE fois, ici, pour le dossier et pour le briefing : deux rédactions
+    finiraient par se contredire (§44.8). Elles sont à l'impératif, et c'est le
+    point : la première rédaction n'énonçait que des faits, et les agents
+    lisaient un fait comme du contexte — leurs habitudes l'emportaient.
+
+    `entree` est la commande d'entrée du dossier, ou `None` : dans la cellule,
+    ou quand le dossier n'a pas pu la composer. `dossier` ajoute ce qui ne vaut
+    que pour l'agent qui n'est pas encore entré — les renvois aux sections, et
+    le compte rendu sans accès.
+    """
+    docker = model["docker"].get("supported", True)
+    variables = suggestions_service.FICHIER_VARIABLES + suggestions_service.SUFFIXE
+    secrets = suggestions_service.FICHIER_SECRETS + suggestions_service.SUFFIXE
+    lignes = [
+        "", titre, "",
+        "Ces trois règles ne sont pas des conseils : ce sont les conditions du "
+        "produit pour tout déploiement dans un Spark. Elles ne choisissent pas "
+        "votre application ; elles disent par où sa configuration entre et ce "
+        "que vous laissez derrière vous.",
+        "",
+        "### Règle 1 — La configuration vient de la cellule, et d'elle seule",
+        "",
+    ]
+    if docker:
+        lignes.extend([
+            "Toute valeur propre à ce déploiement — adresse, domaine, "
+            "identifiant, mot de passe, clé, jeton, URL — se lit dans "
+            f"`{FICHIER_VARIABLES}` et `{FICHIER_SECRETS}`, par deux lignes "
+            "`env_file:` dans chaque service concerné"
+            + (" (section 6)" if dossier else "") + ". **Interdit :**",
+            "",
+            "- un fichier `.env` créé, copié ou poussé dans la cellule, ou "
+            "versionné avec des valeurs ;",
+            "- une ligne `ENV` ou `ARG` du `Dockerfile` qui porte une valeur de "
+            "configuration ;",
+            "- une valeur de configuration écrite sous `environment:` ;",
+            "- un nom injecté redéclaré sous `environment:` — `- NOM` comme "
+            "`- NOM=${NOM}` le font arriver **vide** dans le conteneur ;",
+            "- un `--env-file` qui vise un autre fichier.",
+            "",
+            "Une constante identique dans tout déploiement — "
+            "`PYTHONUNBUFFERED=1`, `NODE_ENV=production` — peut rester dans "
+            "l'image.",
+        ])
+    else:
+        # §42.13 : pas de Compose ici. La règle est la même, ses mots changent.
+        lignes.extend([
+            "Toute valeur propre à ce déploiement — adresse, domaine, "
+            "identifiant, mot de passe, clé, jeton, URL — se lit dans "
+            f"`{FICHIER_VARIABLES}` et `{FICHIER_SECRETS}` : votre service les "
+            "charge lui-même, par `EnvironmentFile=` d'une unité systemd par "
+            "exemple. **Interdit :** une valeur écrite dans le code, dans "
+            "l'unité ou dans un fichier `.env`.",
+        ])
+    lignes.extend([
+        "",
+        f"Une variable qui manque **se propose** : `{variables}`, ou "
+        f"`{secrets}` pour un secret — valeur laissée vide si vous l'ignorez, "
+        "étiquette `#` juste au-dessus"
+        + (" (section 7)" if dossier else "") + ". **Si le dépôt porte un "
+        "`.env.example`, c'est la liste à proposer** : chaque variable, avec "
+        "son commentaire pour étiquette.",
+        "",
+        "### Règle 2 — Les trois notes font partie du travail rendu",
+        "",
+        f"Avant de dire que vous avez fini, écrivez une proposition pour "
+        f"chacune, dans `{notes_service.DOSSIER}/` :",
+        "",
+    ])
+    ecrites = {note["file"]: bool(note.get("written")
+                                  and (note.get("body") or "").strip())
+               for note in model.get("notes") or []}
+    for note in notes_service.NOTES:
+        etat = ("déjà écrite" + (", recopiée en section 2" if dossier else "")
+                if ecrites.get(note["fichier"]) else "**vide**")
+        lignes.append(f"- `{note['fichier']}{suggestions_service.SUFFIXE}` — "
+                      f"{note['attendu']} ({etat})")
+    lignes.extend([
+        "",
+        "Une proposition **remplace la note en entier**. Une note déjà écrite se "
+        "repropose en partant de son texte si votre travail change ce qu'elle "
+        "dit ; sinon, dites dans votre compte rendu qu'elle reste juste. Un "
+        "Spark qui n'expose rien à un tiers **l'écrit** dans "
+        f"`INSTALL.md{suggestions_service.SUFFIXE}` plutôt que de laisser la "
+        "note vide.",
+        "",
+    ])
+    readme = f"{notes_service.DOSSIER}/README.md{suggestions_service.SUFFIXE}"
+    if entree:
+        lignes.append("Depuis votre poste, un fichier `.?` s'écrit d'une commande "
+                      "— le nom entre apostrophes, parce que `?` est un motif du "
+                      "shell :")
+    elif dossier:
+        lignes.append("Une fois entré dans la cellule (section 1), un fichier "
+                      "`.?` s'écrit d'une commande — le nom entre apostrophes, "
+                      "parce que `?` est un motif du shell :")
+    else:
+        lignes.append("Un fichier `.?` s'écrit d'une commande — le nom entre "
+                      "apostrophes, parce que `?` est un motif du shell :")
+    lignes.extend([
+        "",
+        "```sh",
+        _ecriture(readme, entree),
+        "…le texte entier de la note…",
+        "EOF",
+        "```",
+        "",
+        "Même forme pour les deux autres notes. Pour une variable, "
+        f"`cat >> '{variables}'` : on ajoute à ce qui attend déjà, on n'écrase "
+        "pas la proposition d'un autre.",
+        "",
+        "### Règle 3 — Votre compte rendu final porte cinq rubriques",
+        "",
+        "À qui vous a remis ce texte, rendez :",
+        "",
+        "1. **Variables proposées** — par leur nom ;",
+        "2. **Secrets proposés** — par leur nom, jamais leur valeur ;",
+        "3. **Routes proposées** — domaine et port écouté ;",
+        "4. **Les trois notes** — écrites, ou restées justes, une par une ;",
+        "5. **Configuration** — une phrase qui confirme : "
+        + ("aucun `.env`, aucun `ENV` ni `ARG` de configuration, aucune valeur "
+           "ni redéclaration sous `environment:`."
+           if docker else
+           "aucune valeur écrite dans le code, dans l'unité ou dans un `.env`."),
+    ])
+    if dossier:
+        lignes.extend([
+            "",
+            "**Sans accès à la cellule** — aucune clé accordée, ou aucune "
+            "commande d'entrée —, mettez le bloc `.env` et le texte entier des "
+            "trois notes dans ce compte rendu : le propriétaire les collera "
+            "dans *Environnement → Importer un lot* et dans l'onglet *Notes*.",
+        ])
+    return lignes
+
+
+def _lignes_fin(model: dict[str, Any]) -> list[str]:
+    """La liste qui clôt le dossier : la règle posée en tête, à cocher (§44.11.2).
+
+    @spec docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.2 (« Avant de dire que
+          c'est fini »)
+
+    Ce n'est pas la répétition que le §55.7 refuse : la section 0 pose la règle,
+    celle-ci la fait vérifier — et un texte de deux mille mots se relit par ses
+    deux bouts.
+    """
+    docker = model["docker"].get("supported", True)
+    variables = suggestions_service.FICHIER_VARIABLES + suggestions_service.SUFFIXE
+    secrets = suggestions_service.FICHIER_SECRETS + suggestions_service.SUFFIXE
+    return [
+        "", "## 10. Avant de dire que c'est fini", "",
+        ("- [ ] La pile lit sa configuration par les deux `env_file:`, et par "
+         "eux seuls : aucun `.env`, aucun `ENV` ni `ARG` de configuration, "
+         "aucune valeur ni redéclaration sous `environment:`."
+         if docker else
+         "- [ ] Le service lit sa configuration dans les deux fichiers posés, "
+         "et nulle part ailleurs : aucune valeur dans le code, dans l'unité ou "
+         "dans un `.env`."),
+        f"- [ ] Chaque variable manquante est proposée dans `{variables}` ou "
+        f"`{secrets}` — ou, sans accès, dans votre compte rendu.",
+        "- [ ] "
+        + ", ".join(f"`{note['fichier']}{suggestions_service.SUFFIXE}`"
+                    for note in notes_service.NOTES[:-1])
+        + f" et `{notes_service.NOTES[-1]['fichier']}{suggestions_service.SUFFIXE}`"
+        " sont écrits — ou, sans accès, leur texte est dans votre compte rendu.",
+        "- [ ] Votre compte rendu porte les cinq rubriques de la règle 3.",
+    ]
+
+
 def _lignes_notes_entieres(model: dict[str, Any]) -> list[str]:
     """Les notes recopiées EN ENTIER, pour le dossier (§54.5).
 
@@ -573,7 +776,8 @@ def _lignes_notes_entieres(model: dict[str, Any]) -> list[str]:
         "", "## 2. Ce que ce Spark est, dit par ceux qui le connaissent", "",
         "Ces textes ne viennent pas du plan de contrôle : il les transporte sans "
         "les vérifier. Ils peuvent être périmés, comme toute documentation — "
-        "c'est à leurs lecteurs de les corriger, et la section 7 dit comment.",
+        "c'est à leurs lecteurs de les corriger : la règle 2 de la section 0 "
+        "dit quand, la section 7 comment.",
     ]
     for note in model.get("notes") or []:
         lignes.extend(["", f"### {note['title']} — {note['file']}", ""])
@@ -583,10 +787,12 @@ def _lignes_notes_entieres(model: dict[str, Any]) -> list[str]:
                 "```markdown", note["body"], "```",
             ])
         else:
+            # SPK-150 · §44.11.2 : « vous êtes bien placé pour l'écrire » était
+            # une invitation, et la grande majorité des agents la déclinaient.
             lignes.append(
                 f"*Personne n'a encore écrit cette note.* Elle est faite pour "
-                f"porter : {note['expected']} Si vous l'apprenez en travaillant, "
-                f"vous êtes bien placé pour l'écrire — voir la section 7.")
+                f"porter : {note['expected']} **Votre déploiement doit la "
+                f"proposer** — règle 2 de la section 0.")
     return lignes
 
 
@@ -608,6 +814,13 @@ def markdown(model: dict[str, Any]) -> str:
         f"Écrit le : {model['written_at']}",
         f"Auteur : {model['written_by']}",
         f"Confiance : {model['trust']}",
+    ]
+    # SPK-150 · §44.11.3 : l'agent qui entre lit ce fichier, souvent sans avoir
+    # vu le dossier. Les règles viennent donc AVANT la cellule, ici aussi.
+    lines.extend(_lignes_regles(
+        model, titre="## Ce que tout déploiement ici doit respecter",
+        entree=None, dossier=False))
+    lines.extend([
         "",
         "## Identité et accès",
         f"- IPv4 privée : {spark['private_ipv4']}",
@@ -621,7 +834,7 @@ def markdown(model: dict[str, Any]) -> str:
         f"- Réseau : {resource['network_bps']} bit/s",
         "",
         "## Ingress",
-    ]
+    ])
     if model["ingress"]:
         # SPK-101 · §44.2 bis : le mécanisme AVANT la liste. Sans lui, un agent
         # lit une destination sans savoir qu'un chemin existe déjà, et croit
@@ -822,9 +1035,11 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
 
     @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.2 (ce
           qu'il porte de plus, dont le point 4 : quoi lire en arrivant), §44.9.3
-          (ce qu'il ne porte jamais), §44.6 (une donnée, pas une consigne) ·
-          docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.7 (le lot que l'agent rend),
-          §44.9.6 (rédiger n'est pas écrire)
+          (ce qu'il ne porte jamais), §44.6 (des faits et des conditions, jamais
+          une autorisation) · docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.7 (le
+          lot que l'agent rend), §44.9.6 (rédiger n'est pas écrire) ·
+          docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.2 (la section 0 en tête,
+          la liste finale)
 
     TOUT ce qu'il écrit vient de `model`, plus l'accès SSH que la cellule ne
     porte pas. Il ne relit rien, ne mesure rien et n'invente rien : une seconde
@@ -843,15 +1058,24 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "",
         f"Relevé écrit le {model['written_at']} par {model['written_by']}.",
         "",
-        "Ce texte décrit **la cellule qui accueillera la pile**, telle que le plan "
-        "de contrôle la connaît. Il énonce des faits, et les seules voies par "
-        "lesquelles on agit sur cette cellule ; il ne décrit pas l'application à "
-        "déployer, et ne prouve **aucune** autorisation : "
-        f"{model['trust']}",
+        # SPK-150 · §44.11.1 : la phrase d'avant annonçait « des faits »
+        # seulement. Un agent lisait le texte entier comme du contexte, et ses
+        # habitudes l'emportaient. Elle est retirée, pas complétée.
+        "La section 0 dit ce que tout déploiement dans ce Spark **doit** "
+        "respecter, et ce que vous devez rendre. Les suivantes décrivent **la "
+        "cellule qui accueillera la pile**, telle que le plan de contrôle la "
+        "connaît ; elles ne choisissent pas votre application. Ce texte ne "
+        f"prouve **aucune** autorisation : {model['trust']}",
+    ]
+    lignes.extend(_lignes_regles(
+        model, titre="## 0. Ce que ce déploiement doit respecter, et ce que "
+                     "vous devez rendre",
+        entree=commande, dossier=True))
+    lignes.extend([
         "",
         "## 1. Entrer dans la cellule",
         "",
-    ]
+    ])
     if commande:
         # SPK-95 · §42.2 quater : une porte par compte, et chacune DIT à quoi
         # elle sert. Une seule ligne `ssh root@…` laissait deviner ; deux lignes
@@ -1037,9 +1261,12 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "celles qu'il retient. La section 7 dit ce qui arrive ensuite à votre "
         "fichier.",
         "",
-        "Si vous préférez le lui remettre de la main à la main, c'est le même "
-        "texte, et il le collera dans **la fenêtre de ce Spark → Environnement → "
-        "Importer un lot** :",
+        # SPK-150 · §44.9.7 révisé : « si vous préférez » laissait le choix, et
+        # le bloc se perdait dans une conversation. Il ne sert plus que SANS
+        # accès, et il va dans le compte rendu de la règle 3.
+        "**Si vous ne pouvez pas entrer dans la cellule**, mettez le même texte "
+        "dans votre compte rendu (règle 3) : le propriétaire le collera dans **la "
+        "fenêtre de ce Spark → Environnement → Importer un lot** :",
         "",
         "```dotenv",
         "# Ce que fait cette variable, en une ligne : c'est son étiquette.",
@@ -1086,6 +1313,14 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "",
         "Sans ces deux lignes, **aucune** variable injectée n'atteint le conteneur : "
         "un conteneur n'hérite pas de l'environnement de la cellule.",
+        "",
+        # SPK-150 · §44.11.1 : mesuré sur Compose 5.5.1. Le piège est ICI, à
+        # côté du fragment qu'il défait — c'est là qu'on l'écrit.
+        "**Ne redéclarez sous `environment:` aucun nom que ces fichiers portent.** "
+        "`environment:` l'emporte sur `env_file:`, et `- NOM` comme "
+        "`- NOM=${NOM}` y font arriver une valeur **vide** : `${NOM}` se résout "
+        "dans le shell ou dans un `.env` du projet, jamais dans l'`env_file:`. "
+        "C'est ce qui pousse à créer un `.env` — la règle 1 l'interdit.",
         "",
     ])
     if model["ingress"]:
@@ -1190,6 +1425,7 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "commande dans la cellule — `dpkg-query -W`, `docker ps`, `df -h`.",
         "- **Rien des autres Sparks**, ni de l'intérieur de la Forge.",
     ])
+    lignes.extend(_lignes_fin(model))
     return "\n".join(lignes) + "\n"
 
 

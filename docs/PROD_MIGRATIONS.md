@@ -120,6 +120,36 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-36 · Le dossier pour un agent impose la configuration par la cellule et les trois notes (SPK-150)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable.
+Objectif      : le dossier copié pour un LLM, et `BRIEFING.md` dans chaque
+                cellule, s'ouvrent sur trois règles — la configuration par
+                `/etc/spark/env` et `/run/spark/secrets` seuls, les trois notes
+                proposées, un compte rendu en cinq rubriques — ; un piège de
+                plus au modèle JSON ; l'annonce de la console le nomme
+                (DAT §44.11). Aucune migration, aucune variable.
+Dépend de     : rien.
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) ;
+                3. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : `/healthz` rend le commit déployé ; le préflight reste vert.
+                Spark → Infos → « Dossier pour un agent » : l'annonce dit
+                « Ce texte impose à l'agent ses règles de déploiement », et le
+                texte déplié commence par « ## 0. Ce que ce déploiement doit
+                respecter » puis se termine par « ## 10. Avant de dire que
+                c'est fini ». Dans une cellule, après un geste qui la touche
+                (un démarrage suffit) : `head -20 /etc/spark/BRIEFING.md`
+                montre « ## Ce que tout déploiement ici doit respecter ».
+Retour arrière: réinstaller la build précédente (runbook A.2) et relancer la
+                console ; les briefings des cellules reprennent l'ancien texte
+                au geste suivant.
+Risques       : aucun sur les données. Le `BRIEFING.md` d'une cellule n'est
+                réécrit qu'au prochain geste du plan de contrôle qui la touche
+                (§44.8) : jusque-là, il garde l'ancien texte.
+```
+
 ### OP-34 · Valeurs exactes des quotas, mode mémoire souple refusé, aide des alertes, panneau d'installation (SPK-144, SPK-146 à SPK-148)
 
 ```

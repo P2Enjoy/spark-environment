@@ -7,7 +7,10 @@
  *       SPK-DS-18 (une sortie garde ses lignes et se replie) ·
  *       docs/DESIGN_SYSTEM.md §6.27 (l'affichage d'une information mérite une
  *       section, pas une modale), §1.3 (pas de succès simulé), §14.5 (l'absence
- *       se nomme), §14.6 (trois états distincts)
+ *       se nomme), §14.6 (trois états distincts) ·
+ *       docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.4 (l'annonce nomme ce que
+ *       le texte exige) · docs/DESIGN_SYSTEM.md §1.5 bis (l'écran nomme, le
+ *       manuel explique)
  *
  * La console **ne compose pas** ce texte : le runtime le rend depuis l'unique
  * modèle de briefing (§44.8), et cet écran le montre et le copie. Le fabriquer
@@ -36,8 +39,15 @@ export const DOSSIER_VIDE = {
   deplie: false,
 };
 
-/** Ce que la section annonce avant qu'on copie (SPK-DS-19). */
-const ANNONCE = `Ce texte décrit la cellule telle que le plan de contrôle la
+/**
+ * Ce que la section annonce avant qu'on copie (SPK-DS-19).
+ *
+ * SPK-150 · §44.11.4 : le texte s'ouvre désormais sur ce qu'il EXIGE de l'agent.
+ * L'annonce le nomme en une ligne — le pourquoi vit au manuel M8 (§1.5 bis).
+ */
+const ANNONCE = `Ce texte impose à l’agent ses règles de déploiement — la
+  configuration par les variables posées, les trois notes, un compte rendu —,
+  puis décrit la cellule telle que le plan de contrôle la
   connaît : accès SSH par rebond, quotas, distribution et architecture relevées,
   moteur Docker, noms des variables et des secrets, ports attendus par les routes
   et pièges connus. <strong>Aucune valeur de secret n’y figure</strong>, ni aucune

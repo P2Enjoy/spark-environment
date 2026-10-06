@@ -31,6 +31,20 @@ test('la section annonce ce que le texte contient AVANT qu’on le copie', () =>
   assert.match(rendu, /Copier pour un LLM/);
 });
 
+test('l’annonce nomme ce que le texte EXIGE de l’agent, avant la cellule', () => {
+  // @verifies docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.4 ·
+  //           docs/DESIGN_SYSTEM.md §1.5 bis
+  // L'exploitant qui colle ce texte doit savoir qu'il impose des règles et
+  // demande un compte rendu : c'est ce qu'il recevra en retour.
+  const rendu = renderDossier(SPARK, pret());
+  const annonce = rendu.match(/<p class="note">([\s\S]*?)<a /)[1];
+  assert.match(annonce, /impose à l’agent ses règles de déploiement/);
+  assert.match(annonce, /les trois notes/);
+  assert.match(annonce, /un compte rendu/);
+  assert.ok(annonce.indexOf('règles') < annonce.indexOf('décrit la cellule'),
+    'les règles sont nommées avant la description de la cellule, comme dans le texte');
+});
+
 test('le texte est présent, replié et sélectionnable (SPK-DS-19)', () => {
   const rendu = renderDossier(SPARK, pret());
   assert.match(rendu, /<details class="repli">/);

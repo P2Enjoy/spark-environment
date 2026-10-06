@@ -8770,7 +8770,7 @@ expliquer, corriger.
     d'incohérences.
   - **Reste `[~]`** : la vérification sur VM, à arbitrer (ci-dessus).
 
-### [ ] SPK-150 · Le dossier pour un agent impose la configuration par la cellule et les trois notes
+### [~] SPK-150 · Le dossier pour un agent impose la configuration par la cellule et les trois notes
 
 **Signalé le 2026-10-06** par le responsable : la plupart des agents qui
 déploient à partir du texte pour le LLM poussent un fichier `.env` ou écrivent
@@ -8815,6 +8815,24 @@ environnements posés, et enregistrer les trois notes.
 - **Hors de cette unité** : vérifier que les agents obéissent. Le produit ne
   voit pas le dépôt de l'agent ; la preuve est le texte, et l'observation de
   déploiements réels par le responsable.
+- **Codé le 2026-10-06, non vérifié sur VM ni en production.** `briefing.py` :
+  `_lignes_regles` (une seule rédaction pour le dossier et le briefing),
+  `_lignes_fin`, `_ecriture` ; un piège de plus à `PIEGES`. L'annonce de
+  `spark-dossier.js` nomme les règles.
+  - Preuves unitaires et API (`test_briefing.py`, `@verifies SPK-150`) : dix
+    preuves, **rouges toutes les dix** sur le `briefing.py` d'avant, vertes
+    après ; suite `sparkd` 1 629 sur 1 629. Preuve de composant de l'annonce,
+    rouge avant, verte après ; console 1 607 sur 1 607. Garde du contrat verte.
+  - Parcours E2E « copier le dossier » : le presse-papier RELU porte la
+    section 0 avant l'entrée, les voies interdites, la commande
+    `ssh root@… "cat > '/etc/spark/notes/README.md.?'" <<'EOF'`, l'état des
+    notes du seed et la liste finale en dernier. Les trois parcours du dossier
+    verts.
+  - Captures `spk150-01` à `spk150-04` observées, 1440 px et 390 px : la
+    commande se replie dans sa carte, aucun débordement de page, console vierge.
+    Illustration `m8-dossier` reproduite ; preuves du manuel 7 sur 7.
+  - **Reste `[~]`** : la vérification sur la VM du banc (§51.6) et OP-36.
+
 
 ### [ ] SPK-151 · L'onglet Alertes montre le message tel qu'il partirait, avant d'enregistrer
 

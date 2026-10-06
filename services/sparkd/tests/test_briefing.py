@@ -811,3 +811,233 @@ def test_la_pile_ne_se_dit_plus_EN_CLAIR_et_le_dernier_mot_est_explique(tmp_path
         assert "HTTP simple" in texte
         assert "Le dernier mot d'une route règle son côté PUBLIC" in texte
         assert "`clair`, il est publié en `http://`, sans certificat" in texte
+
+
+# --- SPK-150 · §44.11 : ce que le déploiement doit respecter, et rendre -------
+#
+# @verifies docs/BACKLOG.md#SPK-150 · docs/DAT.md §44.11.2 (les trois règles en
+#           tête, la liste finale), §44.11.3 (le briefing de la cellule),
+#           §44.5 (le piège de la redéclaration), §44.6 (révisé), §44.9.7
+#           (révisé), §42.13 (la cellule sans Docker) · docs/MANUAL_PLAN.md M8
+#
+# Le défaut n'était pas un fait manquant : c'était un STATUT. Le texte se disait
+# « des faits », et les agents le lisaient comme du contexte. Ces preuves portent
+# donc sur la PLACE et la FORME des règles autant que sur leurs mots.
+
+REBOND = "responsable@forge.example.test"
+NOTES_PROPOSEES = ("/etc/spark/notes/README.md.?",
+                   "/etc/spark/notes/CONTRIBUTORS.md.?",
+                   "/etc/spark/notes/INSTALL.md.?")
+
+
+def _dossier_de(client: TestClient, name: str, jump: str | None = REBOND) -> str:
+    params = {"jump": jump} if jump else {}
+    return client.get(f"/v1/sparks/{name}/briefing", params=params).json()["markdown"]
+
+
+def _section(texte: str, debut: str, fin: str) -> str:
+    """Le texte entre deux titres, pour qu'une preuve ne lise QUE sa section."""
+    assert debut in texte, debut
+    reste = texte.split(debut, 1)[1]
+    return reste.split(fin, 1)[0] if fin in reste else reste
+
+
+def test_le_dossier_OUVRE_sur_les_trois_regles_avant_la_cellule(tmp_path):
+    """§44.11.2 : à l'impératif, en section 0, avant même l'entrée."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    texte = _dossier_de(client, name)
+
+    zero = texte.index("## 0. Ce que ce déploiement doit respecter, et ce que "
+                       "vous devez rendre")
+    assert zero < texte.index("## 1. Entrer dans la cellule")
+    regles = _section(texte, "## 0.", "## 1. Entrer")
+    for titre in ("### Règle 1 — La configuration vient de la cellule, et "
+                  "d'elle seule",
+                  "### Règle 2 — Les trois notes font partie du travail rendu",
+                  "### Règle 3 — Votre compte rendu final porte cinq rubriques"):
+        assert titre in regles, titre
+    assert "ne sont pas des conseils" in regles
+    # La phrase qui annonçait « des faits » seulement est RETIRÉE, pas complétée.
+    assert "Il énonce des faits" not in texte
+    # §44.6, seconde moitié : la règle limite l'agent, elle ne lui accorde rien.
+    assert "Ce texte ne prouve **aucune** autorisation" in texte
+
+
+def test_la_regle_1_interdit_les_cinq_autres_voies_de_configuration(tmp_path):
+    """Le `.env` poussé et l'`ENV` du `Dockerfile` sont les deux constats du
+    responsable ; les trois autres en sont les variantes."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    regle = _section(_dossier_de(client, name), "### Règle 1", "### Règle 2")
+
+    assert "**Interdit :**" in regle
+    for voie in ("un fichier `.env` créé, copié ou poussé dans la cellule",
+                 "une ligne `ENV` ou `ARG` du `Dockerfile`",
+                 "une valeur de configuration écrite sous `environment:`",
+                 "un nom injecté redéclaré sous `environment:`",
+                 "un `--env-file` qui vise un autre fichier"):
+        assert voie in regle, voie
+    assert "`/etc/spark/env` et `/run/spark/secrets`" in regle
+    # Ce qui RESTE permis, sans quoi la règle serait lue comme absurde.
+    assert "`PYTHONUNBUFFERED=1`" in regle
+    # Où va ce qui manque, et la liste toute faite qu'un dépôt porte souvent.
+    assert "`/etc/spark/env.?`" in regle and "`/run/spark/secrets.?`" in regle
+    assert "**Si le dépôt porte un `.env.example`, c'est la liste à proposer**" in regle
+
+
+def test_la_regle_2_donne_la_commande_qui_ecrit_une_note_depuis_le_poste(tmp_path):
+    """§44.11.2 : le moyen d'écrire, à côté de l'obligation. Le nom est entre
+    apostrophes : `?` est un motif du shell."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    assert client.post(f"/v1/sparks/{name}/bootstrap").status_code == 200
+    adresse = client.get(f"/v1/sparks/{name}").json()["ipv4_address"]
+    regle = _section(_dossier_de(client, name), "### Règle 2", "### Règle 3")
+
+    for chemin in ("README.md.?", "CONTRIBUTORS.md.?", "INSTALL.md.?"):
+        assert f"`{chemin}`" in regle, chemin
+    assert ("ssh -J responsable@forge.example.test "
+            f"root@{adresse} \"cat > '/etc/spark/notes/README.md.?'\" <<'EOF'"
+            in regle)
+    assert "\nEOF\n" in regle
+    # Une variable s'AJOUTE : écraser effacerait la proposition d'un autre.
+    assert "`cat >> '/etc/spark/env.?'`" in regle
+    # Rien d'exposé n'est pas une raison de laisser INSTALL vide.
+    assert "**l'écrit** dans `INSTALL.md.?`" in regle
+
+
+def test_sans_commande_d_entree_la_regle_2_ne_fabrique_aucune_ligne_ssh(tmp_path):
+    """§44.9.2 tient : un rebond non reconnu ne produit AUCUNE commande, pas
+    davantage dans la règle 2. La forme locale reste donnée."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    regle = _section(_dossier_de(client, name, jump="a b; rm -rf /"),
+                     "### Règle 2", "### Règle 3")
+
+    assert "ssh" not in regle
+    assert "rm -rf" not in regle
+    assert "Une fois entré dans la cellule (section 1)" in regle
+    assert "cat > '/etc/spark/notes/README.md.?' <<'EOF'" in regle
+
+
+def test_une_note_ecrite_est_DITE_et_une_note_vide_renvoie_a_la_regle_2(tmp_path):
+    """L'invitation « vous êtes bien placé pour l'écrire » est retirée : la
+    grande majorité des agents la déclinaient."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    assert client.put(f"/v1/sparks/{name}/notes/readme",
+                      json={"body": "# CRM\n\nLe CRM.", "revision": 0}
+                      ).status_code == 200
+    texte = _dossier_de(client, name)
+    regle = _section(texte, "### Règle 2", "### Règle 3")
+
+    assert "`README.md.?` — " in regle
+    assert "(déjà écrite, recopiée en section 2)" in regle
+    assert regle.count("(**vide**)") == 2
+    notes = _section(texte, "## 2. Ce que ce Spark est", "## 3. La machine")
+    assert notes.count("**Votre déploiement doit la proposer** — règle 2") == 2
+    assert "bien placé pour l'écrire" not in texte
+
+
+def test_le_compte_rendu_a_cinq_rubriques_et_porte_tout_SANS_acces(tmp_path):
+    """§44.11.2, règle 3 : ce que l'agent rend, et ce qu'il y met quand il ne
+    peut pas entrer — sinon les notes se perdent avec la conversation."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    texte = _dossier_de(client, name)
+    regle = _section(texte, "### Règle 3", "## 1. Entrer")
+
+    for rubrique in ("1. **Variables proposées**", "2. **Secrets proposés**",
+                     "3. **Routes proposées**", "4. **Les trois notes**",
+                     "5. **Configuration**"):
+        assert rubrique in regle, rubrique
+    assert "jamais leur valeur" in regle
+    assert "**Sans accès à la cellule**" in regle
+    assert "le texte entier des trois notes dans ce compte rendu" in regle
+    # §44.9.7 révisé : le bloc à coller ne sert plus qu'à défaut d'accès.
+    assert "Si vous préférez" not in texte
+    assert "**Si vous ne pouvez pas entrer dans la cellule**" in texte
+
+
+def test_le_dossier_se_TERMINE_par_la_liste_a_cocher(tmp_path):
+    """La section 0 pose la règle ; la dernière la fait vérifier. Un texte de
+    deux mille mots se relit par ses deux bouts."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    texte = _dossier_de(client, name)
+
+    fin = _section(texte, "## 10. Avant de dire que c'est fini", "\n## ")
+    assert texte.rstrip().endswith(fin.rstrip())
+    assert fin.count("- [ ] ") == 4
+    assert "aucun `.env`, aucun `ENV` ni `ARG` de configuration" in fin
+    for chemin in ("`README.md.?`", "`CONTRIBUTORS.md.?`", "`INSTALL.md.?`"):
+        assert chemin in fin, chemin
+    assert "les cinq rubriques de la règle 3" in fin
+
+
+def test_le_piege_de_la_redeclaration_est_dans_le_modele_et_a_cote_du_contrat(tmp_path):
+    """§44.5, §44.11.1 — mesuré sur Compose 5.5.1 : `- NOM` comme `- NOM=${NOM}`
+    font arriver VIDE la valeur de l'`env_file:`."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    assert client.post(f"/v1/sparks/{name}/bootstrap").status_code == 200
+    model, markdown, _ = _briefing_files(client, name)
+
+    assert any("redéclaré sous environment:" in p for p in model["pitfalls"])
+    assert "y arrive VIDE" in markdown
+    contrat = _section(_dossier_de(client, name), "## 6. Le contrat",
+                       "Aucune route publique")
+    assert ("**Ne redéclarez sous `environment:` aucun nom que ces fichiers "
+            "portent.**" in contrat)
+    assert "jamais dans l'`env_file:`" in contrat
+
+
+def test_le_briefing_de_la_cellule_OUVRE_sur_les_memes_regles(tmp_path):
+    """§44.11.3 : l'agent qui entre lit `BRIEFING.md`, souvent sans avoir vu le
+    dossier. Mêmes règles, même fonction — seule la commande change."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    assert client.post(f"/v1/sparks/{name}/bootstrap").status_code == 200
+    model, markdown, _ = _briefing_files(client, name)
+    # Le Markdown reste la présentation du modèle (§44.8).
+    assert briefing.markdown(model) == markdown
+
+    titre = "## Ce que tout déploiement ici doit respecter"
+    assert markdown.index(titre) < markdown.index("## Identité et accès")
+    regles = _section(markdown, titre, "## Identité et accès")
+    dossier_regles = _section(_dossier_de(client, name), "### Règle 1",
+                              "(section 6)")
+    # La même phrase d'ouverture de la règle 1 : une seule rédaction.
+    assert dossier_regles.strip() in regles
+    assert "un fichier `.env` créé, copié ou poussé dans la cellule" in regles
+    # Dans la cellule, la commande est locale : aucun rebond à sauter.
+    assert "cat > '/etc/spark/notes/README.md.?' <<'EOF'" in regles
+    assert "ssh" not in regles
+    # Ce qui ne vaut que pour l'agent qui n'est pas encore entré n'y est pas.
+    assert "section 0" not in regles and "section 6" not in regles
+    assert "Sans accès à la cellule" not in markdown
+    assert "Avant de dire que c'est fini" not in markdown
+
+
+def test_une_cellule_SANS_Docker_recoit_la_regle_1_dans_ses_mots():
+    """§44.11.2, §42.13 : la règle est la même, ses mots changent. Parler de
+    `Dockerfile` à une cellule qui n'aura jamais Docker enverrait en installer un."""
+    model = briefing.modele(
+        {**_CELLULE, "id": "s1", "docker_enabled": 0},
+        forge_public_address="", routes=[], ports=[], environment=[],
+        bootstrap={"observed_at": "2026-09-08T01:00:00+00:00",
+                   "os_id": "alpine", "os_suite": "", "arch": "x86_64",
+                   "openssh_version": "9.9p2", "docker_version": None,
+                   "compose_version": None, "docker_mode": None,
+                   "managed_items": ["sshd"]})
+    for texte, fin in ((briefing.markdown(model), "## Identité et accès"),
+                       (briefing.dossier(model), "## 1. Entrer")):
+        regles = _section(texte, "### Règle 1", fin)
+        assert "`EnvironmentFile=`" in regles
+        assert "Dockerfile" not in regles and "environment:" not in regles
+        assert "aucune valeur écrite dans le code, dans l'unité ou dans un `.env`" in regles
+    # Le piège de Compose s'en va avec les autres pièges Docker.
+    assert not any("environment:" in p for p in model["pitfalls"])
+    assert "aucune valeur dans le code, dans l'unité" in _section(
+        briefing.dossier(model), "## 10.", "\n## ")
