@@ -14075,3 +14075,68 @@ attentes aujourd'hui serait les éprouver sur une pile vouée à disparaître. L
 constat et sa mesure sont repris dans SPK-138 ; l'entrée quitte le registre.
 L'entrée du 2026-09-30 reste où le responsable l'a placée : elle sort du rapport
 quand le parcours est rejoué contre la VM.
+
+## 2026-10-11 · SPK-155 et SPK-156 : le certificat de `gram` qui ne venait pas
+
+**Problème**, signalé par le responsable : « gram.lelabs.tech, j'ai fait
+réparer la route, le TLS ne s'applique pas ».
+
+**Observations**, en lecture seule — sondes depuis le poste, registre et
+diagnostic par la console, journal de `caddy-api` sur la Forge :
+
+- le registre était juste : `tls = 1`, port 8080, appliquée à 15:32:45 — le
+  *Réappliquer* du responsable ;
+- le nom résolvait encore, sur le poste, vers l'**ancienne** machine
+  (163.172.156.76), qui sert toujours `gram` avec son propre certificat ; la
+  Forge, interrogée par son adresse, refusait la poignée de main TLS sur ce nom
+  (`internal error` : aucun certificat) ;
+- le journal de Caddy raconte le reste. À 15:19, Let's Encrypt valide
+  `gram.lelabs.tech` sur 163.172.156.76 — la propagation n'était pas finie chez
+  ses résolveurs — et échoue (`Connection refused`, `Timeout`). Après cinq échecs
+  en une heure, il refuse le nom jusqu'à 15:31:41 (`rateLimited`). Chaque
+  tentative se replie sur ZeroSSL, qui répond `HTTP 422:
+  caddy_legacy_user_removed` à chaque fois. Caddy réessaie seul (60 s, 120 s,
+  …) ; la tentative de 15:40:09 réussit, certificat obtenu à 15:40:25 ;
+- *Réappliquer* n'y pouvait rien : la route était déjà portée, et l'émission
+  suivait son propre calendrier.
+
+**Deux défauts du produit**, proposés au responsable, qui a répondu « oui et
+corrige » :
+
+1. **Le repli ZeroSSL est mort** sur toutes les routes (SPK-155) ;
+2. **la console ne dit pas pourquoi un certificat ne vient pas** — le badge du
+   §18.7 aurait dit « TLS absent », et rien de l'adresse jointe ni de la limite
+   (SPK-156).
+
+**Mesuré avant de spécifier**, sur Caddy 2.6.2 en conteneur (l'image
+`caddy:2.6.2`, la version de la Forge) : une configuration portant une politique
+à un seul émetteur `acme` et un journal `emission` en fichier, filtré sur
+`tls.obtain`, `tls.renew` et `http.acme_client`, est acceptée par `/load` ; un
+seul émetteur est tenté ; le fichier se remplit et le journal par défaut reçoit
+toujours les mêmes lignes ; un dossier de journal absent est créé par Caddy.
+Le risque qui comptait — un `/load` refusé couperait tout l'ingress — est donc
+écarté sur le binaire de la Forge.
+
+**Décisions**, prises sans arbitrage (aucune ne relève des quatre cas) :
+
+1. **Let's Encrypt seul**, pas ZeroSSL avec un compte : un secret de plus sur la
+   Forge, pour un repli dont personne n'a eu besoin. Les autres autorités ACME
+   gratuites exigent toutes un compte (DAT §18.3) ;
+2. **le journal de Caddy, par un fichier que la configuration déclare**, plutôt
+   que `journalctl` depuis `sparkd` : celui-ci mêle les erreurs de mandataire de
+   toutes les piles — des milliers par jour sur la Forge — et ferait du nom de
+   l'unité un contrat. Le chemin est une constante du code, pas un réglage : la
+   même build l'écrit et le lit (§18.9.1) ;
+3. **seuls comptent les événements postérieurs au dernier succès** : un échec
+   suivi d'un succès est une histoire close, et l'afficher ferait chercher une
+   panne réparée ;
+4. **un bloc d'accent sous la route, daté, sans bouton** (SPK-DS-43) : aucun
+   geste de la console ne lève une validation manquée ni une limite, et le
+   pourquoi est au manuel.
+
+**Fait au passage** : la « limite connue » du manuel M7 — « l'émission d'un
+certificat n'a pas encore été éprouvée de bout en bout » — est fausse : la Forge
+a émis aujourd'hui `gram.lelabs.tech` et `pfia2026.lelabs.tech` (relevé du §18.7 :
+Let's Encrypt, 89 jours). Elle sort du manuel avec le code de SPK-156.
+
+Spécification : DAT §18.2, §18.3, §18.9 ; SPK-DS-43 ; backlog SPK-155, SPK-156.

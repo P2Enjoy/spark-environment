@@ -1713,7 +1713,42 @@ portes » sous un Spark qui n'en a qu'une. Preuves observées :
 (`ssh -J compte@forge:2222 spark-docker@…`, 58 caractères) se replie sur trois
 lignes à 390 px et deux à 1440 px, bouton en place, sans défilement de page.
 
-### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
+### SPK-DS-43 · Une émission en échec se lit sous sa route, avec ses dates
+
+**Date** : 2026-10-11 · SPK-156 · `DAT.md` §18.9 · `DESIGN_SYSTEM.md` §1.5 bis,
+§3.1, §6.13 (un état relevé se date), §14.6 · SPK-DS-08, SPK-DS-17, SPK-DS-34
+
+Le badge « TLS absent » (SPK-DS-34) dit qu'aucun certificat n'est servi. Quand
+Caddy a échoué à l'émettre, la ligne de la route porte en plus, **sous** ses
+badges et ses boutons, un bloc `.avertissement` (accent) : c'est un défaut que le
+produit **constate**, pas un geste refusé (SPK-DS-08) — jamais le rouge.
+
+Le bloc dit, dans cet ordre, une ligne par fait, et rien qui ne soit relu :
+
+1. « Émission du certificat en échec depuis 15:19:14 — dernière tentative à
+   15:22:59, prochaine vers 15:24:59. » La prochaine n'est écrite que si Caddy
+   l'a annoncée. Une date d'un autre jour porte son jour ;
+2. « L'autorité a joint 163.172.156.76. » — l'adresse en chasse fixe (§3.1),
+   une seule fois même si deux validations l'ont jointe ; rien si l'erreur ne
+   commence pas par une adresse ;
+3. « Let's Encrypt refuse ce nom jusqu'à 15:31:41 (limite de débit). » quand
+   l'erreur la plus récente porte une limite ;
+4. l'erreur de chaque émetteur, **telle quelle**, en `fragment technique`,
+   repliée (`overflow-wrap: anywhere`, SPK-DS-17) — c'est un texte de tiers, et
+   un JSON d'un seul tenant ;
+5. un renvoi à **M7 — Quand le certificat ne vient pas**. Le pourquoi et le
+   geste à faire vivent là (§1.5 bis) : la même phrase à l'écran mentirait dès
+   que la cause changerait.
+
+- aucun bouton dans le bloc : aucun geste de la console ne lève une validation
+  manquée ni une limite de débit, et *Réappliquer* ne s'y ajoute pas (§1.4) ;
+- un bloc **daté** : sans « dernière tentative à … », un échec d'hier se lirait
+  comme l'état d'aujourd'hui (§6.13) ;
+- pendant un relevé ou quand il a échoué, le bloc ne s'affiche pas, comme les
+  badges (SPK-DS-34) ;
+- un journal d'émission **illisible** se dit une fois, sur la ligne du relevé :
+  « Journal d'émission de Caddy illisible : <raison>. » (§14.6) — jamais un bloc
+  par route, et jamais le silence qui se lirait « aucun échec ».
 
 **Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus
 près de l'action concernée), §9.7, §6.22, §14.3

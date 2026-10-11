@@ -2096,7 +2096,14 @@ précédente avait construit.
 ### 18.2 Forme de la configuration produite
 
 ```json
-{"apps": {"http": {"servers": {"spark": {
+{"logging": {"logs": {"emission": {
+   "writer": {"output": "file", "filename": "/var/log/caddy/emission-tls.log",
+              "roll_size_mb": 5, "roll_keep": 2},
+   "encoder": {"format": "json"}, "level": "INFO",
+   "include": ["tls.obtain", "tls.renew", "http.acme_client"]}}},
+ "apps": {
+  "tls": {"automation": {"policies": [{"issuers": [{"module": "acme"}]}]}},
+  "http": {"servers": {"spark": {
   "listen": [":80", ":443"],
   "protocols": ["h1", "h2"],
   "routes": [
@@ -2107,6 +2114,10 @@ précédente avait construit.
                  "upstreams": [{"dial": "10.77.0.16:8080"}]}]}
   ]}}}}}
 ```
+
+L'émetteur déclaré (`apps.tls`) est l'objet du §18.3 ; le journal d'émission
+(`logging`), celui du §18.9. Tous deux sont **constants** : ils ne dépendent
+d'aucune route, et la configuration les porte même sans route servie.
 
 Les protocoles sont **déclarés** — HTTP/1.1 et HTTP/2, pas HTTP/3 —, et la
 configuration **commence** par une route commune, sans filtre et non terminale :
@@ -2152,7 +2163,37 @@ pas la résolution pour autant, et l'écran ne l'annonce jamais (§38.4).
 
 Un domaine mal pointé produit donc encore un échec d'émission côté Caddy, pas une
 erreur de `sparkd` — et la console doit présenter cet écart comme tel plutôt que
-de laisser croire à une panne du plan de contrôle.
+de laisser croire à une panne du plan de contrôle. C'est le §18.9 qui le fait :
+le diagnostic d'une route rend ce que Caddy dit de ses tentatives d'émission.
+
+**L'émetteur est déclaré : Let's Encrypt, et lui seul (SPK-155).** Sans
+déclaration, Caddy 2.6.2 essaie Let's Encrypt puis, en repli, ZeroSSL. **Constaté
+le 2026-10-11 sur la Forge**, en diagnostiquant une route dont le certificat ne
+venait pas : chaque repli vers ZeroSSL échoue, à chaque tentative et pour tout
+nom, avec `failed getting EAB credentials: HTTP 422: caddy_legacy_user_removed`.
+ZeroSSL ne délivre plus d'identifiants à un Caddy qui ne lui présente pas de
+compte. Le repli n'en est pas un : quand Let's Encrypt refuse — validation
+manquée, limite de débit —, il n'y a aucune issue, et chaque tentative ajoute au
+journal une seconde erreur qui masque la première.
+
+La configuration porte donc une politique d'automatisation à **un seul émetteur
+ACME**, sans autorité nommée : celle par défaut de Caddy, Let's Encrypt en
+production. Ce que cela conserve, mesuré le même jour sur Caddy 2.6.2 en
+conteneur (`scripts/mesures-spk155.sh`) :
+
+- les certificats déjà émis : l'émetteur ACME range ses certificats sous la clé
+  de son autorité, `acme-v02.api.letsencrypt.org-directory`, celle-là même où
+  l'émetteur par défaut les avait rangés ;
+- le repli de Caddy sur l'autorité **de test** de Let's Encrypt après un échec,
+  qui vérifie que la validation passe avant de consommer une tentative en
+  production — c'est le comportement de l'émetteur ACME, pas du repli ZeroSSL ;
+- la configuration relue (`GET /config/`) égale à celle posée, dont dépend le
+  contrôle `ING-CONCORDE` du préflight (§51.5).
+
+Écartées : garder ZeroSSL en lui fournissant un compte — un secret de plus à
+poser sur la Forge, pour un repli dont personne n'a eu besoin ; une seconde
+autorité ACME gratuite — les autres exigent toutes un compte (EAB), et le
+problème serait le même.
 
 ### 18.3 bis Le joker, et la règle de préséance
 
@@ -2431,7 +2472,7 @@ TLS garde sa pastille « sans TLS » (§18.3 quater) :
 | valide | chaîne et nom vérifiés ; l'émetteur et l'échéance sont nommés | succès |
 | expire bientôt | valide, mais l'échéance tombe dans moins de **14 jours**. Caddy renouvelle au dernier tiers de la validité — trente jours pour un certificat de quatre-vingt-dix — : sous quatorze, le renouvellement échoue depuis deux semaines au moins | accent |
 | invalide | la vérification échoue, et sa raison est rendue **telle quelle** : auto-signé, nom qui ne correspond pas, expiré. C'est le cas d'un certificat de l'autorité interne de Caddy, son repli quand l'émission publique échoue | danger |
-| absent | Caddy ne présente aucun certificat pour ce nom : l'émission n'a pas eu lieu — le plus souvent parce que le DNS ne pointe pas ici (§18.3) | danger |
+| absent | Caddy ne présente aucun certificat pour ce nom : l'émission n'a pas eu lieu — le plus souvent parce que le DNS ne pointe pas ici (§18.3). Ce que Caddy a rencontré se lit sous la route (§18.9) | danger |
 | injoignable | rien ne répond sur `443` | danger |
 
 **Quand.** À chaque ouverture de la page des routes, comme l'état DNS, et sur un
@@ -2516,6 +2557,109 @@ Ce que la décision ne couvre pas : la **suppression d'un Spark** emporte ses
 routes par cascade, puis réconcilie ; si Caddy est injoignable à ce moment, il
 sert encore une route vers une cellule qui n'existe plus, jusqu'à la
 réconciliation suivante — au démarrage de `sparkd` au plus tard (§18.1).
+
+### 18.9 Pourquoi un certificat ne vient pas : ce que Caddy dit de ses tentatives (SPK-156)
+
+**Constaté le 2026-10-11 sur la Forge.** Une route venait d'être déclarée, son
+nom repointé vers la Forge. Pendant vingt minutes, la Forge n'a présenté aucun
+certificat pour ce nom. Le badge du §18.7 aurait dit « TLS absent », et rien de plus : ni que
+Let's Encrypt validait encore le nom sur l'**ancienne adresse** — la propagation
+n'était pas finie chez ses résolveurs —, ni qu'après cinq échecs il refusait
+**toute demande pour ce nom pendant une heure**, ni que Caddy réessayait seul,
+de minute en minute. L'exploitant a appuyé sur *Réappliquer*, qui n'y pouvait
+rien. Le certificat est venu à la tentative qui a suivi la levée de la limite. Tout
+cela était écrit dans le journal de Caddy, où la console ne lit pas.
+
+**La règle : quand un certificat ne vient pas, l'écran dit ce que Caddy a
+rencontré, avec sa date.** Ce n'est pas un état que la console déduit, ni un
+souvenir de `sparkd` : c'est le compte rendu que Caddy écrit de ses propres
+tentatives, relu à chaque visite. Le §18.7 continue de dire **si** un certificat
+est servi ; ceci dit **pourquoi** il ne l'est pas.
+
+#### 18.9.1 La source : un journal d'émission que la configuration déclare
+
+La configuration posée (§18.2) déclare un journal à elle, `emission`, qui ne
+retient que trois enregistreurs de Caddy — `tls.obtain`, `tls.renew` et
+`http.acme_client` —, en JSON, dans `/var/log/caddy/emission-tls.log`, avec une
+rotation à 5 Mio et deux fichiers gardés. Mesuré le 2026-10-11 sur Caddy 2.6.2 :
+
+- `POST /load` l'accepte, et Caddy crée le fichier — et son dossier s'il manque ;
+- le journal par défaut **continue de tout recevoir** : ce qui partait dans le
+  journal système (`journalctl -u caddy-api`) y part toujours ;
+- les lignes sont celles du journal système, au caractère près.
+
+Écartées : lire `journalctl` depuis `sparkd` — il faudrait filtrer à chaque visite
+un journal où les erreurs de mandataire de toutes les piles se comptent par
+milliers, et le nom de l'unité deviendrait un contrat de `sparkd` ; interroger
+l'API d'administration — elle ne dit rien des tentatives d'émission.
+
+Le chemin est une **constante du code** (`ingress.JOURNAL_EMISSION`), pas un
+réglage : celui qui l'écrit — la configuration que `sparkd` pose — et celui qui
+le lit — `sparkd` — sont le même programme. Le dossier `/var/log/caddy` est celui
+du paquet Caddy, à son utilisateur ; `sparkd`, qui tourne en `root`, le lit.
+
+#### 18.9.2 Ce qui se lit, nom par nom
+
+`sparkd` relit la **fin** du fichier — 1 Mio au plus, ce que des semaines de
+tentatives n'atteignent pas — et ne garde, pour un nom, que les événements qui le
+désignent : le champ `identifier`, ou le préfixe `[<nom>]` du message « will
+retry », qui n'a pas d'autre marque. Seuls comptent les événements **postérieurs
+au dernier succès** (« certificate obtained successfully », « certificate
+renewed successfully ») : un échec suivi d'un succès est une histoire close.
+
+| État `issuance.state` | Ce qui a été lu | Rendu |
+|---|---|---|
+| `failing` | au moins une tentative en échec depuis le dernier succès | bloc sous la route |
+| `ok` | le dernier événement est un succès | rien de plus que le badge du §18.7 |
+| `none` | aucun événement pour ce nom | rien de plus |
+
+Pour `failing`, la réponse porte, tirés des lignes et jamais reformulés :
+
+- `since` — la date du premier échec qui suit le dernier succès ;
+- `last_attempt_at` — la date de la dernière tentative ;
+- `next_retry_at` — la dernière tentative plus le délai que Caddy a annoncé
+  (`retrying_in`), quand il l'a annoncé ;
+- `challenges` — les validations refusées à la **dernière** tentative : leur
+  type (`http-01`, `tls-alpn-01`), l'**adresse que l'autorité a jointe** quand
+  l'erreur commence par elle (`163.172.156.76: Connection refused`), et l'erreur
+  telle quelle ;
+- `issuers` — pour chaque émetteur, la dernière erreur, telle quelle ;
+- `rate_limited_until` — l'échéance d'une limite de débit de l'autorité, lue
+  dans son message (« retry after 2026-10-11 15:31:41 UTC »), quand l'erreur la
+  plus récente en porte une.
+
+Le journal se lit **une fois par diagnostic**, pas une fois par route. S'il ne
+peut pas être lu — droits, disque —, la réponse le dit une fois
+(`issuance_journal.readable = false` et la raison) et aucune route ne porte
+d'`issuance` : un journal illisible n'est pas une absence d'échec (§14.6 du
+design system). Un fichier **absent** n'est pas une erreur : Caddy ne l'écrit
+qu'au premier événement d'émission, et l'absence vaut `none` pour chaque nom.
+
+**Ce que l'état ne dit pas.** Les certificats émis avant que la configuration ne
+déclare ce journal n'y ont laissé aucune trace : `none` n'est pas « jamais
+émis ». Et `failing` dit ce que Caddy a rencontré, pas ce qu'il rencontrerait
+maintenant : c'est pourquoi la date de la dernière tentative est toujours rendue.
+
+#### 18.9.3 La surface
+
+`GET /v1/ingress/diagnostic?spark=<nom>` porte, par domaine, `issuance` à côté de
+`caddy` et `certificate`, pour toute route TLS que Caddy doit porter ; et, une
+fois, `issuance_journal` (`readable`, `reason`). Une route sans TLS, ou non
+servie, n'a pas d'`issuance`.
+
+À l'écran (contrat visuel : `DESIGN_SYSTEM_APP.md` SPK-DS-43), une route
+`failing` porte sous sa ligne un bloc qui dit, dans cet ordre : depuis quand
+l'émission échoue, la dernière tentative et la suivante ; l'adresse que
+l'autorité a jointe ; la limite de débit et son échéance ; l'erreur de
+l'émetteur, telle quelle. Le pourquoi et le geste — attendre la propagation,
+corriger le DNS, attendre la levée de la limite — sont au manuel M7 (« Quand le
+certificat ne vient pas »). Un journal illisible se dit une fois, sur la ligne
+du relevé.
+
+**Avec le pilote factice** (§28), les sondes factices du §18.7 portent aussi un
+double de ce relevé, déclaré par le seed : `vip.boutique.example.com`, dont le
+certificat est celui de l'autorité interne de Caddy, porte une émission en échec
+— l'autorité a joint `203.0.113.99`. La réponse garde `probes: "fake"`.
 
 ## 19. Instantanés et restauration
 

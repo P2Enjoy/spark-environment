@@ -9034,6 +9034,50 @@ le docker user en fonction de la config d'amorçage ».
     au clavier », est refusé par la capacité, et rouge aussi sur le code
     d'avant SPK-154 : consigné au registre le 2026-10-11.
   - **Reste `[~]`** : OP-39, sur instruction du responsable.
+
+### [ ] SPK-155 · L'ingress déclare son émetteur de certificats : Let's Encrypt, et lui seul
+
+**Constaté le 2026-10-11** sur la Forge, en diagnostiquant `gram.lelabs.tech`
+dont le certificat ne venait pas ; **demandé le même jour** par le responsable :
+« oui et corrige ». Chaque repli de Caddy vers ZeroSSL échoue, pour tout nom, avec
+`HTTP 422: caddy_legacy_user_removed` : quand Let's Encrypt refuse, il n'y a
+aucune issue.
+
+- Spécification : `docs/DAT.md` **§18.3** (« L'émetteur est déclaré ») · §18.2
+  (la forme de la configuration).
+- Dépend de : SPK-12 (la réconciliation).
+- Portée : `ingress.build_config` pose `apps.tls.automation.policies` à un seul
+  émetteur `acme` ; preuves unitaires rouges sur le code d'avant ; mesure
+  `scripts/mesures-spk155.sh` sur Caddy 2.6.2 en conteneur, avec la
+  configuration produite par le code — `/load` accepté, configuration relue égale
+  à la configuration posée, un seul émetteur tenté ; `docs/PROD_MIGRATIONS.md`
+  OP-40 ; validation sur la Forge après OP-40 : `GET /config/apps/tls` porte la
+  politique, et les certificats en place restent servis.
+
+### [ ] SPK-156 · Le diagnostic d'une route dit pourquoi son certificat ne vient pas
+
+**Constaté le 2026-10-11** sur la Forge (même incident que SPK-155) : pendant
+vingt minutes, le certificat de `gram.lelabs.tech` n'est pas venu — Let's Encrypt
+validait encore l'ancienne adresse, puis refusait le nom pour une heure — et la
+console ne pouvait dire que « TLS absent ». **Demandé le même jour** par le
+responsable : « oui et corrige ».
+
+- Spécification : `docs/DAT.md` **§18.9** · §18.7 (le badge certificat) · §18.2
+  (le journal d'émission dans la configuration) · manuel M7 (« Quand le
+  certificat ne vient pas ») · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-43** ·
+  SPK-DS-08, SPK-DS-17, SPK-DS-34 · `docs/DESIGN_SYSTEM.md` §1.5 bis, §6.13,
+  §14.6.
+- Dépend de : SPK-130 (le diagnostic en direct), SPK-155 (la même pose de
+  configuration).
+- Portée : le journal `emission` dans la configuration posée ; la lecture du
+  journal et son analyse nom par nom (`ingress_diagnostic`), avec le double des
+  sondes factices et sa déclaration au seed ; `issuance` et `issuance_journal`
+  dans `GET /v1/ingress/diagnostic` ; le bloc sous la route dans la console ;
+  preuves unitaires (analyse, sur des lignes réelles de Caddy 2.6.2), d'API et
+  de composant rouges sur le code d'avant ; parcours E2E depuis l'accueil
+  jusqu'au bloc de `vip.boutique.example.com` ; vérification visuelle 1440 px et
+  390 px ; manuel M7 et son illustration ; OP-40 ; validation sur la Forge après
+  OP-40.
 ---
 
 ## Lot 6 — Réseau entre Sparks
