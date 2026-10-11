@@ -14062,3 +14062,16 @@ l'onglet *Clés* ne connaît que `root`, et passe par l'alias `spark-host`.
    pour un texte d'une ligne.
 
 Spécification : DAT §44.9.8 ; SPK-DS-42 ; backlog SPK-154.
+
+## 2026-10-11 · Boucle du registre : les trois parcours instables rejoignent SPK-138
+
+L'entrée du 2026-10-06 (« trois parcours rougissent en campagne et passent
+isolément ») attendait un arbitrage entre corriger leurs attentes et les laisser
+à SPK-138. Ce n'est aucun des quatre cas d'arbitrage : tranché. **Issue :
+convertie en unité**, absorbée par SPK-138, sur le précédent de l'entrée du
+2026-09-30 que le responsable avait arbitrée ainsi. Motif : ces parcours tournent
+sur la pile factice, qui ne valide plus rien (DAT §28.7) ; corriger leurs
+attentes aujourd'hui serait les éprouver sur une pile vouée à disparaître. Le
+constat et sa mesure sont repris dans SPK-138 ; l'entrée quitte le registre.
+L'entrée du 2026-09-30 reste où le responsable l'a placée : elle sort du rapport
+quand le parcours est rejoué contre la VM.

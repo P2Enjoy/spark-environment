@@ -8466,6 +8466,16 @@ réponse : « oui ».
   s'atteignent au clavier », rouge une fois sur deux campagnes sur la pile
   factice : il n'est pas corrigé à part, il est rejoué contre la VM quand la
   pile factice disparaît, et son entrée sort alors du rapport d'incohérences.
+- **Absorbe** (tranché le 2026-10-11, boucle du registre, sur le précédent
+  ci-dessus) trois parcours rouges en campagne et verts joués seuls, relevés le
+  2026-10-06 pendant SPK-149 avant et après le changement (148 sur 151 ; 145 sur
+  149 sur l'arbre committé) : « révoquer une clé malgré le gel, par la
+  confirmation qui NOMME », « un conteneur ARRÊTÉ montre son code de sortie, et
+  son silence se distingue » — son attente s'arrête sur un signal déjà vrai, et
+  lit `.principal` avant l'inspection —, « un geste sensible envoie une alerte
+  hors bande, un geste ordinaire non ». Ils sont rejoués contre la VM quand la
+  pile factice disparaît ; s'ils y rougissent encore, leurs attentes sont
+  corrigées alors.
 
 ### [~] SPK-139 · Le refus de « Retirer la route » et de « Réappliquer » s'affiche sous la route
 
