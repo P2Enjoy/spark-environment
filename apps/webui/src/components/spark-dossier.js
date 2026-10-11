@@ -37,6 +37,11 @@ export const DOSSIER_VIDE = {
   // referme ce que l'exploitant venait d'ouvrir — mesuré en capturant la copie :
   // on déplie pour vérifier, on copie, et le texte disparaît (§14.3).
   deplie: false,
+  // SPK-154 · §44.9.8 : les commandes d'entrée, une par porte, rendues par la
+  // MÊME réponse. `null` tant qu'elle n'est pas arrivée — distinct d'une liste.
+  ssh: null,
+  modeDocker: null,  // le mode relevé, pour nommer l'absence de seconde porte
+  copieSsh: null,    // { user, ok, message } — la ligne copiée, et elle seule
 };
 
 /**

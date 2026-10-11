@@ -3225,7 +3225,8 @@ def create_app(config: Config) -> FastAPI:
         """Le dossier de déploiement, pour un agent hors de la cellule.
 
         @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.4
-              (la surface d'API), §44.8 (le modèle unique)
+              (la surface d'API), §44.8 (le modèle unique) ·
+              docs/BACKLOG.md#SPK-154 · docs/DAT.md §44.9.8 (`ssh_commands`)
 
         Elle **n'entre pas dans la cellule** : tout vient du registre et du relevé
         d'amorçage déjà conservé. Elle répond donc sur un Spark **arrêté**, ce qui
@@ -3270,6 +3271,12 @@ def create_app(config: Config) -> FastAPI:
                 "markdown": briefing_service.dossier(
                     model, ssh_config=acces["config"], keys=acces["keys"],
                     jump=jump, direct=direct),
+                # SPK-154 · §44.9.8 : les lignes de la section 1, une par porte,
+                # pour que la console les affiche sans les composer. HORS du
+                # modèle : le rebond n'appartient pas au plan de contrôle, et le
+                # modèle est aussi posé dans la cellule.
+                "ssh_commands": briefing_service.entrees_ssh(
+                    model, jump, direct=direct),
             }
 
     # --- SPK-104 · les trois notes d'un Spark (docs/DAT.md §54) --------------

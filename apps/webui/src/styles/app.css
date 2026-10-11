@@ -752,6 +752,26 @@ tbody tr:hover { background: var(--color-hover); }
   overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
+/* SPK-154 · docs/DAT.md §44.9.8 · DESIGN_SYSTEM_APP.md SPK-DS-42 — les
+   commandes SSH de la section Accès. Une commande d'une ligne se MONTRE : pas de
+   repli. Elle se replie au lieu de défiler (SPK-DS-15) : la colonne secondaire
+   est étroite, et un défilement cacherait l'adresse, c'est-à-dire la fin de la
+   ligne. Le compte et son rôle tiennent la ligne entière, la commande prend la
+   place restante et le bouton garde la sienne. */
+.connexion-ssh > * + * { margin-top: var(--space-2); }
+.commandes-ssh > li.commande-ssh { align-items: flex-start; }
+.commande-ssh__porte { flex-basis: 100%; margin: 0; font-size: var(--text-compact); }
+.commande-ssh__ligne {
+  flex: 1 1 12rem; min-width: 0;
+  white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible;
+}
+.commande-ssh__ligne:focus-visible {
+  outline: 2px solid var(--color-brand); outline-offset: 2px;
+}
+.commande-ssh > button { flex: none; }
+.commande-ssh > .succes,
+.commande-ssh > .avertissement { flex-basis: 100%; margin: 0; }
+
 /* SPK-22 · docs/DAT.md §27 — l'écran des pools de l'hôte. */
 .pools { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
 @media (min-width: 768px)  { .pools { grid-template-columns: repeat(2, 1fr); } }

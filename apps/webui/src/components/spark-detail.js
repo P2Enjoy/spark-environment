@@ -11,6 +11,9 @@
  *       docs/DESIGN_SYSTEM.md §6.3, §6.4, §6.6, §6.22, §6.23, §14.9 ·
  *       docs/DAT.md §44.9.5 (le dossier de déploiement est une SECTION) ·
  *       docs/DESIGN_SYSTEM_APP.md
+ * @spec docs/BACKLOG.md#SPK-154 · docs/DAT.md §44.9.8 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-42 (les commandes SSH dans la section
+ *       Accès) — pour `renderAcces`.
  * @spec docs/BACKLOG.md#SPK-152 · docs/DAT.md §7.2 quater, §49.8 ·
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-41 (le mode partagé plafonné : deux
  *       champs, et un plafond qui attend le démarrage) — pour `ligneCpu`,
@@ -33,6 +36,7 @@ import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
 import { IMPORT_VIDE } from './env-import.js';
 import { IDENTITE_VIDE, renderIdentityPanel } from './spark-identity.js';
 import { DOSSIER_VIDE, renderDossier } from './spark-dossier.js';
+import { renderConnexionSsh } from './spark-acces.js';
 import { NOTES_VIDE, renderNotes } from './spark-notes.js';
 import { PROPOSITIONS_VIDE, renderPropositions } from './spark-suggestions.js';
 // §12.5 : la table des modes CPU vit à UN SEUL endroit. En recopier une
@@ -626,11 +630,18 @@ export const QUOTAS_VIDE = {
             cpu_mode: '', cpu_reservation: '', cpu_max: '', cpu_cores: '' },
 };
 
-function renderAcces(spark) {
+/**
+ * La section « Accès » : où est le Spark, et par quelle porte on y entre.
+ *
+ * @spec docs/BACKLOG.md#SPK-154 · docs/DAT.md §44.9.8 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-42
+ */
+function renderAcces(spark, dossier) {
   return `
 <section class="carte bloc" aria-labelledby="titre-acces">
   <h2 id="titre-acces">Accès</h2>
   ${definitions([['Adresse privée', spark.ipv4_address, true], ['Image', spark.image, true]])}
+  ${renderConnexionSsh(spark, dossier)}
 </section>`;
 }
 
@@ -1032,7 +1043,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
         ${renderReseau(spark, isolation, memberships, reseaux, admin, { exposed, consumable })}
         ${renderProtection(spark, admin)}
         ${renderDossier(spark, dossier)}</div>
-      <div class="detail__secondaire">${renderProjetsSpark(spark, projets, admin)}${renderAcces(spark)}
+      <div class="detail__secondaire">${renderProjetsSpark(spark, projets, admin)}${renderAcces(spark, dossier)}
         ${renderAmorcage(spark, amorcage)}</div>
     </div>`,
     // §39.3 : le nom D'ABORD, le port publié comme un second geste qui annonce

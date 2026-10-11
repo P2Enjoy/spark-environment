@@ -14,7 +14,9 @@
  *           montré ; un sous-domaine à plusieurs niveaux, §38.6.6),
  *           docs/BACKLOG.md#SPK-153 (le « www » de la recette site web est
  *           une case décochée par défaut, §38.6.4 ; SPK-DS-39),
- *           docs/BACKLOG.md#SPK-132 (recréer un conteneur de pile Compose,
+ *           docs/BACKLOG.md#SPK-154 (les commandes SSH d'un Spark, prêtes à
+           copier dans la section Accès, §44.9.8 ; SPK-DS-42),
+           docs/BACKLOG.md#SPK-132 (recréer un conteneur de pile Compose,
  *           §37.7.5 ; l'onglet Environnement nomme ce geste, §43.7) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
@@ -4895,6 +4897,70 @@ test('sur un Spark ENRACINÉ, il n’y a rien à choisir, et l’écran le dit',
     assert.equal(await page.$('[data-terminal="compte"]'), null,
       'aucun sélecteur là où il n’y a rien à choisir');
     await capturer('spk95-terminal-porte-unique');
+  });
+});
+
+// --- SPK-154 · LES COMMANDES SSH, PRÊTES À COPIER (docs/DAT.md §44.9.8) ------
+
+/**
+ * @verifies docs/BACKLOG.md#SPK-154 · docs/DAT.md §44.9.8 (une commande par
+ *           porte, d'après le relevé d'amorçage) · docs/DESIGN_SYSTEM_APP.md
+ *           SPK-DS-42 (la commande se montre, son bouton nomme le compte,
+ *           « copiée » sous la ligne copiée seulement), SPK-DS-21 (l'absence de
+ *           seconde porte se nomme) · CLAUDE.md §15, §16
+ *
+ * Le presse-papier est RELU : c'est ce qu'on colle dans un shell qui est le
+ * produit ici. Ce parcours suit les deux précédents — « boutique » y a été
+ * amorcé en rootless, « crm-production » en enraciné.
+ */
+test('la section Accès donne une commande SSH par porte, et la copie au clavier',
+     async () => {
+  await parcours('acces-commandes-ssh', async () => {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'],
+                                          { origin: pile.base });
+    // §29.3 : depuis l'accueil, en cliquant. La facette Infos est celle d'arrivée.
+    await ouvrir('boutique');
+    await page.waitForSelector('.connexion-ssh [data-ssh-copie]', { timeout: 15000 });
+    const { corps: boutique } = await pile.lireSparkd('/v1/sparks/boutique');
+    // La pile d'épreuve sert la console SUR la Forge : la commande est directe.
+    assert.deepEqual(
+      await page.$$eval('.commande-ssh__ligne', (l) => l.map((e) => e.textContent.trim())),
+      [`ssh root@${boutique.ipv4_address}`, `ssh spark-docker@${boutique.ipv4_address}`]);
+    const portes = await page.textContent('.commandes-ssh');
+    assert.match(portes, /administrer la cellule/);
+    assert.match(portes, /faire tourner la pile/);
+    await capturer('spk154-acces-rootless', { hauteur: 1300 });
+
+    // AU CLAVIER : on sélectionne la commande de spark-docker, puis Tab mène à
+    // SON bouton, et Entrée copie.
+    await page.click('.commande-ssh__ligne >> nth=1');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
+                 'Copier la commande SSH de spark-docker');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.commande-ssh .succes', { timeout: 10000 });
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()),
+                 `ssh spark-docker@${boutique.ipv4_address}`);
+    // SPK-DS-42 : « copiée » sous la ligne copiée, et nulle part ailleurs.
+    assert.equal(await page.locator('.commande-ssh .succes').count(), 1);
+    assert.match(await page.textContent('.commande-ssh:has(.succes)'), /spark-docker/);
+    // §14.3 : la repeinture rend le focus au bouton qui a copié.
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset?.sshCopie),
+                 'spark-docker');
+    await capturer('spk154-acces-copiee', { hauteur: 1300 });
+    await capturer('spk154-acces-mobile', { largeur: 390, hauteur: 844 });
+
+    // ENRACINÉ : une seule porte, et l'écran dit pourquoi — avec les mots du
+    // terminal (SPK-DS-21).
+    await ouvrir('crm-production');
+    await page.waitForSelector('.connexion-ssh [data-ssh-copie]', { timeout: 15000 });
+    const { corps: crm } = await pile.lireSparkd('/v1/sparks/crm-production');
+    assert.deepEqual(
+      await page.$$eval('.commande-ssh__ligne', (l) => l.map((e) => e.textContent.trim())),
+      [`ssh root@${crm.ipv4_address}`]);
+    assert.match(await page.textContent('.connexion-ssh'),
+                 /amorcé en mode enraciné : Docker\s+appartient à « root »/);
+    await capturer('spk154-acces-enracine', { hauteur: 1300 });
   });
 });
 

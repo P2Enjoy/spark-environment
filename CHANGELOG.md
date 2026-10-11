@@ -3,6 +3,17 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-154 — les commandes SSH d'un Spark, prêtes à copier.** La section
+  *Accès* de la facette *Infos* porte un bloc « Se connecter en SSH » : une
+  ligne par porte — `root` toujours, `spark-docker` sur un Spark amorcé en
+  rootless —, la commande complète avec le rebond de la console
+  (`ssh -J compte@forge:port root@10.77.0.x`) et un bouton **Copier** qui ne dit
+  « copiée » qu'après l'accord du presse-papier. Un Spark à une seule porte dit
+  pourquoi, avec les mots du terminal. Les commandes viennent de sparkd :
+  `GET /v1/sparks/{name}/briefing` rend `ssh_commands`, par le même calcul que
+  la section 1 du dossier pour un agent (`entrees_ssh`) ; aucune requête de
+  plus. Aucune migration, aucune variable. DAT §44.9.8 ; SPK-DS-42 ; manuel M6 ;
+  OP-39.
 - **SPK-152 — le mode CPU « partagé plafonné » : une réservation ET un
   plafond.** La réservation est garantie sous contention et seule comptée par
   l'admission ; le plafond borne le burst, se pose par `raw.lxc` et prend effet

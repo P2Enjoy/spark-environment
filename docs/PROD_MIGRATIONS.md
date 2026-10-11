@@ -120,6 +120,31 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-39 · Les commandes SSH d'un Spark, prêtes à copier : `sparkd` et la console (SPK-154)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable.
+Objectif      : `GET /v1/sparks/{name}/briefing` rend `ssh_commands`, une
+                commande par porte du Spark (docs/DAT.md §44.9.8) ; la console
+                les affiche dans Infos → Accès, avec un bouton Copier. Aucune
+                migration, aucune variable ; le dossier pour un agent garde
+                exactement les mêmes lignes.
+Dépend de     : rien (OP-38 peut être jouée avant ou après).
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) ;
+                3. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : `/healthz` rend le commit déployé. Spark → Infos → Accès →
+                « Se connecter en SSH » : la ligne de root porte
+                `ssh -J <compte>@<forge>[:port] root@10.77.0.x`, celle de
+                `spark-docker` en plus sur un Spark amorcé en rootless ;
+                « Copier » puis coller dans un terminal ouvre la session.
+Retour arrière: réinstaller la build précédente (runbook A.2) et relancer la
+                console. Une console relancée AVANT sparkd affiche « Les
+                commandes SSH n'ont pas pu être lues » dans le bloc, le reste de
+                l'écran intact : relancer la console après sparkd.
+Risques       : aucun sur les données — une lecture, déjà faite par le dossier.
+```
+
 ### OP-38 · Le mode CPU « partagé plafonné » : migration 022, `sparkd` et la console (SPK-152)
 
 ```

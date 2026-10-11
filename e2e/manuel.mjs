@@ -3,7 +3,8 @@
  *
  * @spec docs/BACKLOG.md#SPK-25 · docs/DAT.md §30.1 (les illustrations sont
  *       produites, jamais collectées à la main), §28 (la pile et le seed) ·
- *       docs/MANUAL_PLAN.md · CLAUDE.md §7, §16
+ *       docs/MANUAL_PLAN.md · CLAUDE.md §7, §16 · docs/BACKLOG.md#SPK-154 ·
+ *       docs/DAT.md §44.9.8 (l'illustration `m6-connexion`)
  *
  * Chaque image est nommée d'après le chapitre qui l'emploie. Le harnais monte sa
  * propre pile seedée : une illustration ne peut donc pas montrer un écran qui
@@ -286,6 +287,17 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('.dossier__texte', { timeout: 10000 });
     await page.locator('.dossier').scrollIntoViewIfNeeded();
     await capturer('m8-dossier', { hauteur: 1000 });
+
+    // --- M6 · Se connecter : les commandes prêtes à copier (SPK-154, §44.9.8) -
+    // « crm-production » vient d'être amorcé, en enraciné : la section Accès
+    // donne la commande de root et DIT pourquoi il n'y a qu'une porte — les deux
+    // choses que le chapitre décrit. On copie, comme le lecteur le fera.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.waitForSelector('.connexion-ssh [data-ssh-copie]', { timeout: 15000 });
+    await page.click('[data-ssh-copie="root"]');
+    await page.waitForSelector('.commande-ssh .succes', { timeout: 10000 });
+    await page.locator('section[aria-labelledby="titre-acces"]').scrollIntoViewIfNeeded();
+    await capturer('m6-connexion', { hauteur: 900 });
 
     // --- M8 · Les notes d'un Spark (SPK-104, §54.10) -------------------------
     // Le seed écrit deux notes et laisse la troisième NON écrite, avec une

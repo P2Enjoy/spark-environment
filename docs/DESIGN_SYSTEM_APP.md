@@ -1706,6 +1706,13 @@ celle-ci la précise.
 - un lien vers **M6 — Se connecter** clôt le bloc : la clé à accorder, le rebond
   et le choix de la porte s'y expliquent, pas ici.
 
+Vu en capture le 2026-10-11 et corrigé : la ligne du renvoi disait « ouvre ces
+portes » sous un Spark qui n'en a qu'une. Preuves observées :
+`e2e/captures/spk154-acces-rootless`, `-copiee`, `-mobile` (390 px),
+`-enracine` ; manuel `m6-connexion`. Une commande de rebond réelle
+(`ssh -J compte@forge:2222 spark-docker@…`, 58 caractères) se replie sur trois
+lignes à 390 px et deux à 1440 px, bouton en place, sans défilement de page.
+
 ### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
 
 **Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus

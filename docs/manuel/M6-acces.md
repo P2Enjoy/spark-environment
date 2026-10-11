@@ -290,8 +290,45 @@ services, ce que la protection est là pour arrêter. Levez-la d'abord.
 ## Se connecter
 
 Un Spark **n'expose jamais son port 22**. L'accès se fait par rebond sur la Forge,
-dont le `sshd` est la seule porte du système. La console vous donne le fragment à
-coller dans votre `~/.ssh/config` :
+dont le `sshd` est la seule porte du système.
+
+### La commande toute prête
+
+Dans l'onglet **Infos** du Spark, la section **Accès** porte un bloc *Se
+connecter en SSH* : une ligne par compte où vous pouvez entrer, avec la commande
+complète et un bouton **Copier**. Collez-la dans un terminal, elle fonctionne
+telle quelle :
+
+```
+ssh -J exploitation@ma-forge.exemple:2222 root@10.77.0.16
+```
+
+![La section Accès : la commande de root, copiée, et la raison pour laquelle ce Spark n'a qu'une porte](images/m6-connexion.png)
+
+- **Le rebond est celui de la console.** `-J` désigne le compte, l'hôte et le
+  port par lesquels votre console joint cette Forge — ceux de l'inventaire
+  *Serveurs*. Une console servie sur la Forge elle-même n'a rien à sauter : la
+  commande est alors un simple `ssh root@10.77.0.x`.
+- **Les comptes suivent l'amorçage.** `root` est toujours là : c'est la porte
+  d'administration. `spark-docker` n'apparaît que sur un Spark **amorcé en
+  rootless** — c'est le compte qui fait tourner la pile (voir *Déployer votre
+  pile*, plus bas). Sur un Spark enraciné, jamais amorcé ou sans Docker, le bloc
+  le dit sous la commande de root.
+- **« copiée »** n'apparaît que si le navigateur a accepté la copie. S'il la
+  refuse, sélectionnez la commande à la souris : elle reste affichée.
+- **Il faut une clé autorisée** dans l'onglet **Clés** : la commande vous dit
+  où frapper, pas qui vous êtes.
+- Si la console ne sait pas par où rejoindre la Forge, le bloc le dit au lieu
+  d'afficher une commande qui échouerait ; le fragment ci-dessous reste alors
+  la voie.
+
+Ces commandes sont les mêmes, au caractère près, que celles du *Dossier pour un
+agent* (M8).
+
+### Le fragment `ssh_config`
+
+Pour un alias durable, l'onglet **Clés** donne le fragment à coller dans votre
+`~/.ssh/config` :
 
 ```sshconfig
 Host mon-spark

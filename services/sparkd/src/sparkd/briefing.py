@@ -1037,6 +1037,24 @@ def comptes_du_spark(model: dict[str, Any]) -> list[dict[str, str]]:
     return portes
 
 
+def entrees_ssh(model: dict[str, Any], jump: str | None, *,
+                direct: bool = False) -> list[dict[str, Any]]:
+    """Chaque porte de la cellule, avec la ligne qui y entre (§44.9.8).
+
+    @spec docs/BACKLOG.md#SPK-154 · docs/DAT.md §44.9.8 (une entrée par porte,
+          `command` nulle plutôt que piégée), §44.8 (un seul calcul)
+
+    Le dossier écrit ces lignes, la console les affiche une à une : les deux
+    lisent CE calcul, pour qu'une commande copiée depuis l'écran soit au
+    caractère près celle que l'agent reçoit. `command` vaut `None` quand
+    `commande_ssh` refuse d'en composer une — la porte reste dite, ce qui manque
+    aussi.
+    """
+    return [{**porte, "command": commande_ssh(model, jump, direct=direct,
+                                              compte=porte["user"])}
+            for porte in comptes_du_spark(model)]
+
+
 def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
             keys: list[dict[str, Any]] | None = None,
             jump: str | None = None, direct: bool = False) -> str:
@@ -1059,7 +1077,7 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
     docker = model["docker"]
     ressources = model["resources"]
     bootstrap = model["bootstrap"]
-    portes = comptes_du_spark(model)
+    portes = entrees_ssh(model, jump, direct=direct)
     commande = commande_ssh(model, jump, direct=direct)
 
     lignes = [
@@ -1088,14 +1106,14 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
     if commande:
         # SPK-95 · §42.2 quater : une porte par compte, et chacune DIT à quoi
         # elle sert. Une seule ligne `ssh root@…` laissait deviner ; deux lignes
-        # nommées ne laissent rien à deviner.
+        # nommées ne laissent rien à deviner. SPK-154 · §44.9.8 : les lignes
+        # sont celles que la console affiche, par le même calcul.
         for porte in portes:
-            ligne = commande_ssh(model, jump, direct=direct, compte=porte["user"])
-            if not ligne:
+            if not porte["command"]:
                 continue
             lignes.extend([
                 f"**{porte['user']}** — {porte['role']} : {porte['detail']}.", "",
-                "```sh", ligne, "```", ""])
+                "```sh", porte["command"], "```", ""])
     else:
         lignes.extend([
             "La commande complète n'a pas pu être composée : la console n'a pas "

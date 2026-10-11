@@ -2136,6 +2136,10 @@ function brancherPanneaux() {
   for (const bouton of racine.querySelectorAll('[data-dossier-copie]')) {
     bouton.addEventListener('click', () => copierDossier());
   }
+  // SPK-154 · §44.9.8 : les commandes SSH de la section Accès, une par porte.
+  for (const bouton of racine.querySelectorAll('[data-ssh-copie]')) {
+    bouton.addEventListener('click', () => copierCommandeSsh(bouton.dataset.sshCopie));
+  }
   // SPK-105 · §55.9 : les propositions venues de la cellule.
   //
   // Les cases sont retenues SANS repeindre : reconstruire le tableau à chaque
@@ -3482,6 +3486,9 @@ async function chargerDossier(nom) {
   d.texte = null;
   d.copie = null;
   d.message = null;
+  d.ssh = null;
+  d.modeDocker = null;
+  d.copieSsh = null;
   const acces = rebondDuServeur(etat.servers.find((s) => s.name === etat.server));
   const parametres = new URLSearchParams();
   if (acces.jump) parametres.set('jump', acces.jump);
@@ -3494,6 +3501,10 @@ async function chargerDossier(nom) {
     d.texte = rendu.markdown;
     d.ecritLe = (rendu.written_at ?? '').slice(0, 16).replace('T', ' ');
     d.amorce = Boolean(rendu.model?.bootstrap);
+    // SPK-154 · §44.9.8 : les commandes de la section Accès, telles que sparkd
+    // les compose — la console ne les recompose pas.
+    d.ssh = Array.isArray(rendu.ssh_commands) ? rendu.ssh_commands : [];
+    d.modeDocker = rendu.model?.docker?.mode ?? null;
   } catch (erreur) {
     // §14.6 : un Spark sans cellule n'est pas une panne du dossier. Les deux
     // états portent des textes distincts, et le remède de l'un n'est pas
@@ -3526,6 +3537,35 @@ async function copierDossier() {
     d.copie = { ok: false, message: 'Copie refusée par le navigateur : '
                 + 'dépliez le texte ci-dessous et sélectionnez-le pour le copier.' };
   }
+  peindre();
+}
+
+/**
+ * Copie la commande SSH d'une porte, et ne dit « copiée » qu'une fois le
+ * presse-papier d'accord.
+ *
+ * @spec docs/BACKLOG.md#SPK-154 · docs/DAT.md §44.9.8 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-42, SPK-DS-19 · docs/DESIGN_SYSTEM.md
+ *       §1.3 (pas de succès simulé)
+ *
+ * La commande est DÉJÀ chargée avec le détail : le clic ne déclenche aucune
+ * requête, et l'écriture reste dans l'activation du geste. Le message porte le
+ * compte copié, pour s'écrire sous sa ligne et nulle part ailleurs.
+ */
+async function copierCommandeSsh(user) {
+  const d = etat.dossier;
+  const commande = (d.ssh ?? []).find((porte) => porte.user === user)?.command;
+  if (!commande) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('presse-papier indisponible');
+    await navigator.clipboard.writeText(commande);
+    d.copieSsh = { user, ok: true,
+                   message: `Commande de ${user} copiée dans le presse-papier.` };
+  } catch {
+    d.copieSsh = { user, ok: false, message: 'Copie refusée par le navigateur : '
+                   + 'sélectionnez la commande ci-dessus pour la copier.' };
+  }
+  // §14.3 : la repeinture rend le focus au bouton par son `data-ssh-copie`.
   peindre();
 }
 

@@ -8966,7 +8966,7 @@ route.
     catalogue).
   - **Reste `[~]`** : le constat à l'écran d'OP-35, par le responsable.
 
-### [ ] SPK-154 · Les commandes SSH d'un Spark, prêtes à copier, dans la section Accès
+### [~] SPK-154 · Les commandes SSH d'un Spark, prêtes à copier, dans la section Accès
 
 **Demandé le 2026-10-11** par le responsable : « dans les infos d'un spark,
 ajoute un panel avec prêtes à copier la chaîne de connexion ssh pour le spark et
@@ -8988,6 +8988,36 @@ le docker user en fonction de la config d'amorçage ».
   seule et le dit, la copie de `spark-docker` au clavier relue dans le
   presse-papier ; vérification visuelle 1440 px et 390 px ; illustration
   `m6-connexion` ; `docs/PROD_MIGRATIONS.md` OP-39 (sparkd et console).
+- **Codé le 2026-10-11.** `briefing.entrees_ssh` rend une entrée par porte de
+  `comptes_du_spark`, avec la ligne de `commande_ssh` ; le dossier l'emploie pour
+  sa section 1, la route la rend en `ssh_commands`, hors du modèle. La console
+  la garde avec le dossier (`chargerDossier`), `spark-acces.js` rend le bloc, et
+  `phrasePorteUnique` — sortie du terminal — dit l'absence de seconde porte aux
+  deux endroits. Contrat OpenAPI régénéré (la docstring de la route).
+  - Preuves sparkd (`test_commandes_ssh.py`) : **7 rouges sur le code d'avant**,
+    vertes après — deux portes en rootless, une en enraciné, jamais amorcé ou
+    sans Docker ; aucune commande sans rebond ou sur une cible piégée ; la route
+    rend les mêmes lignes que le dossier, au caractère près, et rien dans le
+    modèle. Suite sparkd 1 688 sur 1 688, `contract-check` vert.
+  - Preuves de composant (`spark-acces.test.js`, 8) : rouges avant (module
+    absent), vertes après ; console 1 633 sur 1 633.
+  - Parcours E2E « la section Accès donne une commande SSH par porte, et la
+    copie au clavier » vert, avec les deux parcours d'amorçage qui le
+    précèdent : `boutique` (rootless) rend deux lignes, Tab depuis la commande
+    de `spark-docker` mène à SON bouton, Entrée copie, le presse-papier relu
+    vaut la commande, un seul « copiée », le focus reste sur le bouton ;
+    `crm-production` (enraciné) une ligne et la phrase du terminal.
+  - Vu à l'écran depuis l'accueil, à la souris et au clavier : captures
+    `spk154-acces-rootless`, `-copiee`, `-mobile` (390 px), `-enracine`
+    observées. Les commandes longues d'un vrai rebond, absentes de la pile
+    d'épreuve qui sert la console sur la Forge, ont été rendues avec la feuille
+    de style réelle à 1440 px et 390 px : elles se replient sans déborder.
+    Corrigé en capture : « ouvre ces portes » au pluriel sous une seule porte.
+  - Manuel : M6 « La commande toute prête », illustration `m6-connexion` ;
+    `m6-amorcage`, `m3-projets-ranger`, `m8-erreur`, `m8-protection`,
+    `m10-suppression`, `-nom-frappe`, `m13-attacher`, `m13-membre` renouvelées —
+    elles montrent la facette Infos, et le bloc y figure désormais.
+  - **Reste `[~]`** : OP-39, sur instruction du responsable.
 ---
 
 ## Lot 6 — Réseau entre Sparks

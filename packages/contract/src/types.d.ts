@@ -900,7 +900,8 @@ export interface paths {
          * @description Le dossier de déploiement, pour un agent hors de la cellule.
          *
          *     @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.4
-         *           (la surface d'API), §44.8 (le modèle unique)
+         *           (la surface d'API), §44.8 (le modèle unique) ·
+         *           docs/BACKLOG.md#SPK-154 · docs/DAT.md §44.9.8 (`ssh_commands`)
          *
          *     Elle **n'entre pas dans la cellule** : tout vient du registre et du relevé
          *     d'amorçage déjà conservé. Elle répond donc sur un Spark **arrêté**, ce qui
