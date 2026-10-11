@@ -2609,21 +2609,28 @@ renewed successfully ») : un échec suivi d'un succès est une histoire close.
 
 | État `issuance.state` | Ce qui a été lu | Rendu |
 |---|---|---|
-| `failing` | au moins une tentative en échec depuis le dernier succès | bloc sous la route |
-| `ok` | le dernier événement est un succès | rien de plus que le badge du §18.7 |
+| `failing` | au moins un échec depuis le dernier succès | bloc sous la route |
+| `ok` | rien n'a échoué depuis le dernier succès, daté (`obtained_at`) | rien de plus que le badge du §18.7 |
+| `pending` | une tentative a commencé, sans succès ni échec encore | rien de plus |
 | `none` | aucun événement pour ce nom | rien de plus |
 
 Pour `failing`, la réponse porte, tirés des lignes et jamais reformulés :
 
 - `since` — la date du premier échec qui suit le dernier succès ;
 - `last_attempt_at` — la date de la dernière tentative ;
-- `next_retry_at` — la dernière tentative plus le délai que Caddy a annoncé
-  (`retrying_in`), quand il l'a annoncé ;
-- `challenges` — les validations refusées à la **dernière** tentative : leur
-  type (`http-01`, `tls-alpn-01`), l'**adresse que l'autorité a jointe** quand
-  l'erreur commence par elle (`163.172.156.76: Connection refused`), et l'erreur
-  telle quelle ;
-- `issuers` — pour chaque émetteur, la dernière erreur, telle quelle ;
+- `next_retry_at` — l'annonce de Caddy (« will retry ») plus le délai annoncé
+  (`retrying_in`), quand l'annonce suit la dernière tentative. Si une tentative a
+  recommencé depuis, le délai est écoulé : `null`, plutôt qu'une heure passée ;
+- `challenges` — par type de validation (`http-01`, `tls-alpn-01`), la
+  **dernière refusée depuis le dernier succès**, datée (`at`) : l'**adresse que
+  l'autorité a jointe** quand l'erreur commence par elle (`163.172.156.76:
+  Connection refused`, une adresse IPv6 comprise), et l'erreur telle quelle.
+  Pas seulement celles de la dernière tentative : **mesuré sur l'incident**, une
+  tentative refusée pour limite de débit ne tente aucune validation, et l'adresse
+  — la cause — n'est que dans une tentative précédente. Sa date le dit ;
+- `issuers` — pour chaque émetteur, la dernière erreur, datée, telle quelle, avec
+  le nom lisible de l'autorité (`Let's Encrypt`, `ZeroSSL` ; une clé inconnue est
+  rendue telle quelle) ;
 - `rate_limited_until` — l'échéance d'une limite de débit de l'autorité, lue
   dans son message (« retry after 2026-10-11 15:31:41 UTC »), quand l'erreur la
   plus récente en porte une.

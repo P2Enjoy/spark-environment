@@ -350,6 +350,46 @@ def populate(client: TestClient, incus, caddy, sondes) -> dict[str, int]:
     sondes.poser("vip.boutique.example.com", certificat={
         "state": "invalid", "reason": "unable to get local issuer certificate"})
 
+    # --- SPK-156 · §18.9.3 : POURQUOI le certificat de `vip` n'est pas émis. Des
+    # événements à la forme du journal de Caddy 2.6.2 — ceux de la Forge, le
+    # 2026-10-11 —, passés par la même analyse : l'autorité valide le nom sur une
+    # autre adresse que la Forge, échoue, puis limite le nom. Un double, comme
+    # ceux du dessus ; la réponse le dit (`probes: "fake"`).
+    vip = "vip.boutique.example.com"
+    le = "acme-v02.api.letsencrypt.org-directory"
+    sondes.poser(vip, emission=[
+        {"il_y_a_minutes": 25, "level": "info", "logger": "tls.obtain",
+         "msg": "obtaining certificate", "identifier": vip},
+        {"il_y_a_minutes": 25, "level": "error", "logger": "http.acme_client",
+         "msg": "challenge failed", "identifier": vip, "challenge_type": "http-01",
+         "error": f"203.0.113.99: Fetching http://{vip}/.well-known/acme-challenge/"
+                  "jeton-du-seed: Connection refused"},
+        {"il_y_a_minutes": 25, "level": "error", "logger": "http.acme_client",
+         "msg": "challenge failed", "identifier": vip, "challenge_type": "tls-alpn-01",
+         "error": "203.0.113.99: Connection refused"},
+        {"il_y_a_minutes": 25, "level": "error", "logger": "tls.obtain",
+         "msg": "could not get certificate from issuer", "identifier": vip,
+         "issuer": le,
+         "error": f"[{vip}] solving challenges: {vip}: no solvers available for "
+                  "remaining challenges (configured=[http-01 tls-alpn-01] "
+                  "offered=[http-01 tls-alpn-01 dns-01] remaining=[dns-01])"},
+        {"il_y_a_minutes": 25, "level": "error", "logger": "tls.obtain",
+         "msg": "will retry", "error": f"[{vip}] Obtain: solving challenges",
+         "retrying_in": 600},
+        {"il_y_a_minutes": 15, "level": "info", "logger": "tls.obtain",
+         "msg": "obtaining certificate", "identifier": vip},
+        {"il_y_a_minutes": 15, "level": "error", "logger": "tls.obtain",
+         "msg": "could not get certificate from issuer", "identifier": vip,
+         "issuer": le,
+         "error": "HTTP 429 urn:ietf:params:acme:error:rateLimited - too many "
+                  f"failed authorizations (5) for \"{vip}\" in the last 1h0m0s, "
+                  "retry after {dans_minutes:35} UTC: see "
+                  "https://letsencrypt.org/docs/rate-limits/#authorization-failures-per-hostname-per-account"},
+        {"il_y_a_minutes": 15, "level": "error", "logger": "tls.obtain",
+         "msg": "will retry", "error": f"[{vip}] Obtain: HTTP 429 rateLimited",
+         "retrying_in": 1200},
+    ])
+
     # --- SPK-49 · §39 : un port publié, pour ce qui ne parle pas HTTP.
     #
     # `crm-production` est appliqué : le pilote porte son instance, donc le

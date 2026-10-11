@@ -3,6 +3,17 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-156 — une route dit pourquoi son certificat ne vient pas.** La
+  configuration posée sur Caddy déclare un journal d'émission
+  (`/var/log/caddy/emission-tls.log`, enregistreurs `tls.obtain`, `tls.renew`,
+  `http.acme_client`) ; le diagnostic des routes le relit et rend, par route TLS
+  servie, `issuance` : depuis quand l'émission échoue, la dernière tentative et
+  la suivante, l'adresse que l'autorité a jointe, la limite de débit et l'erreur
+  de chaque émetteur, telle quelle — et `issuance_journal` une fois. La facette
+  Routes l'affiche sous la ligne, en accent, daté, sans geste ; un journal
+  illisible se dit sur la ligne du relevé. Né de l'incident du 2026-10-11 sur
+  `gram.lelabs.tech`. Aucune migration, aucune variable. DAT §18.9 ; SPK-DS-43 ;
+  manuel M7 (« Quand le certificat ne vient pas ») ; OP-40.
 - **SPK-154 — les commandes SSH d'un Spark, prêtes à copier.** La section
   *Accès* de la facette *Infos* porte un bloc « Se connecter en SSH » : une
   ligne par porte — `root` toujours, `spark-docker` sur un Spark amorcé en
@@ -94,6 +105,13 @@
   aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
 
 ### Corrigé
+- **SPK-155 — l'émetteur de certificats est déclaré : Let's Encrypt, et lui
+  seul.** Sans déclaration, Caddy 2.6.2 se repliait sur ZeroSSL, qui refuse
+  chaque tentative depuis que son API ne délivre plus d'identifiants sans compte
+  (`caddy_legacy_user_removed`, constaté sur la Forge le 2026-10-11) : quand
+  Let's Encrypt refusait, il n'y avait aucune issue. Les certificats déjà émis
+  restent servis (même clé de stockage). Mesuré sur Caddy 2.6.2 :
+  `scripts/mesures-spk155.sh`. DAT §18.3 ; OP-40.
 - **Les illustrations du manuel montrent l'interface courante.** Une quinzaine
   dataient d'avant SPK-130, SPK-142, SPK-148, SPK-150 et SPK-152 : elles
   montraient encore le curseur « Débit » unique, l'ancien texte d'« Installer

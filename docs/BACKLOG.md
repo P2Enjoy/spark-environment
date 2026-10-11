@@ -9035,7 +9035,7 @@ le docker user en fonction de la config d'amorçage ».
     d'avant SPK-154 : consigné au registre le 2026-10-11.
   - **Reste `[~]`** : OP-39, sur instruction du responsable.
 
-### [ ] SPK-155 · L'ingress déclare son émetteur de certificats : Let's Encrypt, et lui seul
+### [~] SPK-155 · L'ingress déclare son émetteur de certificats : Let's Encrypt, et lui seul
 
 **Constaté le 2026-10-11** sur la Forge, en diagnostiquant `gram.lelabs.tech`
 dont le certificat ne venait pas ; **demandé le même jour** par le responsable :
@@ -9053,8 +9053,20 @@ aucune issue.
   à la configuration posée, un seul émetteur tenté ; `docs/PROD_MIGRATIONS.md`
   OP-40 ; validation sur la Forge après OP-40 : `GET /config/apps/tls` porte la
   politique, et les certificats en place restent servis.
+- **Codé le 2026-10-11.** `ingress.EMETTEURS` et la politique `apps.tls` de
+  `build_config`, constante, portée par toute configuration posée — y compris
+  celle d'avant un retrait (§18.8) et celle qu'attend le préflight.
+  - Preuves (`test_ingress_emetteur.py`, 5) : **rouges sur le code d'avant**,
+    vertes après.
+  - Banc `scripts/mesures-spk155.sh` sur Caddy 2.6.2 : **vert** — la forme
+    d'avant tente Let's Encrypt puis ZeroSSL ; la forme produite est acceptée,
+    relue à l'identique, et ne tente que
+    `acme-v02.api.letsencrypt.org-directory`, la clé des certificats déjà émis.
+    Le banc de SPK-128 reste vert sur la forme produite.
+  - **Reste `[~]`** : OP-40, sur instruction du responsable, puis la
+    vérification sur la Forge.
 
-### [ ] SPK-156 · Le diagnostic d'une route dit pourquoi son certificat ne vient pas
+### [~] SPK-156 · Le diagnostic d'une route dit pourquoi son certificat ne vient pas
 
 **Constaté le 2026-10-11** sur la Forge (même incident que SPK-155) : pendant
 vingt minutes, le certificat de `gram.lelabs.tech` n'est pas venu — Let's Encrypt
@@ -9078,6 +9090,38 @@ responsable : « oui et corrige ».
   jusqu'au bloc de `vip.boutique.example.com` ; vérification visuelle 1440 px et
   390 px ; manuel M7 et son illustration ; OP-40 ; validation sur la Forge après
   OP-40.
+- **Codé le 2026-10-11.** Le journal `emission` dans `build_config` ;
+  `analyser_emission`, `lire_journal_emission` et `ReleveEmission` dans
+  `ingress_diagnostic`, la méthode `emission()` des deux sondes ; `issuance` et
+  `issuance_journal` dans la réponse ; le double déclaré par le seed sur
+  `vip.boutique.example.com` ; `renderEmission` et la ligne du relevé dans la
+  console. **Appris en mesurant** : une tentative limitée en débit ne tente
+  aucune validation — l'adresse jointe est celle de la dernière validation
+  refusée depuis le dernier succès, datée (DAT §18.9.2 et SPK-DS-43 précisés) ;
+  une tentative commencée sans issue encore est `pending`.
+  - Preuves sparkd (`test_ingress_emission.py`, 19), dont l'analyse sur **les
+    lignes réelles de Caddy 2.6.2 de l'incident** (anonymisées,
+    `caddy-2.6.2-emission.jsonl`) : rouges sur le code d'avant (module sans
+    `analyser_emission`), vertes après. Suite sparkd **1 712 sur 1 712** ;
+    contrat OpenAPI régénéré, `contract-check` vert.
+  - Banc `scripts/mesures-spk155.sh` : Caddy 2.6.2 écrit le fichier déclaré, le
+    journal par défaut garde les mêmes lignes, l'analyse de sparkd lit l'échec.
+  - Preuves de composant (`spark-admin.test.js`, 9) : rouges avant
+    (`renderEmission` absent), vertes après ; console **1 642 sur 1 642**.
+  - Parcours E2E « un certificat qui ne vient pas dit pourquoi, sous sa route,
+    et renvoie au manuel au clavier » vert : depuis l'accueil, au clic jusqu'à
+    la facette Routes de `crm-production`, le bloc daté sous `vip`, l'adresse,
+    la limite, l'erreur ; aucun bloc sous `crm.example.com` ; Tab depuis
+    *Retirer* atteint le renvoi, Entrée ouvre M7.
+  - Vu à l'écran : captures `spk156-emission-echec` (1440 px) et `-mobile`
+    (390 px) observées — le bloc pleine largeur, l'erreur repliée, aucun
+    défilement de page.
+  - Manuel : M7 « Quand le certificat ne vient pas », illustration
+    `m7-emission-echec` ; `m7-route` renouvelée (son arrière-plan montre le
+    bloc). La « limite connue » de M7 — émission jamais constatée de bout en
+    bout — est retirée : la Forge a émis `gram` et `pfia2026` le 2026-10-11.
+  - **Reste `[~]`** : OP-40, sur instruction du responsable, puis la
+    vérification sur la Forge.
 ---
 
 ## Lot 6 — Réseau entre Sparks

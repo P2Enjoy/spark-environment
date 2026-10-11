@@ -108,7 +108,7 @@ export const ADMIN_VIDE = {
   // sparkd à chaque visite. Rien n'est gardé d'une visite à l'autre : un relevé
   // qui vieillirait sans le dire serait le souvenir que le §18.7 interdit.
   diagRoutes: { chargement: false, erreur: null, probes: null, caddyErreur: null,
-                releveA: null, routes: {} },
+                releveA: null, journalEmission: null, routes: {} },
   // SPK-47 · §38.1 : ce que la console SAIT du fournisseur. `configured` vaut
   // `null` tant qu'on n'a pas demandé — « pas encore su » n'est pas « pas
   // configuré », et l'écran ne doit pas annoncer une absence qu'il n'a pas
@@ -261,7 +261,9 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           // route, sa place au journal et ce qu'elle a dépassé.
           `<button type="button" class="bouton bouton--compact" data-modifie-route="${echapper(r.domain)}">Modifier</button>` +
           `<button type="button" class="bouton bouton--compact" data-retire-route="${echapper(r.domain)}">Retirer</button></span>` +
-          `${renderSurcharges(r)}${confirme}${refusDeLigne(ui, r.domain)}</li>`;
+          // SPK-156 · §18.9 : pourquoi le certificat ne vient pas, sous la ligne.
+          `${renderSurcharges(r)}${renderEmission(ui.diagRoutes, r)}${confirme}` +
+          `${refusDeLigne(ui, r.domain)}</li>`;
       }).join('')}</ul>`
     : '<p class="absence">Aucune route publique ne pointe vers ce Spark.</p>';
 
@@ -832,7 +834,83 @@ export function renderReleveRoutes(diag) {
     + (diag.probes === 'fake'
       ? ' Sondes factices du pilote de développement : ce ne sont pas des relevés réels.'
       : '')
+    // SPK-156 · §18.9.2 : un journal illisible n'est pas une absence d'échec. Il
+    // se dit UNE fois, ici, et non sous chaque route (§14.6).
+    + (diag.journalEmission?.readable === false
+      ? ` Journal d’émission de Caddy illisible : ${echapper(diag.journalEmission.reason ?? 'raison inconnue')}.`
+      : '')
     + '</p>';
+}
+
+/**
+ * Le moment d'un événement relevé : l'heure, et le jour s'il n'est pas celui du
+ * relevé — sans lui, un échec d'hier se lirait comme l'état d'aujourd'hui.
+ */
+function moment(iso, reference) {
+  const date = new Date(iso ?? '');
+  if (Number.isNaN(date.getTime())) return null;
+  const ref = new Date(reference ?? Date.now());
+  const memeJour = !Number.isNaN(ref.getTime())
+    && date.toLocaleDateString('fr-FR') === ref.toLocaleDateString('fr-FR');
+  const h = date.toLocaleTimeString('fr-FR');
+  return memeJour ? h
+    : `le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} à ${h}`;
+}
+
+/**
+ * Pourquoi le certificat de cette route ne vient pas : ce que Caddy a rencontré,
+ * daté (SPK-156, §18.9).
+ *
+ * @spec docs/BACKLOG.md#SPK-156 · docs/DAT.md §18.9.3 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-43 · docs/DESIGN_SYSTEM.md §1.5 bis
+ *       (l'écran nomme, le manuel explique), §3.1, §6.13 (un état relevé se
+ *       date), §14.6 · SPK-DS-08 (un défaut constaté est l'accent), SPK-DS-17
+ *       (un texte de tiers se replie)
+ *
+ * Aucun bouton : aucun geste de la console ne lève une validation manquée ni
+ * une limite de débit, et Réappliquer n'y pourrait rien (§1.4). Pendant un
+ * relevé, ou quand il a échoué, rien — comme les badges (SPK-DS-34).
+ */
+export function renderEmission(diag, route) {
+  if (diag?.chargement || diag?.erreur) return '';
+  const e = diag?.routes?.[route?.domain]?.issuance;
+  if (e?.state !== 'failing') return '';
+  const quand = (iso) => moment(iso, diag.releveA);
+  const lignes = [];
+
+  const depuis = quand(e.since);
+  const derniere = quand(e.last_attempt_at);
+  const prochaine = quand(e.next_retry_at);
+  lignes.push(`<strong>Émission du certificat en échec${depuis ? ` depuis ${echapper(depuis)}` : ''}</strong>`
+    + (derniere ? ` — dernière tentative à ${echapper(derniere)}` : '')
+    + (prochaine ? `, prochaine vers ${echapper(prochaine)}` : '') + '.');
+
+  // L'adresse jointe, UNE fois, même si deux validations l'ont jointe ; datée
+  // par la plus récente — la dernière tentative a pu n'en tenter aucune.
+  const jointes = (e.challenges ?? []).filter((c) => c?.address);
+  const adresses = [...new Set(jointes.map((c) => c.address))];
+  if (adresses.length) {
+    const recente = quand(jointes.map((c) => c.at).sort().at(-1));
+    lignes.push(`L’autorité a joint ${adresses.map((a) =>
+      `<span class="technique">${echapper(a)}</span>`).join(', ')}`
+      + (recente ? ` (dernière validation refusée à ${echapper(recente)})` : '') + '.');
+  }
+
+  const limite = quand(e.rate_limited_until);
+  if (limite) {
+    const autorite = (e.issuers ?? []).find((i) => /rateLimited/.test(i?.error ?? ''))?.name
+      ?? 'L’autorité';
+    lignes.push(`${echapper(autorite)} a limité ce nom jusqu’à ${echapper(limite)} (limite de débit).`);
+  }
+
+  for (const emetteur of e.issuers ?? []) {
+    if (!emetteur?.error) continue;
+    lignes.push(`${echapper(emetteur.name ?? emetteur.issuer ?? 'Émetteur')} : `
+      + `<span class="technique emission__erreur">${echapper(emetteur.error)}</span>`);
+  }
+
+  lignes.push('<a href="#/manuel/M7">Manuel M7 — Quand le certificat ne vient pas</a>');
+  return `<div class="avertissement emission">${lignes.map((l) => `<p>${l}</p>`).join('')}</div>`;
 }
 
 /**

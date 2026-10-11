@@ -933,7 +933,7 @@
     },
     "/v1/ingress/diagnostic": {
       "get": {
-        "description": "Ce que Caddy et le TLS disent MAINTENANT des routes de ce Spark.\n\n@spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7\n\nUne LECTURE : la configuration vivante de Caddy, une requête réelle et\nune poignée de main TLS par route, sur la boucle locale. Rien n'est\nécrit, rien n'entre au journal (§36.7).",
+        "description": "Ce que Caddy et le TLS disent MAINTENANT des routes de ce Spark.\n\n@spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7\n@spec docs/BACKLOG.md#SPK-156 · docs/DAT.md §18.9.3 (`issuance` par\n      route TLS servie, `issuance_journal` une fois)\n\nUne LECTURE : la configuration vivante de Caddy, une requête réelle et\nune poignée de main TLS par route, sur la boucle locale ; et ce que\nCaddy a écrit de ses tentatives d'émission. Rien n'est écrit, rien\nn'entre au journal (§36.7).",
         "operationId": "diagnose_routes_v1_ingress_diagnostic_get",
         "parameters": [
           {

@@ -2,6 +2,9 @@
  * @verifies docs/BACKLOG.md#SPK-139 · docs/DESIGN_SYSTEM_APP.md SPK-DS-36 (le
  *           refus d'un geste de ligne s'affiche dans la ligne) ·
  *           docs/DESIGN_SYSTEM.md §7.1, §9.7
+ * @verifies docs/BACKLOG.md#SPK-156 · docs/DAT.md §18.9.3 (pourquoi un certificat
+ *           ne vient pas, sous sa route) · docs/DESIGN_SYSTEM_APP.md SPK-DS-43 ·
+ *           docs/DESIGN_SYSTEM.md §1.5 bis, §6.13, §14.6 · SPK-DS-08, SPK-DS-17
  * @verifies docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 (Caddy et le certificat,
  *           relevés à chaque visite) · docs/DESIGN_SYSTEM.md §6.8, §6.13, §14.6,
  *           §14.7 · docs/DESIGN_SYSTEM_APP.md SPK-DS-34
@@ -48,6 +51,7 @@ import {
   renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation, zonePour,
   renderPortsPanel, refusZones, renderEtatDns, renderVerification,
   refusEcritureRecette, renderEtatCaddy, renderEtatCertificat, renderReleveRoutes,
+  renderEmission,
   cleApercuRecette, apercuAJour,
 } from './spark-admin.js';
 
@@ -1508,6 +1512,104 @@ test('SPK-130 : des sondes factices se disent factices', () => {
 test('SPK-130 : Revérifier n’apparaît que s’il y a des routes à relever', () => {
   assert.ok(renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE], ui()).includes('data-reverifie-routes'));
   assert.ok(!renderRoutesPanel(SPARK, [], ui()).includes('data-reverifie-routes'));
+});
+
+// --- SPK-156 · §18.9 : pourquoi un certificat ne vient pas -------------------
+
+const heureFr = (iso) => new Date(iso).toLocaleTimeString('fr-FR');
+// L'état relevé pendant l'incident du 2026-10-11, tel que sparkd le rend.
+const enEchec = {
+  state: 'failing', since: '2026-09-30T10:19:25+00:00',
+  last_attempt_at: '2026-09-30T10:22:49+00:00', next_retry_at: '2026-09-30T10:24:59+00:00',
+  challenges: [
+    { type: 'http-01', at: '2026-09-30T10:20:45+00:00', address: '203.0.113.50',
+      error: '203.0.113.50: Error reading HTTP response body' },
+    { type: 'tls-alpn-01', at: '2026-09-30T10:20:48+00:00', address: '203.0.113.50',
+      error: '203.0.113.50: remote error: tls: internal error' }],
+  issuers: [{ issuer: 'acme-v02.api.letsencrypt.org-directory', name: "Let's Encrypt",
+              at: '2026-09-30T10:22:59+00:00',
+              error: 'HTTP 429 urn:ietf:params:acme:error:rateLimited - too many failed '
+                + 'authorizations (5) for "crm.example.com" in the last 1h0m0s' }],
+  rate_limited_until: '2026-09-30T10:31:34+00:00',
+};
+const absent = { state: 'missing', reason: 'TLSV1_ALERT_INTERNAL_ERROR' };
+
+test('SPK-156 : une émission en échec se lit sous sa route, datée, en accent', () => {
+  const diag = releve({ 'crm.example.com': { caddy: servie, certificate: absent,
+                                             issuance: enEchec } });
+  const rendu = renderEmission(diag, ROUTE_APPLIQUEE);
+  assert.match(rendu, /class="avertissement emission"/, 'un défaut constaté : l’accent (SPK-DS-08)');
+  assert.ok(!rendu.includes('class="refus'), 'jamais le rouge d’un refus');
+  assert.ok(rendu.includes(`Émission du certificat en échec depuis ${heureFr(enEchec.since)}`));
+  assert.ok(rendu.includes(`dernière tentative à ${heureFr(enEchec.last_attempt_at)}`));
+  assert.ok(rendu.includes(`prochaine vers ${heureFr(enEchec.next_retry_at)}`));
+});
+
+test('SPK-156 : l’adresse jointe se dit une fois, avec la date de la validation refusée', () => {
+  const rendu = renderEmission(releve({ 'crm.example.com': { issuance: enEchec } }),
+                               ROUTE_APPLIQUEE);
+  assert.equal(rendu.split('203.0.113.50</span>').length - 1, 1, 'une seule fois, deux validations');
+  assert.ok(rendu.includes(`dernière validation refusée à ${heureFr('2026-09-30T10:20:48+00:00')}`));
+});
+
+test('SPK-156 : la limite de débit et l’erreur de l’émetteur, telle quelle et repliée', () => {
+  const rendu = renderEmission(releve({ 'crm.example.com': { issuance: enEchec } }),
+                               ROUTE_APPLIQUEE);
+  assert.ok(rendu.includes(`Let&#39;s Encrypt a limité ce nom jusqu’à ${heureFr(enEchec.rate_limited_until)}`)
+    || rendu.includes(`Let's Encrypt a limité ce nom jusqu’à ${heureFr(enEchec.rate_limited_until)}`));
+  assert.match(rendu, /class="technique emission__erreur"[^>]*>HTTP 429 urn:ietf:params:acme:error:rateLimited/);
+  assert.match(rendu, /href="#\/manuel\/M7"/, 'le pourquoi est au manuel (§1.5 bis)');
+  assert.ok(!rendu.includes('<button'), 'aucun geste de la console ne lève une limite');
+});
+
+test('SPK-156 : sans annonce, ni adresse, ni limite, rien n’est inventé', () => {
+  const nu = { ...enEchec, next_retry_at: null, rate_limited_until: null,
+               challenges: [{ type: 'http-01', at: enEchec.since, address: null,
+                              error: 'DNS problem: NXDOMAIN' }] };
+  const rendu = renderEmission(releve({ 'crm.example.com': { issuance: nu } }), ROUTE_APPLIQUEE);
+  assert.ok(!rendu.includes('prochaine'));
+  assert.ok(!rendu.includes('a joint'));
+  assert.ok(!rendu.includes('limité'));
+  assert.ok(!rendu.includes('undefined') && !rendu.includes('null'));
+});
+
+test('SPK-156 : une date d’un autre jour porte son jour', () => {
+  const hier = { ...enEchec, since: '2026-09-29T08:00:00+00:00' };
+  const rendu = renderEmission(releve({ 'crm.example.com': { issuance: hier } }), ROUTE_APPLIQUEE);
+  assert.ok(rendu.includes(new Date(hier.since).toLocaleDateString('fr-FR',
+    { day: 'numeric', month: 'long' })), 'sans son jour, hier se lirait aujourd’hui');
+});
+
+test('SPK-156 : rien sous une route saine, en clair, ou pendant un relevé', () => {
+  for (const issuance of [{ state: 'ok', obtained_at: enEchec.since }, { state: 'none' },
+                          { state: 'pending' }, undefined]) {
+    assert.equal(renderEmission(releve({ 'crm.example.com': { issuance } }), ROUTE_APPLIQUEE), '');
+  }
+  const enCours = { ...ADMIN_VIDE.diagRoutes, chargement: true,
+                    routes: { 'crm.example.com': { issuance: enEchec } } };
+  assert.equal(renderEmission(enCours, ROUTE_APPLIQUEE), '');
+});
+
+test('SPK-156 : le bloc est rendu DANS la ligne de sa route', () => {
+  const diag = releve({ 'crm.example.com': { caddy: servie, certificate: absent,
+                                             issuance: enEchec } });
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE], ui({ diagRoutes: diag }));
+  const ligne = rendu.slice(rendu.indexOf('crm.example.com'));
+  assert.ok(ligne.indexOf('emission') < ligne.indexOf('</li>'));
+});
+
+test('SPK-156 : un journal d’émission illisible se dit une fois, sur la ligne du relevé', () => {
+  const diag = releve({}, { journalEmission: { readable: false, reason: 'Permission denied' } });
+  assert.match(renderReleveRoutes(diag),
+    /Journal d’émission de Caddy illisible : Permission denied\./);
+  assert.ok(!renderReleveRoutes(releve({}, { journalEmission: { readable: true, reason: null } }))
+    .includes('illisible'));
+});
+
+test('SPK-156 : une erreur venue de l’autorité est échappée', () => {
+  const piege = { ...enEchec, issuers: [{ ...enEchec.issuers[0], error: '<img src=x onerror=1>' }] };
+  const rendu = renderEmission(releve({ 'crm.example.com': { issuance: piege } }), ROUTE_APPLIQUEE);
+  assert.ok(!rendu.includes('<img'));
 });
 
 test('SPK-130 : une raison venue du réseau est échappée', () => {

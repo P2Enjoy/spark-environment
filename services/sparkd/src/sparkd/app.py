@@ -2041,10 +2041,13 @@ def create_app(config: Config) -> FastAPI:
         """Ce que Caddy et le TLS disent MAINTENANT des routes de ce Spark.
 
         @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7
+        @spec docs/BACKLOG.md#SPK-156 · docs/DAT.md §18.9.3 (`issuance` par
+              route TLS servie, `issuance_journal` une fois)
 
         Une LECTURE : la configuration vivante de Caddy, une requête réelle et
-        une poignée de main TLS par route, sur la boucle locale. Rien n'est
-        écrit, rien n'entre au journal (§36.7).
+        une poignée de main TLS par route, sur la boucle locale ; et ce que
+        Caddy a écrit de ses tentatives d'émission. Rien n'est écrit, rien
+        n'entre au journal (§36.7).
         """
         with registry() as connection:
             try:

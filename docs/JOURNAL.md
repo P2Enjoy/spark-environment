@@ -14140,3 +14140,23 @@ a émis aujourd'hui `gram.lelabs.tech` et `pfia2026.lelabs.tech` (relevé du §1
 Let's Encrypt, 89 jours). Elle sort du manuel avec le code de SPK-156.
 
 Spécification : DAT §18.2, §18.3, §18.9 ; SPK-DS-43 ; backlog SPK-155, SPK-156.
+
+**Codé et vérifié le même jour** (hors Forge réelle) :
+
+- l'analyse, éprouvée sur les lignes réelles de l'incident, a corrigé une
+  hypothèse de la spécification : une tentative refusée pour limite de débit ne
+  tente aucune validation, donc l'adresse jointe — la cause — n'est que dans une
+  tentative précédente. On rend la dernière validation refusée depuis le dernier
+  succès, datée ; DAT §18.9.2 et SPK-DS-43 précisés. Une tentative commencée sans
+  issue encore est `pending` ;
+- sparkd 1 712 sur 1 712, console 1 642 sur 1 642 ; bancs Caddy 2.6.2
+  `mesures-spk155.sh` et `mesures-spk128.sh` verts ; les neuf parcours E2E de
+  routes verts, dont le nouveau ; captures `spk156-*`, `spk130-*` et illustration
+  `m7-emission-echec` observées ;
+- **faute de procédure, consignée** : un `make manuel` est parti alors qu'une
+  campagne Playwright d'un autre dépôt tournait sur le poste — la vérification
+  préalable l'affichait, mais la commande enchaînait sans s'y arrêter. Rien n'a
+  été tué ; les épreuves suivantes ont attendu le poste libre, vérifié dans une
+  commande séparée (CLAUDE.md §15 bis).
+
+**Reste** : OP-40 sur la Forge, sur instruction du responsable.

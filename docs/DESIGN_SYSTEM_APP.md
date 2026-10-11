@@ -1728,11 +1728,14 @@ Le bloc dit, dans cet ordre, une ligne par fait, et rien qui ne soit relu :
 1. « Émission du certificat en échec depuis 15:19:14 — dernière tentative à
    15:22:59, prochaine vers 15:24:59. » La prochaine n'est écrite que si Caddy
    l'a annoncée. Une date d'un autre jour porte son jour ;
-2. « L'autorité a joint 163.172.156.76. » — l'adresse en chasse fixe (§3.1),
-   une seule fois même si deux validations l'ont jointe ; rien si l'erreur ne
-   commence pas par une adresse ;
-3. « Let's Encrypt refuse ce nom jusqu'à 15:31:41 (limite de débit). » quand
-   l'erreur la plus récente porte une limite ;
+2. « L'autorité a joint 163.172.156.76 (dernière validation refusée à
+   15:20:48). » — l'adresse en chasse fixe (§3.1), une seule fois même si deux
+   validations l'ont jointe, datée par la plus récente : elle peut venir d'une
+   tentative antérieure à la dernière ; rien si l'erreur ne commence pas par une
+   adresse ;
+3. « Let's Encrypt a limité ce nom jusqu'à 15:31:41 (limite de débit). » quand
+   l'erreur la plus récente porte une limite — au passé composé, vrai avant
+   comme après l'échéance ;
 4. l'erreur de chaque émetteur, **telle quelle**, en `fragment technique`,
    repliée (`overflow-wrap: anywhere`, SPK-DS-17) — c'est un texte de tiers, et
    un JSON d'un seul tenant ;

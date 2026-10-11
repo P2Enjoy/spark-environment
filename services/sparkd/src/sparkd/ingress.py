@@ -12,6 +12,10 @@
       commune), §18.6 (l'ingress ne sert pas HTTP/3, et le dit)
 @spec docs/BACKLOG.md#SPK-141 · docs/DAT.md §18.8 (une route ne sort du registre
       qu'une fois Caddy confirmé)
+@spec docs/BACKLOG.md#SPK-155 · docs/DAT.md §18.3 (l'émetteur est déclaré :
+      Let's Encrypt, et lui seul), §18.2
+@spec docs/BACKLOG.md#SPK-156 · docs/DAT.md §18.9.1 (le journal d'émission que
+      la configuration déclare), §18.2
 
 On régénère la configuration entière, on ne la rapièce pas. Une configuration
 rapiécée diverge ; une configuration régénérée ne le peut pas.
@@ -39,6 +43,23 @@ SERVER_NAME = "spark"
 #: et l'annonce sur chaque réponse, alors que la poignée de main n'aboutit pas —
 #: mesuré le 2026-09-30. Chaque visiteur payait l'attente de son repli.
 PROTOCOLES = ("h1", "h2")
+
+#: SPK-155 · §18.3 : l'émetteur des certificats, DÉCLARÉ. Sans déclaration,
+#: Caddy 2.6.2 se replie sur ZeroSSL, qui refuse toute tentative depuis que son
+#: API ne délivre plus d'identifiants sans compte — constaté sur la Forge le
+#: 2026-10-11 (`caddy_legacy_user_removed`). Un émetteur ACME sans autorité
+#: nommée : celle par défaut de Caddy, Let's Encrypt en production, qui range ses
+#: certificats sous la même clé que l'émetteur par défaut — ceux déjà émis restent.
+EMETTEURS = ({"module": "acme"},)
+
+#: SPK-156 · §18.9.1 : le journal où Caddy écrit ses tentatives d'émission, et que
+#: le diagnostic relit. Une constante, pas un réglage : la configuration que ce
+#: module pose l'écrit, et `ingress_diagnostic` — la même build — le lit. Le
+#: dossier est celui du paquet Caddy.
+JOURNAL_EMISSION = "/var/log/caddy/emission-tls.log"
+#: Les enregistreurs de Caddy qui racontent une émission : la tentative et son
+#: issue (`tls.obtain`, `tls.renew`), les validations (`http.acme_client`).
+ENREGISTREURS_EMISSION = ("tls.obtain", "tls.renew", "http.acme_client")
 
 #: Un nom d'hôte, éventuellement avec un joker de premier niveau (§18.3 bis).
 DOMAIN = re.compile(
@@ -528,7 +549,24 @@ def build_config(connection: sqlite3.Connection, exclure: str | None = None) -> 
         # certificat que personne n'a demandé (docs/DAT.md §18.3).
         serveur["automatic_https"] = {"skip": sorted(en_clair)}
 
-    return {"apps": {"http": {"servers": {SERVER_NAME: serveur}}}}
+    return {
+        # SPK-156 · §18.9.1 : un journal À LUI, qui ne retient que l'émission. Le
+        # journal par défaut reçoit toujours tout — mesuré sur Caddy 2.6.2.
+        "logging": {"logs": {"emission": {
+            "writer": {"output": "file", "filename": JOURNAL_EMISSION,
+                       "roll_size_mb": 5, "roll_keep": 2},
+            "encoder": {"format": "json"},
+            "level": "INFO",
+            "include": list(ENREGISTREURS_EMISSION),
+        }}},
+        "apps": {
+            # SPK-155 · §18.3 : une politique, sans `subjects` — elle vaut pour
+            # tout nom servi —, à un seul émetteur.
+            "tls": {"automation": {"policies": [
+                {"issuers": [dict(e) for e in EMETTEURS]}]}},
+            "http": {"servers": {SERVER_NAME: serveur}},
+        },
+    }
 
 
 def _nb_servies(config: dict) -> int:

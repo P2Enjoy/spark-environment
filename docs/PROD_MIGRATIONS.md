@@ -120,6 +120,43 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-40 · L'émetteur de certificats déclaré, et le journal d'émission : `sparkd` et la console (SPK-155, SPK-156)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable.
+Objectif      : la configuration que sparkd pose sur Caddy déclare un seul
+                émetteur, Let's Encrypt (le repli ZeroSSL échouait à chaque
+                tentative : caddy_legacy_user_removed), et un journal
+                d'émission /var/log/caddy/emission-tls.log que le diagnostic
+                des routes relit (docs/DAT.md §18.3, §18.9). La console montre,
+                sous une route dont le certificat ne vient pas, ce que Caddy a
+                rencontré. Aucune migration, aucune variable.
+Dépend de     : rien (OP-38 et OP-39 peuvent être jouées avant ou après).
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) — son démarrage
+                   réconcilie et pose la nouvelle configuration (§18.1) ;
+                3. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : `/healthz` rend le commit déployé.
+                Sur la Forge : `curl -s 127.0.0.1:2019/config/apps/tls` rend
+                {"automation":{"policies":[{"issuers":[{"module":"acme"}]}]}} ;
+                `curl -s 127.0.0.1:2019/config/logging` porte le journal
+                « emission ». Les certificats en place restent servis : page
+                Routes d'un Spark servi en TLS → « TLS valide · N j » inchangé.
+                Le préflight rend ING-CONCORDE conforme.
+                Le fichier /var/log/caddy/emission-tls.log n'apparaît qu'au
+                premier événement d'émission (déclaration ou renouvellement) :
+                son absence juste après le déploiement est normale.
+Retour arrière: réinstaller la build précédente (runbook A.2) : son démarrage
+                repose l'ancienne configuration, sans émetteur ni journal
+                (ZeroSSL redevient le repli, en échec). Le fichier de journal
+                reste sur le disque, inoffensif ; il peut être supprimé.
+Risques       : faibles, mesurés sur Caddy 2.6.2 (scripts/mesures-spk155.sh) :
+                /load accepte la configuration, les certificats déjà émis sont
+                rangés sous la même clé et restent servis. Un /load refusé
+                laisserait Caddy sur sa configuration précédente — l'ingress ne
+                tombe pas — et la page Routes dirait « Réappliquer ».
+```
+
 ### OP-39 · Les commandes SSH d'un Spark, prêtes à copier : `sparkd` et la console (SPK-154)
 
 ```

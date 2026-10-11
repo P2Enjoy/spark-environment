@@ -707,6 +707,14 @@ tbody tr:hover { background: var(--color-hover); }
 }
 .liste-administrable > li > .avertissement { color: inherit; }
 
+/* SPK-156 · SPK-DS-43 : pourquoi un certificat ne vient pas, sous sa route. Un
+   bloc d'accent pleine largeur, détaché de la rangée des badges ; l'erreur de
+   l'autorité est un texte de tiers, souvent un seul tenant : elle se replie
+   (SPK-DS-17) plutôt que de pousser la ligne. */
+.liste-administrable > li > .emission { margin-top: var(--space-2); }
+.emission__erreur { overflow-wrap: anywhere; }
+.emission a { color: inherit; }
+
 /* §3.1 : le fragment ssh_config se compare caractère par caractère. Il défile
    dans son propre conteneur — la page ne défile jamais horizontalement (§8.2). */
 .fragment {

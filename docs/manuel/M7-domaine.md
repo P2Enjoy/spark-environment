@@ -227,7 +227,8 @@ badge rouge désigne l'endroit où chercher :
 - **Caddy injoignable** — le proxy lui-même ne répond pas ; c'est une affaire
   d'exploitation de la Forge ;
 - **TLS absent** — aucun certificat n'a été émis pour ce nom ; le plus souvent,
-  le DNS ne pointe pas encore ici. Regardez le badge DNS ;
+  le DNS ne pointe pas encore ici. Regardez le badge DNS, et ce que la ligne dit
+  dessous (« Quand le certificat ne vient pas ») ;
 - **TLS invalide** — un certificat est présenté, mais un navigateur le refuserait
   ; le survol donne la raison exacte, par exemple un certificat de repli émis
   par le proxy lui-même quand l'émission publique a échoué ;
@@ -241,6 +242,40 @@ désigne aucun nom précis.
 La vérification envoie à votre pile une requête `GET /` par route et par visite,
 signée `sparkd-diagnostic` dans son `User-Agent` : c'est elle que vous verrez
 passer dans vos journaux.
+
+## Quand le certificat ne vient pas
+
+![Une route dont le certificat ne vient pas : sous ses badges, depuis quand l'émission échoue, l'adresse que l'autorité a jointe, la limite de débit et l'erreur de Let's Encrypt](images/m7-emission-echec.png)
+
+Le proxy demande le certificat d'une route à **Let's Encrypt**, et à lui seul.
+Pour le délivrer, Let's Encrypt vérifie que le nom mène bien à cette Forge : il
+le résout **avec ses propres résolveurs**, puis vient chercher une preuve sur
+l'adresse qu'il a trouvée. Quand cela échoue, la ligne de la route le dit, sous
+ses badges, avec ce que le proxy a lui-même écrit de ses tentatives :
+
+- **depuis quand** l'émission échoue, la **dernière tentative**, et la
+  **prochaine** quand le proxy l'a annoncée. Le proxy réessaie seul : vous n'avez
+  rien à relancer ;
+- **l'adresse que l'autorité a jointe**. Si ce n'est pas celle de la Forge, le
+  nom pointait encore ailleurs pour Let's Encrypt au moment de sa vérification —
+  même si votre fournisseur DNS porte déjà la bonne adresse : un ancien
+  enregistrement reste en cache le temps de son TTL. Comparez avec le badge DNS ;
+- **la limite de débit** et son échéance. Après cinq vérifications manquées en
+  une heure, Let's Encrypt refuse le nom jusqu'à l'heure dite. Le proxy le sait,
+  et réessaie après ;
+- **l'erreur de Let's Encrypt**, telle quelle : c'est elle qui fait foi.
+
+**Ce qu'il faut faire** : corriger le DNS s'il pointe ailleurs, puis attendre.
+**Réappliquer** n'y peut rien — la route est déjà servie, et le proxy suit son
+propre calendrier de tentatives. Dès qu'une tentative réussit, le bloc
+disparaît et le badge passe à **TLS valide**.
+
+Le bloc n'apparaît que lorsque la tentative la plus récente a échoué : un échec
+suivi d'un succès est une affaire close. Il disparaît aussi pendant un relevé.
+Si la Forge ne peut pas lire le journal où le proxy écrit ses tentatives, la
+ligne du relevé le dit une fois — « Journal d'émission de Caddy illisible » — et
+aucune route ne porte de bloc : cela ne veut pas dire qu'aucune émission
+n'échoue.
 
 ## Retirer
 
@@ -264,12 +299,6 @@ Forge pose d'abord la configuration sans elle, relit ce que le proxy sert, et
 seulement alors l'efface de son registre. Si le proxy ne répond pas, ou la sert
 encore, la route **reste** — à l'écran comme au registre — avec la raison sous
 elle : recommencez quand Caddy répond.
-
-> **Limite connue.** L'émission d'un certificat n'a pas encore été éprouvée de
-> bout en bout. La cause la plus fréquente de son échec — un domaine qui ne
-> résout pas — est levée depuis que la console pose le DNS, mais l'émission
-> elle-même reste à constater sur un serveur joignable depuis l'extérieur. Voir
-> SPK-12 au [backlog](../BACKLOG.md).
 
 ## Appliquer une recette DNS
 

@@ -3154,6 +3154,8 @@ async function chargerDiagnosticRoutes({ dejaAnnonce = false } = {}) {
   etat.admin.diagRoutes = resultat.ok
     ? { ...ADMIN_VIDE.diagRoutes, probes: corps.probes ?? null,
         caddyErreur: corps.caddy_error ?? null, releveA: corps.checked_at ?? null,
+        // SPK-156 · §18.9.2 : lisible ou non, dit une fois par le relevé.
+        journalEmission: corps.issuance_journal ?? null,
         routes: corps.routes ?? {} }
     // Un relevé impossible ne se déguise pas en état (§14.6) : il se DIT.
     : { ...ADMIN_VIDE.diagRoutes,

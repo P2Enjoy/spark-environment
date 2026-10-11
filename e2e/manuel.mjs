@@ -4,7 +4,9 @@
  * @spec docs/BACKLOG.md#SPK-25 · docs/DAT.md §30.1 (les illustrations sont
  *       produites, jamais collectées à la main), §28 (la pile et le seed) ·
  *       docs/MANUAL_PLAN.md · CLAUDE.md §7, §16 · docs/BACKLOG.md#SPK-154 ·
- *       docs/DAT.md §44.9.8 (l'illustration `m6-connexion`)
+ *       docs/DAT.md §44.9.8 (l'illustration `m6-connexion`) ·
+ *       docs/BACKLOG.md#SPK-156 · docs/DAT.md §18.9.3 (l'illustration
+ *       `m7-emission-echec`)
  *
  * Chaque image est nommée d'après le chapitre qui l'emploie. Le harnais monte sa
  * propre pile seedée : une illustration ne peut donc pas montrer un écran qui
@@ -234,6 +236,14 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.click('[data-ouvre="route"]');
     await page.waitForSelector('#route-domaine');
     await capturer('m7-route', { hauteur: 800 });
+
+    // --- M7 · Quand le certificat ne vient pas (SPK-156, §18.9) --------------
+    // Le seed déclare l'émission en échec de `vip.boutique.example.com` : la
+    // ligne porte, sous ses badges, ce que le proxy a écrit de ses tentatives.
+    await ouvrir('crm-production', 'routes');
+    await page.waitForSelector('li:has(> .emission)', { timeout: 20000 });
+    await page.locator('li:has(> .emission)').scrollIntoViewIfNeeded();
+    await capturer('m7-emission-echec', { hauteur: 900 });
 
     // --- M7 · Une route sans TLS, et sa sortie (SPK-112, §18.3 quater) -------
     // Le seed porte sur « ubuntu-24 » une route servie en clair : la pastille

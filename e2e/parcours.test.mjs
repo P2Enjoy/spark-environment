@@ -16,6 +16,8 @@
  *           une case décochée par défaut, §38.6.4 ; SPK-DS-39),
  *           docs/BACKLOG.md#SPK-154 (les commandes SSH d'un Spark, prêtes à
            copier dans la section Accès, §44.9.8 ; SPK-DS-42),
+           docs/BACKLOG.md#SPK-156 (un certificat qui ne vient pas dit
+           pourquoi, sous sa route, §18.9 ; SPK-DS-43),
            docs/BACKLOG.md#SPK-132 (recréer un conteneur de pile Compose,
  *           §37.7.5 ; l'onglet Environnement nomme ce geste, §43.7) ·
  *           docs/DAT.md §29 (éprouver le produit par où
@@ -3158,6 +3160,44 @@ test('la facette Routes RELÈVE Caddy et le certificat de chaque route, et le re
     await page.waitForFunction(
       (s) => /relevés à/.test(document.querySelector(s)?.textContent ?? ''),
       sectionRoutes, { timeout: 20000 });
+  });
+});
+
+test('un certificat qui ne vient pas dit pourquoi, sous sa route, et renvoie au manuel au clavier', async () => {
+  await parcours('routes-emission-echec', async () => {
+    // Le seed déclare l'émission en échec de `vip.boutique.example.com`, portée
+    // par `crm-production` : l'autorité a joint une autre adresse, puis limité
+    // le nom (docs/DAT.md §18.9.3).
+    await ouvrir('crm-production', 'routes');
+    const vip = ligneRoute('vip.boutique.example.com');
+    await page.waitForSelector(`${vip} > .emission`, { timeout: 20000 });
+    const bloc = await page.textContent(`${vip} > .emission`);
+    assert.match(bloc, /Émission du certificat en échec depuis \d\d:\d\d:\d\d — dernière tentative à \d\d:\d\d:\d\d, prochaine vers \d\d:\d\d:\d\d\./);
+    assert.match(bloc, /L’autorité a joint 203\.0\.113\.99 \(dernière validation refusée à \d\d:\d\d:\d\d\)/);
+    assert.match(bloc, /Let's Encrypt a limité ce nom jusqu’à \d\d:\d\d:\d\d \(limite de débit\)/);
+    assert.match(bloc, /Let's Encrypt : HTTP 429 urn:ietf:params:acme:error:rateLimited/);
+    // Un défaut constaté : l'accent, jamais le rouge d'un refus (SPK-DS-08).
+    assert.equal(await page.locator(`${vip} > .emission.avertissement`).count(), 1);
+    // Aucun geste dans le bloc : aucun ne lève une limite (SPK-DS-43).
+    assert.equal(await page.locator(`${vip} > .emission button`).count(), 0);
+    // Une route saine n'en porte pas.
+    assert.equal(await page.locator(`${ligneRoute('crm.example.com')} > .emission`).count(), 0);
+    await page.locator(`${vip} > .emission`).scrollIntoViewIfNeeded();
+    await capturer('spk156-emission-echec', { hauteur: 1000 });
+    await capturer('spk156-emission-echec-mobile', { largeur: 390, hauteur: 1000 });
+    await page.setViewportSize({ width: 1440, height: 1300 });
+
+    // Au CLAVIER : depuis le dernier geste de la ligne, la tabulation suivante
+    // atteint le renvoi au manuel, et Entrée l'ouvre.
+    await page.locator(`${vip} [data-retire-route]`).focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent),
+      'Manuel M7 — Quand le certificat ne vient pas');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => /Quand le certificat ne vient pas/.test(document.querySelector('main')?.textContent ?? ''),
+      null, { timeout: 20000 });
+    assert.match(page.url(), /#\/manuel\/M7/);
   });
 });
 
