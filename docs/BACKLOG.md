@@ -8965,6 +8965,29 @@ route.
     depuis 6ebe664, sert la case `www` (constaté en lecture seule sur son
     catalogue).
   - **Reste `[~]`** : le constat à l'écran d'OP-35, par le responsable.
+
+### [ ] SPK-154 · Les commandes SSH d'un Spark, prêtes à copier, dans la section Accès
+
+**Demandé le 2026-10-11** par le responsable : « dans les infos d'un spark,
+ajoute un panel avec prêtes à copier la chaîne de connexion ssh pour le spark et
+le docker user en fonction de la config d'amorçage ».
+
+- Spécification : `docs/DAT.md` **§44.9.8** (la propriété `ssh_commands`, le
+  rebond de l'inventaire, le bloc « Se connecter en SSH ») · §44.9.4 (la surface
+  d'API) · §42.2 quater (les portes) · §44.9.2 (la commande, refusée plutôt que
+  piégée) · manuel M6 (« Se connecter ») · `docs/DESIGN_SYSTEM_APP.md`
+  **SPK-DS-42** · SPK-DS-19, SPK-DS-21, SPK-DS-24 · `docs/DESIGN_SYSTEM.md`
+  §1.3, §6.19, §14.5.
+- Dépend de : SPK-85, SPK-95, SPK-98.
+- Portée : `entrees_ssh` dans `briefing.py`, employée par le dossier et rendue
+  par la route `/briefing` en `ssh_commands` ; la console la garde avec le
+  dossier, sans requête de plus ; le bloc dans la section *Accès*, un bouton de
+  copie par porte ; la phrase de la porte unique partagée avec le terminal ;
+  preuves unitaires (composition, route, rendu) rouges sur le code d'avant ;
+  parcours E2E — un Spark rootless offre deux commandes, un Spark enraciné une
+  seule et le dit, la copie de `spark-docker` au clavier relue dans le
+  presse-papier ; vérification visuelle 1440 px et 390 px ; illustration
+  `m6-connexion` ; `docs/PROD_MIGRATIONS.md` OP-39 (sparkd et console).
 ---
 
 ## Lot 6 — Réseau entre Sparks

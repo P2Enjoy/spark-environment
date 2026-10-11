@@ -1668,6 +1668,44 @@ Sous le champ « Gabarit du message » de l'onglet Alertes, un bouton secondaire
   « en attente ». Cellule arrêtée : rien de plus, le plafond s'appliquera à son
   démarrage.
 
+### SPK-DS-42 · Une commande d'une ligne se montre en entier, avec son bouton à côté
+
+**Date** : 2026-10-11 · SPK-154 · `DAT.md` §44.9.8 · `DESIGN_SYSTEM.md` §1.3,
+§1.5 bis, §3.1, §6.27, §9.7, §14.5 · SPK-DS-15, SPK-DS-19, SPK-DS-21, SPK-DS-24
+
+Le bloc **« Se connecter en SSH »** de la section *Accès* rend une commande par
+porte du Spark. C'est un texte fait pour être collé, comme le dossier du
+SPK-DS-19, mais **d'une ligne** : la règle du repli ne lui convient pas, et
+celle-ci la précise.
+
+- **la commande est visible, pas repliée.** Le `<details>` du SPK-DS-19 évite
+  qu'un pavé noie sa section ; une ligne ne noie rien, et la cacher ferait cliquer
+  pour lire ce qu'on est venu chercher ;
+- **une porte, une ligne de liste** (§6.19) : le compte en gras, son rôle court
+  à côté — « root — administrer la cellule » —, puis la commande en
+  `fragment technique` à chasse fixe (§3.1), puis le bouton. Le détail long du
+  rôle n'est **pas** rendu : le manuel M6 l'explique (§1.5 bis) ;
+- **la commande se replie, elle ne défile pas** (SPK-DS-15) : `pre-wrap` et
+  `overflow-wrap: anywhere`. La colonne secondaire est étroite, et un défilement
+  cacherait l'adresse — la fin de la ligne, donc ce qui change d'un Spark à
+  l'autre ;
+- **un bouton par commande**, secondaire et compact, libellé « Copier », dont le
+  **nom accessible nomme le compte** : « Copier la commande SSH de root ». Deux
+  boutons « Copier » indiscernables à la synthèse vocale ne disent pas lequel
+  part ;
+- **« copiée » sous la ligne copiée seulement**, en `.succes` `role="status"`,
+  après l'accord du presse-papier (§1.3) ; le refus, en `.avertissement`, renvoie
+  à la sélection de **cette** commande. Copier l'autre ligne déplace le message :
+  deux « copiée » à l'écran mentiraient sur l'une des deux ;
+- **l'absence de la seconde porte se nomme une fois**, sous la liste, avec les
+  textes du terminal (SPK-DS-21, SPK-DS-24) — et c'est **la même fonction** qui
+  les rend aux deux endroits : deux écrans qui disent la même absence la disent
+  avec les mêmes mots ;
+- **sans commande composable**, une phrase dit pourquoi et renvoie à l'onglet
+  *Clés* ; aucune ligne vide, aucun bouton qui copierait rien (§1.4) ;
+- un lien vers **M6 — Se connecter** clôt le bloc : la clé à accorder, le rebond
+  et le choix de la porte s'y expliquent, pas ici.
+
 ### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
 
 **Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus

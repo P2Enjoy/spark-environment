@@ -14028,3 +14028,37 @@ travaillent en parallèle —, les reproduire sur HEAD et les committer.
 désormais « pourrait manquer » sur le CPU, parce que le seed de SPK-152 ne
 laisse que 0,25 CPU libre. C'est le comportement réel de ce seed, pas un défaut
 d'illustration.
+
+## 2026-10-11 · SPK-154 : les commandes SSH d'un Spark, prêtes à copier
+
+**Demande** du responsable : dans les infos d'un Spark, un panneau avec la
+chaîne de connexion SSH, prête à copier, pour le Spark et pour le compte Docker,
+selon la configuration d'amorçage.
+
+**Observé** : sparkd compose déjà ces commandes — `comptes_du_spark` (root
+toujours, `spark-docker` si le relevé dit `rootless`) et `commande_ssh` (le
+rebond que la console tient de son inventaire, ou `ssh` direct pour une console
+servie sur la Forge). Elles ne sortent que dans le Markdown du dossier, section
+1, replié. Aucune réponse ne les donne en données. Le fragment `ssh_config` de
+l'onglet *Clés* ne connaît que `root`, et passe par l'alias `spark-host`.
+
+**Décisions**, prises sans arbitrage (aucune ne relève des quatre cas) :
+
+1. **Le serveur compose, la console affiche** (§44.8). Écartée : composer la
+   ligne dans la console à partir de `model.access.accounts` — une troisième
+   vérité, que le commentaire de `modele()` interdit nommément. Retenue : une
+   fonction `entrees_ssh`, que le dossier emploie aussi, rendue par `/briefing`
+   en `ssh_commands`.
+2. **Hors du modèle.** Le modèle est posé dans la cellule ; le rebond n'appartient
+   pas au plan de contrôle. Écartée : `model.access.accounts[].command`.
+3. **Le rebond de l'inventaire, pas `spark-host`.** « Prête à copier » veut dire
+   qui marche une fois collée ; l'alias ne marche que chez qui l'a défini. C'est
+   aussi la forme du dossier — même commande, même forme.
+4. **La même réponse que le dossier**, déjà chargée avec le détail : aucune
+   requête de plus, et la copie reste dans l'activation du geste.
+5. **La phrase de la porte unique est partagée avec le terminal** (même fonction),
+   pour que la même absence se dise avec les mêmes mots.
+6. **La commande se montre, ne se replie pas** : SPK-DS-42 précise SPK-DS-19
+   pour un texte d'une ligne.
+
+Spécification : DAT §44.9.8 ; SPK-DS-42 ; backlog SPK-154.

@@ -11353,9 +11353,10 @@ autorisations se jouent côté Forge, où le locataire n'atteint rien (§35.1).
 #### 44.9.4 La surface d'API
 
     GET /v1/sparks/{name}/briefing → 200
-      { "spark", "written_at", "markdown", "model" }
+      { "spark", "written_at", "markdown", "model", "ssh_commands" }
 
-Trois propriétés, et chacune est une décision :
+`ssh_commands` est décrit au §44.9.8 (SPK-154). Trois propriétés de la route, et
+chacune est une décision :
 
 - la route **n'entre pas dans la cellule**. Elle lit le registre et le relevé
   d'amorçage déjà conservé (§44.8) : elle n'exécute rien chez le locataire, ne
@@ -11458,6 +11459,81 @@ variable, et rien dans la cellule ne la rend possible. Le bloc que l'agent rend
 est **le sien** : il ne vient pas du registre, et le §44.9.3 n'est pas entamé —
 aucune valeur détenue par le plan de contrôle n'entre dans ce texte, dans un
 sens comme dans l'autre.
+
+#### 44.9.8 Les commandes d'entrée, prêtes à copier, dans la section Accès (SPK-154)
+
+Demandé par le responsable le 2026-10-11 : « dans les infos d'un spark, un
+panneau avec, prêtes à copier, la chaîne de connexion SSH pour le Spark et le
+docker user en fonction de la config d'amorçage ».
+
+Les deux commandes existent déjà : ce sont celles de la section 1 du dossier
+(§44.9.2 point 1, §44.10). Mais elles n'y sont qu'**au milieu d'un texte replié
+de dix sections**, fait pour un agent. Un exploitant qui veut seulement entrer
+doit déplier, chercher, sélectionner à la main.
+
+**La surface d'API.** La réponse de `GET /v1/sparks/{name}/briefing` gagne une
+cinquième propriété :
+
+    "ssh_commands": [
+      { "user": "root", "role": "administrer la cellule",
+        "detail": "…", "command": "ssh -J ops@forge:2222 root@10.77.0.16" },
+      { "user": "spark-docker", "role": "faire tourner la pile",
+        "detail": "…", "command": "ssh -J ops@forge:2222 spark-docker@10.77.0.16" }
+    ]
+
+Une entrée par porte de `comptes_du_spark` (§42.2 quater), chacune avec la
+ligne que rend `commande_ssh` (§44.9.2) pour ce compte. **Le même calcul que la
+section 1 du dossier** : `entrees_ssh` le fait une fois, et le dossier l'emploie
+aussi — deux présentations d'un même calcul, jamais deux calculs (§44.8).
+
+- `command` vaut `null` quand la console n'a nommé ni rebond ni accès direct, ou
+  quand la cible de rebond n'est pas un `[compte@]hôte[:port]` — la règle du
+  §44.9.2, qui ne compose pas une commande piégée ;
+- `spark-docker` n'y figure **que** si le relevé dit `rootless` (§42.2 bis et
+  quater). Le mode est lu dans le **dernier relevé d'amorçage** conservé : c'est
+  ce que la demande appelle « la config d'amorçage », et c'est la seule source
+  qui ne ment pas sur une cellule dont l'amorçage a changé de mode ;
+- la propriété est **hors du modèle**. Le modèle est aussi posé dans la cellule
+  (`briefing.json`), et le rebond appartient à l'inventaire de la console, pas
+  au plan de contrôle (§44.9.2) : il n'a rien à faire dans un fichier écrit par
+  sparkd.
+
+**Pourquoi le rebond de l'inventaire, et pas l'alias `spark-host` du fragment
+`ssh_config` (§17.4).** Le fragment suppose un `Host spark-host` défini dans le
+`~/.ssh/config` du poste : collé tel quel dans un shell, `ssh -J spark-host …`
+échoue chez quiconque ne l'a pas défini. « Prête à copier » veut dire qui
+marche une fois collée ; seul le rebond par lequel la console joint réellement
+cette Forge le garantit. C'est aussi celui du dossier : deux écrans qui donnent
+la même commande la donnent de la même façon. Le fragment reste dans l'onglet
+*Clés*, pour qui préfère un alias durable.
+
+**Ce que la console en fait.** La section **Accès** de la facette *Infos* porte,
+sous l'adresse privée et l'image, un bloc **« Se connecter en SSH »** :
+
+- une ligne par porte, dans l'ordre du serveur — `root` d'abord —, avec le nom
+  du compte, son rôle, la commande en chasse fixe et un bouton **Copier** dont le
+  nom accessible nomme le compte ;
+- la commande est **visible**, pas repliée : elle tient sur une ligne, et c'est
+  elle qu'on vient chercher. Le repli du §44.9.5 vaut pour un texte de plusieurs
+  écrans ;
+- les règles de copie du §44.9.5, à l'identique : « copiée » n'apparaît qu'après
+  l'accord du presse-papier, sous la ligne copiée seulement ; un refus renvoie à
+  la sélection de la commande, qui reste sélectionnable ;
+- l'absence de la seconde porte se **nomme**, avec les trois textes du terminal
+  (SPK-DS-21, SPK-DS-24) : image sans Docker (définitif), amorcé en mode
+  enraciné, mode jamais relevé (amorcer pour savoir) ;
+- sans commande composable, le bloc le dit en une phrase et renvoie au fragment
+  de l'onglet *Clés*, au lieu de rendre une ligne vide ;
+- chargement, Spark sans cellule et lecture échouée suivent les trois états du
+  dossier (§14.6) — c'est la même réponse.
+
+**Aucune requête de plus.** Le dossier est déjà chargé avec le détail (§44.9.4) ;
+le bloc lit la même réponse. Le clic de copie ne déclenche donc aucune requête,
+et l'écriture dans le presse-papier reste dans l'activation du geste.
+
+Ce n'est pas un accès de plus : la commande n'ouvre rien qu'une clé accordée
+n'ouvrait déjà, et la section ne modifie rien — un Spark protégé l'affiche à
+l'identique (§44.9.5).
 
 
 ### 44.10 Ce que le briefing devient quand la cellule a deux comptes (SPK-94, SPK-95)
