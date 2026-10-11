@@ -9027,6 +9027,12 @@ le docker user en fonction de la config d'amorçage ».
     `m6-amorcage`, `m3-projets-ranger`, `m8-erreur`, `m8-protection`,
     `m10-suppression`, `-nom-frappe`, `m13-attacher`, `m13-membre` renouvelées —
     elles montrent la facette Infos, et le bloc y figure désormais.
+  - Campagne E2E complète après la boucle du registre : 150 sur 153. Le
+    nouveau parcours est vert dans la campagne. Deux rouges sont ceux que
+    SPK-138 absorbe (« révoquer une clé malgré le gel… », « un geste sensible
+    envoie une alerte… ») ; le troisième, « changer le MODE CPU depuis l'écran,
+    au clavier », est refusé par la capacité, et rouge aussi sur le code
+    d'avant SPK-154 : consigné au registre le 2026-10-11.
   - **Reste `[~]`** : OP-39, sur instruction du responsable.
 ---
 
