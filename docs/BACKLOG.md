@@ -9122,6 +9122,14 @@ responsable : « oui et corrige ».
     bout — est retirée : la Forge a émis `gram` et `pfia2026` le 2026-10-11.
   - **Reste `[~]`** : OP-40, sur instruction du responsable, puis la
     vérification sur la Forge.
+
+### [@] SPK-157 · Aucun paquet TCP IPv4 porteur d'options n'atteint la Forge ni ses Sparks (CVE-2026-98432)
+
+*Prise en charge : agent 2026-10-28 (session p2enjoy-crm, CRM-117) depuis 2026-10-30 12:48 UTC — état avant : [ ]*
+
+**Demandé le 2026-10-30** par le responsable : patcher immédiatement la Forge et
+ses Sparks contre une faille critique du noyau Linux, par le pare-feu si c'est
+plus simple, et l'ajouter à la recette cloud-init.
 ---
 
 ## Lot 6 — Réseau entre Sparks
