@@ -2,7 +2,8 @@
 
 @verifies docs/BACKLOG.md#SPK-73 · docs/DAT.md §50.4-§50.6 (l'executeur ferme),
           §8.2 (le pool livre par le schema JSON s'adopte) · README.md (rejeu de
-          l'amorce)
+          l'amorce) · docs/BACKLOG.md#SPK-157 · docs/DAT.md §65.3 (les options
+          IPv4 rejetees des le premier demarrage)
 
 Le script vivait auparavant SEULEMENT sur la machine, produit par le `user_data`
 du serveur : ni versionne, ni relisible en revue, ni testable. Ces preuves
@@ -165,3 +166,18 @@ def test_la_preparation_est_IDEMPOTENTE():
     assert corps.count("debconf-set-selections") == 1
     assert ">>" not in corps.split("preparer_grub_sur_raid()")[1].split("}")[0], \
         "la reponse se POSE, elle ne s'ajoute pas"
+
+
+def test_l_amorce_rejette_les_options_ipv4_avant_le_premier_apt():
+    """@verifies docs/BACKLOG.md#SPK-157 · docs/DAT.md §65.3 (CVE-2026-98432)
+
+    Une Forge neuve est exposee des son premier demarrage ; sparkd ne pose son
+    pare-feu que plusieurs minutes plus tard. L'amorce pose les MEMES tables que
+    `pare_feu`, mot pour mot : deux textes, une seule regle, et ce test les
+    tient ensemble."""
+    from sparkd import pare_feu
+
+    texte = code()
+    assert pare_feu.OPTIONS_IPV4 in source(), "l'amorce porte exactement les tables de pare_feu"
+    assert "nft -f -" in texte
+    assert texte.index("nft -f -") < texte.index("apt-get update"), "avant le premier apt"

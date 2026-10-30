@@ -9,15 +9,18 @@
       route vers rien), §58.6 (mesuré le 2026-09-18 : sans règle, la Forge route
       `spn* → sparkbr0` et son sshd répond sur la passerelle du réseau) ·
       docs/PROD_MIGRATIONS.md#OP-21, docs/PROD_MIGRATIONS.md#OP-22,
-      docs/PROD_MIGRATIONS.md#OP-23
+      docs/PROD_MIGRATIONS.md#OP-23 ·
+      docs/BACKLOG.md#SPK-157 · docs/DAT.md §65.2, §65.3 (les options IPv4
+      rejetées avant toute table : CVE-2026-98432) · docs/PROD_MIGRATIONS.md#OP-41
 
-Une seule table, `inet spark_filter`, rendue comme une FONCTION PURE du nom du
-bridge : ce qui se pose se lit d'un coup, et se compare à un témoin. La pose ne
+Une table, `inet spark_filter`, rendue comme une FONCTION PURE du nom du
+bridge, suivie des deux tables `spark_ipopts` qui n'en dépendent pas (SPK-157) :
+ce qui se pose se lit d'un coup, et se compare à un témoin. La pose ne
 regarde jamais une étiquette pour décider — c'est ce qui aurait privé toute
 Forge déjà durcie d'une règle nouvelle (§56.3). Elle compare le fichier rendu au
 fichier en place, et ne recharge que s'il a changé.
 
-Rien n'est flushé : le fichier remplace SA table, atomiquement — déclaration,
+Rien n'est flushé : le fichier remplace SES tables, atomiquement — déclaration,
 suppression, définition, dans la seule transaction d'un `nft -f`. Le
 `/etc/nftables.conf` d'Ubuntu commence par `flush ruleset`, ce qui effacerait la
 table d'Incus, donc le NAT, le DNS et le DHCP de tous les Sparks (§48.2 bis).
@@ -61,6 +64,33 @@ WantedBy=multi-user.target
 """
 
 Executeur = Callable[[list[str]], object]
+
+#: SPK-157 · §65.2 : CVE-2026-98432. Un SYN IPv4 porteur d'options (Record
+#: Route, Timestamp) atteint un use-after-free de la poignée de main TCP, dans
+#: le noyau que la Forge PARTAGE avec chaque Spark. Aucun trafic légitime n'en
+#: porte : on le rejette avant toute table — dans la pile IP, à `raw`, pour ce
+#: qui entre ou est routé ; sur le bridge, pour ce qu'un Spark commute vers un
+#: voisin. Ne dépend pas du bridge, et l'amorce cloud-init le pose tel quel
+#: avant le premier apt (§65.3). MESURÉ le 2026-10-30 : depuis `crm`, le SYN à
+#: option est rejeté au bridge, un SYN ordinaire passe.
+OPTIONS_IPV4 = (
+    "add table ip spark_ipopts\n"
+    "delete table ip spark_ipopts\n"
+    "table ip spark_ipopts {\n"
+    "  chain prerouting {\n"
+    "    type filter hook prerouting priority raw; policy accept;\n"
+    "    ip hdrlength > 5 ip protocol tcp counter drop\n"
+    "  }\n"
+    "}\n"
+    "add table bridge spark_ipopts\n"
+    "delete table bridge spark_ipopts\n"
+    "table bridge spark_ipopts {\n"
+    "  chain prerouting {\n"
+    "    type filter hook prerouting priority -300; policy accept;\n"
+    "    ether type ip ip hdrlength > 5 ip protocol tcp counter drop\n"
+    "  }\n"
+    "}\n"
+)
 
 
 def rendre(bridge: str) -> str:
@@ -119,6 +149,7 @@ def rendre(bridge: str) -> str:
         f'    oifname "{prive}" drop\n'
         "  }\n"
         "}\n"
+        + OPTIONS_IPV4
     )
 
 
@@ -129,6 +160,11 @@ def regles(bridge: str, chaine: str = "input") -> list[str]:
     dedans = False
     for brut in rendre(bridge).splitlines():
         ligne = brut.strip()
+        # Une table nouvelle ferme la chaîne en cours : sans cela, `forward`
+        # lirait les déclarations de `spark_ipopts` qui la suivent (SPK-157).
+        if ligne.startswith(("table ", "add table ", "delete table ")):
+            dedans = False
+            continue
         if ligne.startswith("chain "):
             dedans = ligne == f"chain {chaine} {{"
             continue

@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+### Sécurité
+- **SPK-157 — CVE-2026-98432 : aucun paquet TCP IPv4 porteur d'options n'atteint
+  la Forge ni ses Sparks.** Le pare-feu que `sparkd` pose
+  (`/etc/sparkd/firewall.nft`) rejette, dans deux tables `spark_ipopts`, tout
+  paquet TCP IPv4 dont l'en-tête porte des options : à l'entrée de la pile IP
+  (priorité `raw`) et sur le bridge des Sparks. L'amorce cloud-init pose les mêmes
+  tables avant son premier `apt`. Les Sparks partageant le noyau de la Forge, c'est
+  là, et là seulement, que la faille se traite ; le noyau corrigé d'Ubuntu reste à
+  poser dès sa publication (`docs/PROD_MIGRATIONS.md` OP-41). Le filtre a été posé
+  à la main sur la Forge le 2026-10-30 (OP-41 étape 1).
+
 ### Ajouté
 - **SPK-156 — une route dit pourquoi son certificat ne vient pas.** La
   configuration posée sur Caddy déclare un journal d'émission

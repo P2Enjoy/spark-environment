@@ -5,7 +5,9 @@
 #       (l'executeur ferme), §8.2 (la paire dediee livree par le schema JSON),
 #       §3.1 (Incus >= 6.19) · README.md (schema de partitionnement, rejeu de
 #       l'amorce) · docs/AGENT_RUNBOOK.md §A · docs/BACKLOG.md#SPK-135,
-#       docs/DAT.md §5.3 bis (NET_MBIT : le debit declare)
+#       docs/DAT.md §5.3 bis (NET_MBIT : le debit declare) ·
+#       docs/BACKLOG.md#SPK-157, docs/DAT.md §65.3 (les options IPv4 rejetees
+#       des le premier demarrage : CVE-2026-98432)
 #
 # La machine est livree avec le schema de partitionnement du README : sda5 et
 # sdb5 sont nues, le zpool est cree par le geste paramétré ou deja present.
@@ -28,6 +30,37 @@ CPU_RESERVE=0.5       # coeurs que la Forge garde pour elle
 NET_MBIT=""           # debit du lien en Mbit/s, SEULEMENT si la carte n'en annonce
                       # aucun (virtio) ; vide : le debit est mesure (DAT §5.3 bis)
 export DEBIAN_FRONTEND=noninteractive
+
+# SPK-157 · docs/DAT.md §65.3 — AVANT tout le reste. CVE-2026-98432 : un SYN IPv4
+# porteur d'options atteint un use-after-free du noyau que la Forge partage avec
+# ses Sparks. La machine est exposee des son premier demarrage, et sparkd ne pose
+# son pare-feu que plusieurs minutes plus tard. Ces tables sont CELLES de
+# `sparkd.pare_feu.OPTIONS_IPV4`, mot pour mot (une preuve unitaire les tient
+# ensemble) ; rien n'est ecrit sur le disque : le fichier de sparkd les remplace
+# ensuite, table pour table. Sans nft — image sans nftables —, on le dit et on
+# continue : sparkd installe et pose le pare-feu plus loin.
+if command -v nft >/dev/null 2>&1; then
+  nft -f - <<'NFT'
+add table ip spark_ipopts
+delete table ip spark_ipopts
+table ip spark_ipopts {
+  chain prerouting {
+    type filter hook prerouting priority raw; policy accept;
+    ip hdrlength > 5 ip protocol tcp counter drop
+  }
+}
+add table bridge spark_ipopts
+delete table bridge spark_ipopts
+table bridge spark_ipopts {
+  chain prerouting {
+    type filter hook prerouting priority -300; policy accept;
+    ether type ip ip hdrlength > 5 ip protocol tcp counter drop
+  }
+}
+NFT
+else
+  echo "amorce: nft absent — options IPv4 non filtrees jusqu'au pare-feu de sparkd"
+fi
 
 # SPK-84 · docs/DAT.md §50.7.1 · runbook §C.5 — AVANT le premier apt.
 #

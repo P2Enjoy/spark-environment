@@ -1,7 +1,9 @@
 """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.2 (80 et 443, et rien
            d'autre), §56.3 (la pose par comparaison du fichier rendu, le
            rechargement seulement quand il a changé), §56.5 · §48.2 bis (rien
-           n'est flushé, l'ordre d'OP-11) · docs/PROD_MIGRATIONS.md#OP-21
+           n'est flushé, l'ordre d'OP-11) · docs/PROD_MIGRATIONS.md#OP-21 ·
+           docs/BACKLOG.md#SPK-157 · docs/DAT.md §65.2, §65.3 (les options
+           IPv4 rejetées avant toute table) · docs/PROD_MIGRATIONS.md#OP-41
 
 Le rendu est une fonction pure : la preuve le compare à un TÉMOIN écrit ici,
 mot pour mot. Une ligne qui change dans le rendu change ce témoin, et la
@@ -38,6 +40,22 @@ table inet spark_filter {
     iifname "sparkbr0" oifname "sparkbr0" drop
     iifname "spn*" drop
     oifname "spn*" drop
+  }
+}
+add table ip spark_ipopts
+delete table ip spark_ipopts
+table ip spark_ipopts {
+  chain prerouting {
+    type filter hook prerouting priority raw; policy accept;
+    ip hdrlength > 5 ip protocol tcp counter drop
+  }
+}
+add table bridge spark_ipopts
+delete table bridge spark_ipopts
+table bridge spark_ipopts {
+  chain prerouting {
+    type filter hook prerouting priority -300; policy accept;
+    ether type ip ip hdrlength > 5 ip protocol tcp counter drop
   }
 }
 """
@@ -196,3 +214,38 @@ def test_le_lien_prive_passe_apres_l_etabli_et_avant_les_drop():
     assert forward[0] == "ct state established,related accept"
     assert forward[1] == "ct status dnat accept"
     assert forward[2:] and all(ligne.endswith("drop") for ligne in forward[2:])
+
+
+def test_les_options_ipv4_sont_rejetees_avant_toute_autre_table():
+    """@verifies docs/BACKLOG.md#SPK-157 · docs/DAT.md §65.2 (CVE-2026-98432)
+
+    Un SYN porteur d'options Record Route ou Timestamp atteint la course du
+    noyau partagé par la Forge et ses Sparks. Deux points de passage : la pile
+    IP — à la priorité `raw`, avant le suivi de connexion et la traduction
+    d'Incus — et le bridge, où un Spark joint un voisin sans passer par elle.
+    MESURÉ le 2026-10-30 : depuis `crm`, le SYN à option est rejeté au bridge,
+    un SYN ordinaire passe."""
+    rendu = pare_feu.rendre("sparkbr0")
+    ip = rendu[rendu.index("table ip spark_ipopts {"):]
+    assert "hook prerouting priority raw;" in ip
+    assert "ip hdrlength > 5 ip protocol tcp counter drop" in ip
+    pont = rendu[rendu.index("table bridge spark_ipopts {"):]
+    assert "hook prerouting priority -300;" in pont
+    assert "ether type ip ip hdrlength > 5 ip protocol tcp counter drop" in pont
+    for famille in ("ip", "bridge"):
+        assert rendu.index(f"add table {famille} spark_ipopts") < rendu.index(
+            f"delete table {famille} spark_ipopts") < rendu.index(f"table {famille} spark_ipopts {{")
+    assert pare_feu.OPTIONS_IPV4 in rendu
+
+
+def test_les_regles_lues_restent_celles_de_spark_filter():
+    """@verifies docs/BACKLOG.md#SPK-157 · docs/DAT.md §65.3
+
+    `regles()` sert au préflight et à ses remèdes : une table de plus dans le
+    fichier ne doit pas glisser ses lignes dans la chaîne `forward` lue."""
+    forward = pare_feu.regles("sparkbr0", "forward")
+    assert not any("spark_ipopts" in r or "hdrlength" in r for r in forward)
+    assert pare_feu.regles("sparkbr0", "prerouting") == [
+        "ip hdrlength > 5 ip protocol tcp counter drop",
+        "ether type ip ip hdrlength > 5 ip protocol tcp counter drop",
+    ]

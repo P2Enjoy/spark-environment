@@ -9123,9 +9123,7 @@ responsable : « oui et corrige ».
   - **Reste `[~]`** : OP-40, sur instruction du responsable, puis la
     vérification sur la Forge.
 
-### [@] SPK-157 · Aucun paquet TCP IPv4 porteur d'options n'atteint la Forge ni ses Sparks (CVE-2026-98432)
-
-*Prise en charge : agent 2026-10-28 (session p2enjoy-crm, CRM-117) depuis 2026-10-30 12:48 UTC — état avant : [ ]*
+### [P] SPK-157 · Aucun paquet TCP IPv4 porteur d'options n'atteint la Forge ni ses Sparks (CVE-2026-98432)
 
 **Demandé le 2026-10-30** par le responsable : patcher immédiatement la Forge et
 ses Sparks contre une faille critique du noyau Linux, par le pare-feu si c'est
@@ -9143,6 +9141,17 @@ plus simple, et l'ajouter à la recette cloud-init.
 - Hors portée, dit pour que la question ne se repose pas : les images Docker, les
   sources et les dépôts des applications des Sparks — un conteneur n'a pas de
   noyau à lui (DAT §65.1).
+- **Codé le 2026-10-30.** `pare_feu.OPTIONS_IPV4`, rendu après `spark_filter` ;
+  `regles()` ferme la chaîne en cours à chaque table ; l'amorce pose les mêmes
+  tables avant le premier `apt`, sans nft elle le dit et continue.
+  - Preuves (`test_pare_feu.py`, `test_amorce.py`) : **six rouges sur le code
+    d'avant**, vertes après ; suite sparkd **1 715 sur 1 715** ; `sh -n` de
+    l'amorce.
+  - Sur la Forge, sans rien appliquer : le fichier complet rendu par `rendre`
+    passe `nft -c`. Le bloc de l'amorce est identique à `OPTIONS_IPV4`.
+  - **Reste `[P]`** : OP-41 étapes 2 et 3 (mise à jour de sparkd, qui emporte
+    aussi OP-39 et OP-40) sur instruction du responsable, puis la vérification
+    d'OP-41 ; étape 4, le noyau corrigé, à sa publication par Ubuntu.
 ---
 
 ## Lot 6 — Réseau entre Sparks
