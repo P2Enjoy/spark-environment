@@ -9130,6 +9130,19 @@ responsable : « oui et corrige ».
 **Demandé le 2026-10-30** par le responsable : patcher immédiatement la Forge et
 ses Sparks contre une faille critique du noyau Linux, par le pare-feu si c'est
 plus simple, et l'ajouter à la recette cloud-init.
+
+- Spécification : `docs/DAT.md` **§65** · §56.3 (le fichier qui remplace sa propre
+  table) · §48.2 bis (rien n'est flushé) · `docs/JOURNAL.md` 2026-10-30.
+- Dépend de : SPK-108 (`pare_feu`), SPK-73 (l'amorce).
+- Portée : `pare_feu.rendre` rend `ip spark_ipopts` et `bridge spark_ipopts` après
+  `spark_filter` ; `regles()` ne lit toujours que `spark_filter` ; l'amorce
+  cloud-init pose les mêmes tables avant le premier `apt` ; preuves unitaires
+  rouges sur le code d'avant ; OP-41 ; vérification sur la Forge après OP-41.
+- **Posé à la main sur la Forge le 2026-10-30** (OP-41 étape 1) et mesuré (DAT
+  §65.4) — non persistant jusqu'à OP-41 étape 3.
+- Hors portée, dit pour que la question ne se repose pas : les images Docker, les
+  sources et les dépôts des applications des Sparks — un conteneur n'a pas de
+  noyau à lui (DAT §65.1).
 ---
 
 ## Lot 6 — Réseau entre Sparks

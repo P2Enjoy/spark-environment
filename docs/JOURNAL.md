@@ -14160,3 +14160,47 @@ Spécification : DAT §18.2, §18.3, §18.9 ; SPK-DS-43 ; backlog SPK-155, SPK-1
   commande séparée (CLAUDE.md §15 bis).
 
 **Reste** : OP-40 sur la Forge, sur instruction du responsable.
+
+## 2026-10-30 · SPK-157 : CVE-2026-98432, la Forge filtrée avant d'être corrigée
+
+**Problème**, signalé par le responsable : une faille très grave du noyau Linux
+circule (« tcp2shell ») ; patcher immédiatement la Forge, les Sparks et leurs
+applications, ou passer par le pare-feu si c'est plus simple, et l'ajouter à la
+recette cloud-init.
+
+**Hypothèses et observations** :
+
+- le nom « tcp2shell » ne correspond à aucune publication trouvée. La faille
+  noyau critique et récente qui correspond est **CVE-2026-98432** : une course
+  dans la poignée de main TCP IPv4, atteinte par un SYN porteur des options
+  *Record Route* ou *Timestamp* (DAT §65.1). C'est une **hypothèse
+  d'identification** : si le responsable visait une autre faille, ce qui suit ne
+  la couvre pas ;
+- relevé en lecture seule sur la Forge : Ubuntu 26.04.1, noyau en cours
+  `7.0.0-31-generic` (46 jours sans redémarrage), `7.0.0-38` installé,
+  `7.0.0-42` candidat — aucun ne corrige, Ubuntu annonce `7.0.0-43.43` sans date ;
+  `tcp_migrate_req = 0` ; aucun écouteur MPTCP, ni sur la Forge ni dans les
+  sept Sparks ;
+- les sept Sparks sont des conteneurs : un seul noyau à protéger. Mettre à jour
+  les images Docker, les sources et les dépôts des applications n'y change rien ;
+  ce travail n'a pas été fait.
+
+**Solutions envisagées** : attendre le noyau (impossible aujourd'hui) ; Livepatch
+(disponible pour la Forge mais non activé — `pro status` — et aucun correctif
+trouvé pour cette CVE à ce jour) ; filtrer la forme du
+paquet. **Décision** : filtrer, à deux endroits — `ip prerouting` pour ce qui
+entre ou est routé, `bridge prerouting` pour ce qui est commuté entre Sparks — et
+garder le filtre après le noyau corrigé (DAT §65.2).
+
+**Appliqué sur la Forge le même jour**, sur instruction du responsable : les deux
+tables validées en `nft -c`, posées dans `/etc/sparkd/ipopts.nft` et chargées.
+Nouvelle session SSH acceptée ; neuf routes publiques sur dix inchangées, la
+dixième (`polaris`) en 502 parce que son application ne répond plus depuis sa
+propre cellule, sans rapport ; SYN à options depuis un Spark rejeté (5 paquets
+comptés), SYN ordinaire accepté. **Cette pose ne survit pas à un redémarrage** :
+la persistance vient avec `sparkd` (OP-41).
+
+**Conséquences** : SPK-157 porte les deux tables dans `pare_feu` et dans
+l'amorce ; OP-41 décrit la mise à jour de `sparkd` et le noyau à poser dès sa
+publication. Le poste du responsable, sous Ubuntu et `7.0.0-38`, est lui aussi
+vulnérable ; son exposition n'a pas été relevée.

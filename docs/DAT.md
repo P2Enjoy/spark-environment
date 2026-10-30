@@ -15986,3 +15986,82 @@ du §36.10 n'est pas transposée à l'identité SSO.
 9. **SPK-125** — l'installation guidée et la mise à jour conjointe.
 10. **SPK-127** — le parcours officiel au README, et la bascule de la Forge de
     validation, opération par opération.
+
+## 65. Aucun paquet TCP IPv4 porteur d'options n'atteint la Forge ni ses Sparks : contrat (SPK-157)
+
+### 65.1 La faille, et pourquoi la Forge est le seul endroit où la traiter
+
+**CVE-2026-98432** (publiée en octobre 2026, CVSS 9,8 selon l'équipe CVE du
+noyau, 8,1 selon Red Hat, Oracle et SUSE) : un use-after-free dans la poignée de
+main TCP IPv4. `tcp_v4_syn_recv_sock()` transmet à la nouvelle socket les options
+IP de la requête sans les copier ; un second CPU qui répond à un SYN
+retransmis peut construire un SYN-ACK depuis ces options (`ip_options_build()`)
+après leur libération. Un pair **distant et non authentifié** l'atteint en
+envoyant un SYN porteur des options IPv4 *Record Route* ou *Timestamp*, puis en
+le retransmettant pour gagner la course. Introduite en 4.4, corrigée en 7.2.10 et
+7.3 (commit `e3f33b0a1d89`, `kfree()` → `kfree_rcu()`). L'IPv6 copie les options :
+le chemin principal ne s'y applique pas.
+
+**Un Spark est un conteneur Incus : il partage le noyau de la Forge** (§3). Le
+défaut vit donc dans UN noyau, celui de la Forge, et ni une image Docker, ni une
+source applicative, ni une mise à jour faite dans une cellule n'y change rien.
+Relevé le 2026-10-30 : sept Sparks, tous en conteneur, tous sur
+`7.0.0-31-generic` ; aucun en `runtime: vm`.
+
+**Ubuntu n'a pas encore de noyau corrigé** au 2026-10-30 : le suivi de sécurité
+classe `linux` « vulnérable, travail en cours » sur 26.04 (correctif attendu en
+`7.0.0-43.43`), sans USN. Le candidat d'`apt` sur la Forge, `7.0.0-42.42`, ne le
+corrige pas. Jusqu'à ce noyau, le filtrage est la seule protection disponible.
+
+### 65.2 La décision
+
+**Rejeter tout paquet TCP IPv4 dont l'en-tête porte des options** (`ip hdrlength
+> 5`), avant toute autre table, à deux endroits :
+
+- `table ip spark_ipopts`, chaîne `prerouting` à la priorité `raw` : tout ce qui
+  entre dans la pile IP de la Forge, qu'il lui soit destiné ou qu'il soit routé
+  vers un Spark (ports publiés, réseaux privés) ;
+- `table bridge spark_ipopts`, chaîne `prerouting` à la priorité `-300` : ce qui
+  est commuté sur `sparkbr0` sans passer par la pile IP — un Spark vers un autre.
+
+Aucun trafic légitime ne porte d'options IPv4 : les routeurs d'Internet les
+ignorent ou les rejettent, et aucune des applications servies n'en émet. Le
+rejet n'est pas une règle d'accès mais une forme de paquet, et il reste en place
+après le noyau corrigé : il ne coûte rien et ferme la famille de défauts.
+
+**Ce que la règle ne ferme pas** : un processus d'un Spark qui vise sa PROPRE
+pile — la boucle locale de la cellule, ou un conteneur Docker de la même cellule
+— ne traverse jamais les tables de la Forge. Une application compromise dans un
+Spark peut donc encore tenter la course contre le noyau partagé. Seul le noyau
+corrigé ferme ce chemin ; c'est l'objet d'OP-41, étape 4.
+
+### 65.3 Le mécanisme
+
+Les deux tables sont rendues par `pare_feu.rendre`, **dans le même fichier** que
+`spark_filter` (§56.3) : `/etc/sparkd/firewall.nft`, posé par l'installateur
+quand il diffère, rechargé par `spark-firewall.service`. Chacune se remplace
+elle-même, atomiquement (`add table`, `delete table`, définition) : un
+rechargement ne duplique rien, aucune table d'Incus n'est touchée.
+
+**La recette cloud-init** pose les deux mêmes tables **en tête** de
+`spark-amorce.sh`, avant le premier `apt` : une Forge neuve est exposée dès son
+premier démarrage, et `sparkd` n'est installé que plusieurs minutes plus tard.
+La pose de l'amorce n'écrit rien sur le disque ; le fichier de `sparkd` la
+remplace ensuite, table pour table. Une preuve unitaire exige que l'amorce porte
+exactement les règles que rend `pare_feu` : deux textes, une seule règle.
+
+### 65.4 La preuve
+
+- **Unitaire** : le témoin de `rendre` porte les deux tables ; `regles()` lit
+  toujours les seules lignes de `spark_filter` ; l'amorce porte les mêmes règles
+  que `rendre`, et les pose avant le premier `apt-get`.
+- **Sur la Forge, mesuré le 2026-10-30** (pose à la main, OP-41 étape 1) : depuis
+  le Spark `crm`, un SYN vers `10.77.0.1:443` porteur d'une option *Timestamp*
+  reste sans réponse, un SYN ordinaire est accepté ; le compteur de
+  `bridge spark_ipopts` compte 5 paquets (le SYN et ses retransmissions). Les
+  dix routes publiques répondent comme avant, sauf `polaris.lelabs.tech` (502),
+  dont l'application ne répond plus déjà depuis sa propre cellule.
+- **Non prouvé** : le chemin depuis Internet. Le SYN envoyé depuis le poste du
+  responsable a reçu un `RST` sans atteindre la Forge (compteur de
+  `ip spark_ipopts` à 0) : le réseau du poste traite lui-même les paquets à
+  options.

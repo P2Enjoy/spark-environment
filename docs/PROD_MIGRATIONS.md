@@ -120,6 +120,51 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-41 · CVE-2026-98432 : le filtre des options IPv4, puis le noyau corrigé (SPK-157)
+
+```
+État          : ÉTAPE 1 APPLIQUÉE le 2026-10-30 (à la main, sur instruction du
+                responsable) ; étapes 2 à 4 EN ATTENTE.
+Objectif      : aucun paquet TCP IPv4 porteur d'options n'atteint la pile de
+                la Forge ni un Spark (docs/DAT.md §65), jusqu'au noyau corrigé
+                et au-delà ; puis le noyau corrigé, seul à fermer le chemin
+                depuis l'intérieur d'un Spark.
+Dépend de     : étape 3 : rien, mais elle déploie aussi OP-39 et OP-40, en
+                attente sur la même branche ; étape 4 : la publication par
+                Ubuntu du noyau corrigé (attendu : 7.0.0-43.43).
+Ordre         : 1. FAIT — /etc/sparkd/ipopts.nft (tables ip et bridge
+                   spark_ipopts) validé par `nft -c`, chargé par `nft -f` ;
+                   NE SURVIT PAS à un redémarrage ;
+                2. sauvegarder le registre (§2 bis) ;
+                3. mettre à jour sparkd (runbook A.2) : l'installation repose
+                   /etc/sparkd/firewall.nft avec les deux tables et recharge
+                   spark-firewall.service ; puis
+                   `sudo rm /etc/sparkd/ipopts.nft` (copie de l'étape 1, plus
+                   lue par rien) ;
+                4. dès que `apt-cache policy linux-image-generic` propose le
+                   noyau corrigé (suivi Ubuntu de CVE-2026-98432) :
+                   `sudo apt-get install linux-generic` puis redémarrage, dans
+                   une fenêtre annoncée — les sept Sparks redémarrent avec la
+                   Forge.
+Vérification  : étape 3 : `sudo nft list tables` montre `table ip
+                spark_ipopts` et `table bridge spark_ipopts`, après un
+                `sudo systemctl restart spark-firewall` comme après un
+                redémarrage ; un SYN à option Timestamp depuis un Spark vers
+                10.77.0.1:443 reste sans réponse, un SYN ordinaire passe
+                (docs/DAT.md §65.4) ; les routes publiques répondent.
+                Étape 4 : `uname -r` rend le noyau corrigé.
+Retour arrière: `sudo nft delete table ip spark_ipopts; sudo nft delete table
+                bridge spark_ipopts` retire le filtre immédiatement ; à
+                l'étape 3, réinstaller la build précédente. Étape 4 : choisir
+                le noyau précédent au menu GRUB.
+Risques       : faibles. Le filtre ne rejette que des paquets qu'aucune
+                application servie n'émet ; vérifié le 2026-10-30 : SSH et
+                neuf routes publiques sur dix inchangés — polaris rend 502
+                parce que son application ne répond plus depuis sa propre
+                cellule, ce que le filtre ne voit pas. L'étape 4 interrompt
+                tous les Sparks le temps du redémarrage.
+```
+
 ### OP-40 · L'émetteur de certificats déclaré, et le journal d'émission : `sparkd` et la console (SPK-155, SPK-156)
 
 ```
