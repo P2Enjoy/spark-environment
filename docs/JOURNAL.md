@@ -14179,8 +14179,13 @@ recette cloud-init.
 - relevé en lecture seule sur la Forge : Ubuntu 26.04.1, noyau en cours
   `7.0.0-31-generic` (46 jours sans redémarrage), `7.0.0-38` installé,
   `7.0.0-42` candidat — aucun ne corrige, Ubuntu annonce `7.0.0-43.43` sans date ;
-  `tcp_migrate_req = 0` ; aucun écouteur MPTCP, ni sur la Forge ni dans les
-  sept Sparks ;
+  `tcp_migrate_req = 0` ; aucun écouteur MPTCP sur la Forge. **Corrigé le même
+  jour** : la première version de cette entrée disait « ni dans les sept
+  Sparks », par une lecture fausse de `ss -Mlnp`, qui ne liste QUE des sockets
+  MPTCP. Les lignes relevées dans chaque Spark sont donc des écouteurs MPTCP :
+  le proxy de ports de Docker sans racine (`rootlesskit`, en Go) écoute en MPTCP
+  sur `0.0.0.0` — 8080, 30000 pour `evox-relay`, 8443 pour `sso-p2enjoy`. C'est
+  la configuration que visait l'exploit annoncé (DAT §65.1) ;
 - les sept Sparks sont des conteneurs : un seul noyau à protéger. Mettre à jour
   les images Docker, les sources et les dépôts des applications n'y change rien ;
   ce travail n'a pas été fait.

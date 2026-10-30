@@ -16006,7 +16006,13 @@ le chemin principal ne s'y applique pas.
 défaut vit donc dans UN noyau, celui de la Forge, et ni une image Docker, ni une
 source applicative, ni une mise à jour faite dans une cellule n'y change rien.
 Relevé le 2026-10-30 : sept Sparks, tous en conteneur, tous sur
-`7.0.0-31-generic` ; aucun en `runtime: vm`.
+`7.0.0-31-generic` ; aucun en `runtime: vm`. Aucun écouteur MPTCP sur la Forge ;
+dans **chaque** Spark, en revanche, le proxy de ports de Docker sans racine
+(`rootlesskit`, écrit en Go, qui ouvre ses écouteurs en MPTCP) écoute en MPTCP
+sur `0.0.0.0` — la configuration que visait l'exploit annoncé. Ces ports ne sont
+joints depuis Internet qu'à travers Caddy, qui ouvre depuis la Forge une
+connexion neuve, sans options ; le chemin qui reste ouvert est celui d'un
+processus du Spark lui-même (§65.2), que seul le noyau corrigé ferme.
 
 **Ubuntu n'a pas encore de noyau corrigé** au 2026-10-30 : le suivi de sécurité
 classe `linux` « vulnérable, travail en cours » sur 26.04 (correctif attendu en
