@@ -9628,7 +9628,7 @@ commandée ; le gabarit `user-data.yaml`, collé tel quel, posait une amorce
 **vide** ; l'amorce supposait un pool que le schéma ne livre pas. Contrat au
 `docs/DAT.md` §66, **écrit et committé avant le code**.
 
-### [ ] SPK-158 · Une commande produit le schéma de partitionnement et le cloud-init complets d'une Forge
+### [~] SPK-158 · Une commande produit le schéma de partitionnement et le cloud-init complets d'une Forge
 
 **Demandé par le responsable le 2026-11-10** : « une commande qui output le json de
 format et le cloud init complet prêt à copier-coller, renseignée dans le README en
@@ -9661,8 +9661,38 @@ lien et en place des textes bruts ».
   coller la sortie `partitionnement` dans la console de l'hébergeur et lire sa
   validation (ou appeler `partitioning-schemas/validate`). La session ne peut pas
   le faire : ni offre ni clé valide.
+- **Codé le 2026-11-10**, dans le même changement que SPK-159 : le gabarit
+  `user-data.yaml` ne pouvait pas survivre entre les deux sans documenter un état
+  déjà faux.
+  - `scripts/preparer-forge.py` (`partitionnement`, `cloud-init`, `--defaut`,
+    `--racine-gio`, `--pool-source`, `--arc-gib`, `--net-mbit`, `--compresser`) ;
+    `deploy/cloud-init/user-data.yaml` supprimé ; README, DAT §8.6 et §51.5,
+    manuel M2, `scripts/README.md`, `deploy/README.md`, contrat de déploiement
+    corrigés.
+  - Preuves (`test_preparer_forge.py`, 74 cas) : la règle sur le **schéma par défaut
+    réel** du 2026-11-10 (le résultat est celui que la console a validé), sur NVMe
+    et UEFI **construits** (non relevés), en snake_case, neuf refus, le YAML relu
+    par PyYAML (contenu identique aux sources, ligne `runcmd` acceptée par
+    l'analyseur de l'amorce embarquée), la commande lancée comme un utilisateur
+    (fichier, entrée standard, codes de sortie, rien sur la sortie standard en cas
+    de refus). Suite sparkd : **1 809 sur 1 809**.
+  - **Défauts trouvés par les preuves, avant la livraison** : `$` d'une expression
+    régulière Python accepte une fin de ligne finale, donc `/dev/sda5\n` passait
+    pour un support sûr ; `grep -q` de l'amorce réussit dès qu'**une** ligne
+    convient, donc une première ligne valide laissait passer la suite. Les deux
+    sont corrigés, avec leurs preuves rouges d'abord.
+  - **Mesuré** : le `user-data` fait environ **19 Ko** en clair (l'estimation
+    écrite d'abord, 13 Ko, était fausse) ; `--compresser` le ramène à 11,5 Ko. La
+    limite du champ chez l'hébergeur reste inconnue.
+  - **Reste `[~]`** : le banc `make forge-vm`, qui monte la Forge avec le
+    cloud-init produit, **n'a pas été rejoué** — il est adapté (`node --check`,
+    ancres du texte vérifiées) mais le poste portait une épreuve d'un autre projet
+    (3 Gio disponibles pour une VM de 6) ; CLAUDE.md §15 bis interdit d'en lancer
+    une seconde. Le mode `--compresser` n'a pas été joué sur une VM. Les schémas
+    NVMe et UEFI sont construits, pas relevés. Et l'acceptation par l'hébergeur,
+    ci-dessus.
 
-### [ ] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
+### [~] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
 
 **Constaté le 2026-11-10**, en lisant l'amorce contre le schéma : elle adopte un
 pool « livré », or le schéma ne déclare pas de pool (`"zfs": null`, §8.6). Au
@@ -9698,6 +9728,22 @@ en éditant le fichier, serveur par serveur.
   création, `sh -n`, et la forme `source=mirror=…` de `creer-pool.sh`, rouge
   avant correction) ; banc de redémarrage vert, **le pool créé par l'amorce
   elle-même sur un Incus réel** ; README et DAT à jour ; `@spec` / `@verifies`.
+- **Codé le 2026-11-10** : `spark-amorce.sh` (arguments nommés validés avant toute
+  écriture, pool créé sur `--pool-source` seulement), `creer-pool.sh`
+  (`source=mirror=/dev/a,/dev/b`), banc adapté.
+  - Preuves (`test_amorce.py`, `test_creer_pool.py`) : l'amorce lancée **pour de
+    vrai** avec les commandes qui écrivent doublées sur le `PATH` — aide et
+    refus n'en appellent aucune, **rouge sur l'ancienne amorce** (5 appels, dont
+    `nft`) ; le bloc du pool extrait du script et joué dans cinq situations (pool
+    présent, importable, absent sans argument, absent avec argument, `creer-pool`
+    absent) ; la forme `source=mirror=…` **rouge avant correction** ; aucune
+    variable d'environnement lue. Suite sparkd : **1 809 sur 1 809**.
+  - Contrat de SPK-73 reformulé (« jamais » → « seulement sur `--pool-source` ») :
+    **arbitrage du responsable demandé** (DAT §66.2 point 6).
+  - **Reste `[~]`** : `make forge-vm` n'a **pas** été rejoué, pour la raison
+    donnée à SPK-158. C'est lui qui prouve que le pool est créé par l'amorce sur
+    un Incus réel, donc que la forme `source=mirror=…` — établie par la
+    documentation d'Incus, pas par une exécution — est acceptée.
 
 ---
 

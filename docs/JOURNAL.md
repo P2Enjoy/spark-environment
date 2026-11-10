@@ -14303,6 +14303,50 @@ corrigée ne vaut que pour `zfs`, seul pilote que le produit supporte en miroir
 (§8.5) ; les autres pilotes ne sont pas touchés. Le DAT §66.1 point 6 et SPK-159
 point 4 le portent.
 
-**Vérifications à ce stade.** Documentation seule, à relire contre le code qui
-suit : aucun code n'est encore écrit pour ce point, aucune preuve rejouée. La
-sortie de la commande n'a pas encore été soumise à l'hébergeur.
+**Réalisé le même jour.** SPK-159 puis SPK-158, **dans un seul commit** : le gabarit
+`user-data.yaml` ne pouvait pas survivre entre les deux sans qu'un document dise
+quelque chose de faux. L'amorce prend `--pool-source`, `--arc-gib`, `--net-mbit` ;
+`creer-pool.sh` écrit `source=mirror=/dev/a,/dev/b` ; `scripts/preparer-forge.py`
+produit le partitionnement et le cloud-init ; le banc consomme la sortie de la
+commande ; le README ne porte plus ni JSON ni YAML ; le gabarit est supprimé.
+
+**Ce que les preuves ont trouvé avant la livraison.**
+
+- `$` d'une expression régulière Python accepte une fin de ligne finale :
+  `/dev/sda5\n` passait pour un support sûr, et un saut de ligne aurait cassé la
+  ligne YAML. `fullmatch`, avec sa preuve rouge d'abord.
+- Le même défaut, côté shell : `printf … | grep -Eq '^…$'` réussit dès qu'**une**
+  ligne convient, donc `--pool-source "/dev/a,/dev/b\nreboot"` passait la
+  validation de l'amorce. Un `case` écarte d'abord tout caractère hors liste.
+  Trois cas rouges sur l'ancienne validation, verts ensuite. La valeur n'était pas
+  exécutée (elle est passée entre guillemets à `creer-pool.sh`, qui refuse un
+  chemin qui n'est pas un périphérique bloc) : la garde était plus faible que son
+  commentaire ne le disait, pas exploitable.
+- **Ma propre estimation de taille était fausse.** J'avais écrit au DAT et au
+  README « environ 13 Ko » ; la mesure donne **19 Ko** (les scripts pèsent 16,6 Ko :
+  l'amorce a grossi avec ses arguments, et chaque ligne gagne six espaces). C'est
+  au-dessus des 16 Ko que fixent d'autres hébergeurs. Les documents sont corrigés,
+  et `--compresser` (`gz+b64`, 11,5 Ko) existe comme échappatoire explicite —
+  gain de 40 %, pas « trois fois » comme sa première aide le disait : corrigée
+  aussi.
+- L'ancienne amorce, lancée avec `--help` ou un argument invalide sur des doubles,
+  appelle `nft` et quatre autres commandes qui écrivent : c'est la preuve rouge de
+  « un refus précède toute écriture ».
+
+**Vérifications.** Suite sparkd **1 809 sur 1 809**. La commande lancée comme un
+utilisateur sur le schéma par défaut réel : la sortie est celle que la console a
+validée. `sh -n` de l'amorce et `bash -n` de `creer-pool.sh`, **extraits de la
+sortie de la commande**.
+
+**Ce qui n'a PAS été vérifié.**
+
+- `make forge-vm` n'a pas été rejoué : une épreuve Playwright d'un autre projet
+  (`p2enjoy-crm`) tenait le poste depuis plus de 20 minutes, 3 Gio disponibles sur
+  37 pour une VM de 6. CLAUDE.md §15 bis interdit d'en lancer une seconde à côté ;
+  je n'ai pas tué un processus qui n'est pas de ce dépôt. Le banc est adapté
+  (`node --check`, ancres du texte vérifiées). **C'est lui qui dira si `creer-pool.sh`
+  est accepté par un Incus réel** avec la forme que la documentation décrit.
+- `--compresser` n'a pas été joué dans un cloud-init réel.
+- Les schémas NVMe et UEFI sont construits d'après le défaut BIOS, pas relevés.
+- La sortie `partitionnement` n'a pas été collée dans la console : le même JSON,
+  dérivé à la main, y avait été validé — pas la sortie de la commande elle-même.

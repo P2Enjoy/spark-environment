@@ -7,11 +7,16 @@
 #       l'amorce) · docs/AGENT_RUNBOOK.md §A · docs/BACKLOG.md#SPK-135,
 #       docs/DAT.md §5.3 bis (NET_MBIT : le debit declare) ·
 #       docs/BACKLOG.md#SPK-157, docs/DAT.md §65.3 (les options IPv4 rejetees
-#       des le premier demarrage : CVE-2026-98432)
+#       des le premier demarrage : CVE-2026-98432) ·
+#       docs/BACKLOG.md#SPK-159, docs/DAT.md §66.2 points 5 a 7, §66.4 (les
+#       reglages en arguments nommes ; le pool cree sur demande explicite)
 #
-# La machine est livree avec le schema de partitionnement du README : sda5 et
-# sdb5 sont nues, le zpool est cree par le geste paramétré ou deja present.
-# Ce script n'en FORMATE aucun : il adopte ce qu'il trouve.
+# La machine est livree avec le schema de partitionnement que produit
+# `scripts/preparer-forge.py` : sda5 et sdb5 sont nues et AUCUN pool n'existe
+# (DAT §66.1). Au premier demarrage, cloud-init donne --pool-source : l'amorce cree
+# alors le pool, par /opt/creer-pool.sh, qui refuse tout support deja ecrit. Sans
+# cet argument — le rejeu manuel —, elle n'a jamais cree et ne cree rien : elle
+# adopte ce qu'elle trouve. Ce script ne FORMATE rien lui-meme.
 #
 # IDEMPOTENT, et c'est un contrat, pas un effet de bord (SPK-73). Un second
 # passage remet d'aplomb ce qui a derive et NE REINITIALISE PAS les Sparks :
@@ -22,16 +27,80 @@
 # cloud-init : `runcmd` ne s'execute qu'une fois par instance, et
 # `cloud-init clean` effacerait l'etat et les journaux de la premiere pose.
 set -eu
-POOL=spark            # nom du zpool livre par le schema
-BRIDGE=sparkbr0       # bridge prive des Sparks
-ARC_GIB=16            # plafond ARC ZFS, soustrait de la memoire allouable
+
+# Conventions du produit, pas des proprietes de la machine : le registre attend le
+# pool « spark » et l'adressage 10.77.0.1/24 de « sparkbr0 » (DAT §66.2 point 5).
+POOL=spark
+BRIDGE=sparkbr0
 MEM_RESERVE_GIB=2     # reserve memoire de la Forge, hors ARC
 CPU_RESERVE=0.5       # coeurs que la Forge garde pour elle
-NET_MBIT=""           # debit du lien en Mbit/s, SEULEMENT si la carte n'en annonce
-                      # aucun (virtio) ; vide : le debit est mesure (DAT §5.3 bis)
+
+# Reglages d'installation : des ARGUMENTS NOMMES, lus dans la commande et dans
+# --help, jamais une variable d'environnement ni un texte a editer (CLAUDE.md §3).
+POOL_SOURCE=""        # --pool-source : vide, l'amorce ne cree aucun pool
+ARC_GIB=16            # --arc-gib : plafond ARC ZFS, soustrait de la memoire allouable
+NET_MBIT=""           # --net-mbit : vide, le debit est mesure (DAT §5.3 bis)
+
+usage() {
+  cat <<'USAGE'
+Usage : spark-amorce.sh [--pool-source SUPPORT,SUPPORT] [--arc-gib N] [--net-mbit N]
+
+  --pool-source A,B  les DEUX supports du miroir ZFS, un par disque,
+                     ex. /dev/nvme0n1p5,/dev/nvme1n1p5.
+                     Donne : si aucun pool « spark » ne peut etre importe, il est
+                     cree par /opt/creer-pool.sh, qui refuse un support non vide.
+                     Absent (le rejeu) : le pool est seulement adopte, jamais cree.
+  --arc-gib N        plafond de l'ARC ZFS en Gio, retire de la memoire allouable
+                     aux Sparks. Defaut 16, regle pour une machine de 94 Gio.
+  --net-mbit N       debit du lien en Mbit/s, SEULEMENT si la carte n'en annonce
+                     aucun (virtio). Absent : le debit est mesure.
+  --help             affiche cette aide.
+USAGE
+}
+
+# Un refus precede TOUTE ecriture : rien n'est lu ni pose avant que les arguments
+# soient valides, et --help n'ecrit rien.
+refuser() {
+  echo "amorce: $1" >&2
+  echo "amorce: voir --help." >&2
+  exit 2
+}
+entier_positif() {
+  case "$2" in ''|*[!0-9]*) refuser "$1 attend un entier, recu : « $2 »" ;; esac
+  [ "$2" -ge 1 ] || refuser "$1 doit etre superieur ou egal a 1, recu : $2"
+}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --pool-source|--arc-gib|--net-mbit)
+      [ $# -ge 2 ] || refuser "$1 attend une valeur"
+      case "$1" in
+        --pool-source) POOL_SOURCE=$2 ;;
+        --arc-gib)     entier_positif "$1" "$2"; ARC_GIB=$2 ;;
+        --net-mbit)    entier_positif "$1" "$2"; NET_MBIT=$2 ;;
+      esac
+      shift 2 ;;
+    *) refuser "argument inconnu : $1" ;;
+  esac
+done
+# Deux supports, des chemins /dev, des caracteres surs : la valeur finit dans un
+# appel de script lance en root. Le `case` ecarte d'abord tout caractere hors liste,
+# SAUT DE LIGNE compris : `grep -q` reussit des qu'UNE ligne convient, donc une
+# premiere ligne valide laisserait passer tout ce qui la suit.
+if [ -n "$POOL_SOURCE" ]; then
+  case "$POOL_SOURCE" in
+    *[!A-Za-z0-9._/,-]*) source_sure=non ;;
+    *) printf '%s' "$POOL_SOURCE" \
+         | grep -Eq '^/dev/[A-Za-z0-9._/-]+(,/dev/[A-Za-z0-9._/-]+)+$' \
+         && source_sure=oui || source_sure=non ;;
+  esac
+  [ "$source_sure" = oui ] \
+    || refuser "--pool-source attend deux chemins /dev separes par une virgule, recu : « $POOL_SOURCE »"
+fi
+
 export DEBIAN_FRONTEND=noninteractive
 
-# SPK-157 · docs/DAT.md §65.3 — AVANT tout le reste. CVE-2026-98432 : un SYN IPv4
+# SPK-157 · docs/DAT.md §65.3 — AVANT toute ecriture et tout apt. CVE-2026-98432 : un SYN IPv4
 # porteur d'options atteint un use-after-free du noyau que la Forge partage avec
 # ses Sparks. La machine est exposee des son premier demarrage, et sparkd ne pose
 # son pare-feu que plusieurs minutes plus tard. Ces tables sont CELLES de
@@ -132,10 +201,29 @@ EOF
 apt-get update -q
 apt-get install -y incus zfsutils-linux
 
-# Le pool livre par l'hebergeur : l'importer si besoin, puis le confier a Incus.
-# Aucune creation, aucun formatage — le pool s'adopte.
+# Le pool : l'adopter s'il existe, le creer SEULEMENT sur demande explicite, puis
+# le confier a Incus (docs/DAT.md §66.2 point 6).
+#
+# --pool-source est absent d'un rejeu (`sudo /opt/spark-amorce.sh`) : une Forge en
+# service ne peut donc pas voir cette amorce ecrire sur un disque. Donne, il ne sert
+# qu'a une machine sans pool, et la creation passe par creer-pool.sh, qui REFUSE un
+# support portant deja une signature — y compris celle d'un pool non importe.
 modprobe zfs
-zpool list "$POOL" >/dev/null 2>&1 || zpool import -f "$POOL"
+pool_present() {
+  zpool list "$POOL" >/dev/null 2>&1 || zpool import -f "$POOL" >/dev/null 2>&1
+}
+if ! pool_present; then
+  if [ -z "$POOL_SOURCE" ]; then
+    echo "amorce: aucun pool « $POOL » n'est present ni importable, et --pool-source" >&2
+    echo "amorce: n'est pas donne : sans cette demande explicite, l'amorce ne cree rien." >&2
+    echo "amorce: creez le pool (scripts/creer-pool.sh) puis rejouez, ou donnez --pool-source." >&2
+    exit 1
+  fi
+  [ -x /opt/creer-pool.sh ] \
+    || refuser "/opt/creer-pool.sh est absent : le cloud-init de preparer-forge.py le depose"
+  echo "amorce: aucun pool « $POOL » : creation par creer-pool.sh sur $POOL_SOURCE"
+  SPARK_POOL_NAME="$POOL" SPARK_POOL_SOURCE="$POOL_SOURCE" /opt/creer-pool.sh
+fi
 incus storage show "$POOL" >/dev/null 2>&1 \
   || incus storage create "$POOL" zfs "source=$POOL"
 

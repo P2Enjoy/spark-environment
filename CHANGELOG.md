@@ -14,6 +14,24 @@
   à la main sur la Forge le 2026-10-30 (OP-41 étape 1).
 
 ### Ajouté
+- **SPK-158 — une commande produit le schéma de partitionnement et le cloud-init
+  complets d'une Forge, prêts à coller dans la console de l'hébergeur.**
+  `scripts/preparer-forge.py partitionnement --defaut defaut.json` et
+  `… cloud-init --defaut defaut.json` lisent le schéma de partitionnement **par
+  défaut de l'offre** (la console l'affiche) et lui appliquent une règle :
+  tout est conservé, `root` est bornée (200 Gio par défaut, `--racine-gio`), une
+  partition `data` prend le reste de chaque disque et ses deux supports restent
+  nus ; un schéma sans deux disques, déjà dérivé ou qui déclare un pool est
+  refusé avec ses mots, en code `2`, sans rien sur la sortie standard. Le
+  cloud-init embarque `spark-amorce.sh` et `creer-pool.sh` **octet pour octet** et
+  lance l'amorce avec `--pool-source`, `--arc-gib` et `--net-mbit` ;
+  `--compresser` les embarque en `gz+b64` (11,5 Ko au lieu de 19 Ko : la limite
+  du champ chez l'hébergeur n'est pas documentée). Le README ne porte plus ni
+  JSON ni YAML ; `deploy/cloud-init/user-data.yaml`, dont le marqueur collé tel
+  quel posait une amorce **vide** sans la moindre erreur, est supprimé. Preuves
+  sur le schéma par défaut réel relevé le 2026-11-10, relu avec PyYAML
+  (dépendance de test). Aucune migration, aucune variable d'environnement. DAT
+  §66 ; README ; `scripts/README.md`.
 - **SPK-156 — une route dit pourquoi son certificat ne vient pas.** La
   configuration posée sur Caddy déclare un journal d'émission
   (`/var/log/caddy/emission-tls.log`, enregistreurs `tls.obtain`, `tls.renew`,
@@ -104,6 +122,19 @@
   et §37.7.4 révisés ; SPK-DS-35 ; manuels M8 et M6 ; OP-31.
 
 ### Modifié
+- **SPK-159 — l'amorce cloud-init prend des arguments nommés, et crée le pool sur
+  demande explicite.** `--pool-source`, `--arc-gib`, `--net-mbit` et `--help`
+  remplacent `ARC_GIB` et `NET_MBIT`, qu'il fallait éditer dans le texte, serveur
+  par serveur ; un argument inconnu ou invalide est refusé **avant toute
+  écriture**, saut de ligne compris. Au premier démarrage, l'amorce s'arrêtait à
+  `zpool import -f spark` : le schéma ne livre aucun pool (`"zfs": null`). Elle
+  appelle désormais `creer-pool.sh` — qui refuse un support non vide — **si, et
+  seulement si**, `--pool-source` est donné et qu'aucun pool ne peut être
+  importé. Le rejeu manuel (`sudo /opt/spark-amorce.sh`) ne le donne pas : il ne
+  crée toujours rien. Le plafond de l'ARC garde 16 Gio par défaut. Le banc
+  `make forge-vm` monte sa Forge avec le cloud-init que produit la commande, et
+  laisse l'amorce créer le pool : il le créait lui-même avant, « comme
+  l'hébergeur le livre ». Aucune migration, aucune variable. DAT §66.2, §66.4.
 - **SPK-153 — la recette « Site web » ne pose le `www` que si on le demande.**
   Elle posait toujours le `www` du nom choisi, y compris sous un sous-domaine
   (`www.evoliz-mcp`), avec sa route. Une case *Poser aussi le « www »*, sous le
@@ -116,6 +147,13 @@
   aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
 
 ### Corrigé
+- **`creer-pool.sh` passe à Incus la source du miroir dans la forme que sa
+  documentation décrit.** Il écrivait `source=mirror /dev/a /dev/b` ; Incus
+  documente `source=mirror=/dev/a,/dev/b` (type de vdev, `=`, périphériques
+  séparés par des virgules). Les preuves assertaient la forme fautive contre un
+  `incus` doublé : elles ne pouvaient pas la contredire. **Établi par la
+  documentation, pas par un Incus réel** — le banc de redémarrage est le premier
+  à jouer ce geste. Seul le pilote `zfs` est touché. DAT §66.1 point 6 (SPK-159).
 - **SPK-155 — l'émetteur de certificats est déclaré : Let's Encrypt, et lui
   seul.** Sans déclaration, Caddy 2.6.2 se repliait sur ZeroSSL, qui refuse
   chaque tentative depuis que son API ne délivre plus d'identifiants sans compte

@@ -3,7 +3,9 @@
 #
 # @spec docs/BACKLOG.md#SPK-28 · docs/DAT.md §8.5 (UNE disposition, revise le
 #       2026-09-02), §8.5 bis (aucune valeur codee en dur), §8.6 (le schema de
-#       partitionnement) · README.md · docs/PROD_MIGRATIONS.md
+#       partitionnement) · README.md · docs/PROD_MIGRATIONS.md ·
+#       docs/BACKLOG.md#SPK-159, docs/DAT.md §66.1 point 6 (la forme de la
+#       source du miroir ; le script est aussi appele par l'amorce cloud-init)
 #
 # Ce script CREE. La verification est ailleurs, en lecture seule (§31.3) :
 #
@@ -79,5 +81,18 @@ done
 echo "== Pool « $NOM », miroir ZFS natif =="
 echo "   pilote      : $PILOTE"
 echo "   miroir sur  : ${PERIPHERIQUES[*]}"
-incus storage create "$NOM" "$PILOTE" source="mirror ${PERIPHERIQUES[*]}"
+
+# La `source` d'un pool ZFS dans la forme que DECRIT Incus (reference/storage_zfs) :
+# le type de vdev, `=`, puis les peripheriques separes par des virgules —
+# `mirror=/dev/a,/dev/b`. L'ancienne forme, `mirror /dev/a /dev/b`, n'y figure pas
+# (SPK-159, DAT §66.1 point 6). Etabli par la documentation ; le banc de
+# redemarrage la joue sur un Incus reel. Les autres pilotes ne sont pas touches :
+# le produit ne supporte le miroir qu'en ZFS (§8.5).
+if [ "$PILOTE" = "zfs" ]; then
+  LISTE=$(IFS=,; echo "${PERIPHERIQUES[*]}")
+  SOURCE_INCUS="mirror=${LISTE}"
+else
+  SOURCE_INCUS="mirror ${PERIPHERIQUES[*]}"
+fi
+incus storage create "$NOM" "$PILOTE" source="$SOURCE_INCUS"
 echo "Cree. ZFS gere le miroir : la corruption silencieuse est detectee ET reparee."

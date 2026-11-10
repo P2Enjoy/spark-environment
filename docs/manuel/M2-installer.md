@@ -36,8 +36,9 @@ partitions du même disque n'en font pas un : la panne de ce disque emporterait
 les deux copies. Quand le miroir n'est pas proposé, l'écran dit laquelle des
 trois situations vous avez — aucun support libre, un seul, ou tous sur le même
 disque — parce qu'elles appellent deux gestes, tous deux **en amont de la
-console** : commander la machine avec le schéma de partitionnement, ou lui
-ajouter un disque.
+console** : commander la machine avec le schéma de partitionnement que produit
+`scripts/preparer-forge.py partitionnement` (voir le README), ou lui ajouter un
+disque.
 
 Le relevé demande à la Forge le droit d'administration qu'il a constaté pour
 `sudo`. Sans ce droit, il ne peut lire ni les pools, ni les réseaux, ni la
@@ -236,9 +237,9 @@ nouveau :
 SPARKD_NETWORK_CAPACITY_MBIT=1000
 ```
 
-Pour une Forge montée par le cloud-init, le réglage `NET_MBIT` en tête de
-`deploy/cloud-init/spark-amorce.sh` fait la même déclaration ; laissez-le vide
-sur une machine dont la carte annonce son débit. Un débit **mesuré** l'emporte
+Pour une Forge montée par le cloud-init, l'argument `--net-mbit` de la commande
+`scripts/preparer-forge.py cloud-init` (il devient un argument de l'amorce) fait la
+même déclaration ; ne le donnez pas sur une machine dont la carte annonce son débit. Un débit **mesuré** l'emporte
 toujours sur un débit déclaré, et l'onglet Forge dit lequel il affiche
 ([M4](M4-pools.md)).
 

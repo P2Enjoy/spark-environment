@@ -351,8 +351,8 @@ issue, alors qu'**il connaît le débit** de la machine qu'il loue.
   l'écran de la Forge dit « déclaré » à côté de la capacité réseau. Une capacité
   que personne n'a mesurée ne doit pas se lire comme une mesure ;
 - l'exécuteur accepte `networkCapacityMbit` dans la configuration de son plan,
-  et l'écrit dans `/etc/sparkd/sparkd.env` ; l'amorce du cloud-init porte le
-  réglage `NET_MBIT`, vide par défaut — le débit est alors mesuré. Une
+  et l'écrit dans `/etc/sparkd/sparkd.env` ; l'amorce du cloud-init reçoit
+  l'argument `--net-mbit` (SPK-159), absent par défaut — le débit est alors mesuré. Une
   déclaration posée à la main dans `sparkd.env` survit à une réinstallation :
   l'exécuteur ne l'écrit que s'il en reçoit une.
 
@@ -1125,11 +1125,14 @@ sda4 / sdb4   ~200 Go  md1  → /  ext4
 sda5 / sdb5   ~5,2 To  zpool miroir    — À CRÉER
 ```
 
-Le schéma de partitionnement remis à l'hébergeur (README) **ne déclare pas** le
+Le schéma de partitionnement remis à l'hébergeur — que produit
+`scripts/preparer-forge.py` (§66) — **ne déclare pas** le
 pool, alors que l'API de Scaleway saurait le créer. Ce n'est pas un oubli : un
 pool créé à l'installation laisserait une signature `zfs_member` sur `sda5` et
 `sdb5`, et `scripts/creer-pool.sh` refuserait alors d'écrire dessus (§8.5 bis).
-La frontière tient : l'hébergeur livre des partitions, la Forge crée son pool.
+La frontière tient : l'hébergeur livre des partitions, la Forge crée son pool — au
+premier démarrage, par l'amorce qui appelle `creer-pool.sh` sur `--pool-source`
+(§66.2 point 6).
 
 Le passage de la disposition actuelle à celle-ci suppose de réduire `md1`, ce que
 `resize2fs` ne sait pas faire à chaud sur un système de fichiers racine monté. Deux
@@ -9555,11 +9558,15 @@ appelle le même exécuteur.
    du dépôt, dans une machine virtuelle du poste — pas sur la Forge de
    validation, qui porte des locataires. Un miroir sur deux disques, un Spark,
    une route, un redémarrage, puis tout est revérifié **sans aucun geste**. Le
-   banc s'écarte du cloud-init réel en quatre points, et en ceux-là seulement,
-   qu'il imprime : il crée le zpool avant l'amorce (l'hébergeur le livre, §8.2) ;
-   il installe `sparkd` depuis l'arbre de travail et non depuis `main`, pour
-   éprouver une build avant de la publier ; il réduit l'ARC à la mémoire de la
-   machine virtuelle ; il dépose une clé SSH jetable pour s'y connecter.
+   banc monte la Forge avec le cloud-init que **produit** `scripts/preparer-forge.py`
+   (§66, SPK-158), et s'en écarte en trois points, et en ceux-là seulement,
+   qu'il imprime : il installe `sparkd` depuis l'arbre de travail et non depuis
+   `main`, pour éprouver une build avant de la publier ; il passe `--arc-gib 1`
+   à l'amorce, la machine virtuelle ayant 6 Gio ; il dépose une clé SSH jetable
+   pour s'y connecter. **Le pool n'est plus un écart** : l'hébergeur ne le livre
+   pas (§66.1), et c'est l'amorce qui le crée, sur `--pool-source` (§66.2 point 6).
+   *Jusqu'au 2026-11-10 le banc créait le zpool lui-même avant l'amorce « comme
+   l'hébergeur le livre » ; la table ci-dessous a été jouée dans cet état.*
 
 **Joué le 2026-09-30** (`make forge-vm`, `e2e/forge-vm/redemarrage.mjs`) :
 
@@ -16074,9 +16081,9 @@ exactement les règles que rend `pare_feu` : deux textes, une seule règle.
 
 ## 66. Commander une Forge : une commande produit le schéma de partitionnement et le cloud-init complets : contrat (SPK-158, SPK-159)
 
-*Écrit le 2026-11-10, avant le code. Les sections qu'il remplace (§8.2, §8.6, le
-README, l'en-tête de l'amorce) restent vraies de l'état du dépôt jusqu'à la
-livraison du code, qui les corrige dans le même changement.*
+*Contrat écrit le 2026-11-10 avant le code (commit `38e8968`), livré dans le même
+changement que la correction de §8.6, du README, de l'amorce et du banc de
+redémarrage. L'ancien gabarit `deploy/cloud-init/user-data.yaml` est supprimé.*
 
 ### 66.1 Le constat
 
@@ -16193,8 +16200,14 @@ validation : un support doit être un chemin `/dev/…` de caractères sûrs, le
 entiers sont des entiers. La commande écrit sur **la sortie d'erreur** la taille
 produite : la limite du champ chez l'hébergeur n'est pas documentée (recherche du
 2026-11-10 ; il n'accepte que `text/plain`), et la seule autre limite rencontrée,
-chez un autre hébergeur, est de 16 Ko. Deux scripts de 11,8 Ko donnent un fichier
-d'environ 13 Ko.
+chez un autre hébergeur, est de 16 Ko. **Mesuré le 2026-11-10** : les deux scripts
+pèsent 16,6 Ko, le `user-data` environ **19 Ko** en clair — au-dessus de cette
+limite-là. `--compresser` embarque les scripts en `gz+b64` (que cloud-init décode
+lui-même ; le contenu décodé reste celui du dépôt, octet pour octet) : **11,5 Ko**.
+Ce n'est pas le défaut — le texte lisible se relit avant de coller —, c'est
+l'échappatoire si l'hébergeur refuse la taille ; il n'a pas été joué sur une VM.
+*Une première version de ce paragraphe annonçait 13 Ko : l'estimation oubliait la
+croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
 
 ### 66.5 La preuve
 

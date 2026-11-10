@@ -29,6 +29,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    # Dependance de TEST seulement (SPK-158, docs/DAT.md §66.5) : relire le
+    # cloud-init que produit `scripts/preparer-forge.py` avec la bibliotheque que
+    # cloud-init emploie lui-meme. Aucun effet sur le paquet deploye.
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]

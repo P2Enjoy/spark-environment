@@ -9,7 +9,9 @@
 - `staging/`, `prod/` — variables dediees, documentees dans le `README.md` et
   dans `docs/PROD_MIGRATIONS.md`.
 - `cloud-init/` — l'amorce d'une Forge neuve : le script joue par `runcmd` au
-  premier demarrage, et son gabarit `user-data`. Unite **SPK-73**.
+  premier demarrage. Le `user-data` complet ne s'ecrit pas a la main : il est
+  PRODUIT par `scripts/preparer-forge.py cloud-init` (il n'y a plus de gabarit).
+  Unites **SPK-73**, **SPK-158**, **SPK-159**.
 
 **Les unites systemd ne vivent PAS ici.** Elles sont emballees avec le paquet,
 dans `services/sparkd/src/sparkd/systemd/`, et posees par `python -m

@@ -12,11 +12,17 @@
  * @verifies docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3 (le fichier des
  *           secrets reposé après *Redémarrer*, après un `reboot` dans la
  *           cellule, après le redémarrage de la Forge ; la ligne du journal)
+ * @verifies docs/BACKLOG.md#SPK-158 · docs/DAT.md §66.4, §66.5 (la Forge est montée
+ *           par le cloud-init que PRODUIT la commande, pas par un gabarit)
+ * @verifies docs/BACKLOG.md#SPK-159 · docs/DAT.md §66.2 points 5 et 6, §66.5 (le
+ *           pool est CRÉÉ PAR L'AMORCE, sur `--pool-source`, sur deux disques
+ *           vierges, et `creer-pool.sh` joue pour la première fois sur un Incus réel)
  *
  * Ce que le banc établit, et que rien d'autre n'établit :
  *
  *   1. `deploy/cloud-init/` monte une Forge qui fonctionne — préflight vert,
- *      `sparkd` prêt — sur une Ubuntu 26.04 neuve, à deux disques ;
+ *      `sparkd` prêt — sur une Ubuntu 26.04 neuve, à deux disques VIERGES dont
+ *      l'amorce crée elle-même le pool miroir (`--pool-source`, SPK-159) ;
  *   2. un Spark créé PAR L'API, une route déclarée PAR L'API, servent une page ;
  *   3. le fichier des secrets d'un Spark (`/run/spark/secrets`, un tmpfs) est
  *      là après *Redémarrer* par l'API, et revient seul après un `reboot` tapé
@@ -25,18 +31,22 @@
  *      sert la même page, le Spark est en marche, son fichier des secrets est
  *      reposé, le pare-feu est posé, le préflight est vert.
  *
- * Il s'écarte du cloud-init réel en quatre points, et en ceux-là seulement —
- * il les imprime avant de démarrer :
- *   - il crée le zpool avant l'amorce : l'hébergeur le livre (docs/DAT.md §8.2) ;
+ * Le cloud-init est celui que PRODUIT `scripts/preparer-forge.py cloud-init`
+ * (SPK-158), avec ses arguments nommés : le banc ne le compose plus lui-même.
+ * Il s'en écarte en trois points, et en ceux-là seulement — il les imprime avant
+ * de démarrer :
  *   - il installe `sparkd` depuis une roue construite sur CE poste, et non depuis
  *     `main` : c'est une build qu'on veut éprouver avant de la publier ;
- *   - il ramène le plafond de l'ARC à 1 Gio : la machine en a 6 ;
+ *   - il passe `--arc-gib 1` à l'amorce : la machine en a 6. Un ARGUMENT de
+ *     l'amorce, plus un texte remplacé (SPK-159) ;
  *   - il dépose une clé SSH jetable, pour s'y connecter.
+ * Le pool n'est plus un écart : l'hébergeur ne le livre pas (§66.1), et le banc
+ * ne le crée plus à la place de l'amorce — elle le crée, sur `--pool-source`.
  *
  *   make forge-vm                          # roue construite depuis l'arbre de travail
  *   make forge-vm ARGS="--roue <x.whl>"    # une roue donnée : la preuve ROUGE d'avant
  *   make forge-vm ARGS="--carte virtio"    # SPK-135 : une carte qui n'annonce aucun
- *                                          # débit, et `NET_MBIT` déclaré dans l'amorce
+ *                                          # débit, et `--net-mbit` passé à l'amorce
  *   make forge-vm ARGS="--garder"          # SPK-137 : garde la machine, lance une console
  *                                          # branchée sur elle, attend Ctrl-C
  *   make forge-vm ARGS="--epreuve <a,b>"   # SPK-137 : joue e2e/forge-vm/epreuves/<a>.mjs,
@@ -209,10 +219,11 @@ if (brancher) {
   }
 }
 
-// --- 2. le cloud-init du dépôt, et ses quatre écarts --------------------------
+// --- 2. le cloud-init que PRODUIT la commande du dépôt, et ses trois écarts ----
+// SPK-158 : le banc ne compose plus le cloud-init lui-même — il lance la commande
+// que l'exploitant lance (`scripts/preparer-forge.py cloud-init`), avec ses
+// arguments nommés. C'est ce texte-là, et aucun autre, que la machine reçoit.
 const portSeed = await portLibre();
-const gabarit = readFileSync(join(RACINE, 'deploy', 'cloud-init', 'user-data.yaml'), 'utf8');
-let amorce = readFileSync(join(RACINE, 'deploy', 'cloud-init', 'spark-amorce.sh'), 'utf8');
 function remplacer(texte, avant, apres, ecart) {
   if (!texte.includes(avant)) {
     throw new Error(`le cloud-init a changé, l'écart « ${ecart} » ne s'applique plus : ${avant}`);
@@ -220,25 +231,23 @@ function remplacer(texte, avant, apres, ecart) {
   console.log(`  écart du banc — ${ecart}`);
   return texte.replace(avant, apres);
 }
-console.log('Écarts du banc au cloud-init réel (docs/DAT.md §51.5) :');
-amorce = remplacer(amorce,
+// Le pool est créé PAR L'AMORCE sur les deux disques vierges du banc (`vdb`, `vdc`) :
+// `--pool-source` donné, comme le donne la commande depuis le schéma de l'hébergeur.
+const argsCommande = ['cloud-init', '--pool-source', '/dev/vdb,/dev/vdc', '--arc-gib', '1',
+                      ...(carte === 'virtio' ? ['--net-mbit', '1000'] : [])];
+const produit = spawnSync('python3', [join(RACINE, 'scripts', 'preparer-forge.py'), ...argsCommande],
+                          { encoding: 'utf8' });
+if (produit.status !== 0) {
+  throw new Error(`preparer-forge.py ${argsCommande.join(' ')} → ${produit.status}\n${produit.stderr}`);
+}
+console.log(`Le cloud-init est celui de « preparer-forge.py ${argsCommande.join(' ')} »`);
+console.log('Écarts du banc à ce cloud-init (docs/DAT.md §51.5, §66.5) :');
+let userData = remplacer(produit.stdout,
   '"git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"',
   `"http://10.0.2.2:${portSeed}/${basename(roue)}"`,
   `sparkd installé depuis ${basename(roue)}, pas depuis main`);
-amorce = remplacer(amorce, 'ARC_GIB=16 ', 'ARC_GIB=1  ', 'plafond ARC ramené à 1 Gio');
-if (carte === 'virtio') {
-  amorce = remplacer(amorce, 'NET_MBIT=""  ', 'NET_MBIT="1000"',
-    'carte virtio, qui n’annonce aucun débit : NET_MBIT=1000 déclaré (SPK-135)');
-}
-const MARQUE = '      # <<< contenu integral de deploy/cloud-init/spark-amorce.sh, indente ici >>>';
-let userData = remplacer(gabarit, MARQUE,
-  amorce.split('\n').map((l) => (l ? `      ${l}` : '')).join('\n'),
-  'amorce insérée dans le gabarit, telle quelle hors des deux écarts ci-dessus');
-userData = remplacer(userData, "runcmd:\n  - '/opt/spark-amorce.sh'",
-  "runcmd:\n  - [sh, -c, 'apt-get update -q && apt-get install -y zfsutils-linux"
-  + " && zpool create -f spark mirror /dev/vdb /dev/vdc && zpool export spark']\n"
-  + "  - '/opt/spark-amorce.sh'",
-  'zpool « spark » créé en miroir sur vdb et vdc avant l’amorce, comme l’hébergeur le livre');
+console.log('  écart du banc — ARC à 1 Gio (--arc-gib 1) : la machine en a 6'
+  + (carte === 'virtio' ? ' ; carte virtio, qui n’annonce aucun débit : 1000 Mbit/s déclarés (--net-mbit 1000, SPK-135)' : ''));
 userData = remplacer(userData, '\nwrite_files:',
   `\nssh_authorized_keys:\n${[clePublique, ...clesDuPoste].map((c) => `  - ${c}`).join('\n')}`
   + `${hote ? `\n\nssh_keys:\n  ed25519_private: |\n${hote.privee.trimEnd().split('\n')

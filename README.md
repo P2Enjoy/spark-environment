@@ -97,7 +97,8 @@ n'a jamais tourné ailleurs que sur cette Forge-là. Le détail est au §13 du
 ## Forge cible
 
 Dell PowerEdge R320, relevé le 2026-09-01, après réinstallation complète depuis
-le schéma de partitionnement JSON ci-dessous.
+un schéma de partitionnement qui réserve `sda5` et `sdb5` — la règle qui produit un
+tel schéma pour n'importe quelle offre est décrite plus bas.
 
 | Ressource | Capacité physique | Remarque |
 |---|---|---|
@@ -115,7 +116,7 @@ défaut, c'est le mode normal sur cette machine.
 **Ce que le partitionnement à la commande a débloqué :** cette machine a
 d'abord été livrée avec ses deux disques entièrement consommés par un unique
 RAID1 `ext4` monté sur `/`, sans aucun périphérique bloc libre — la disposition
-sur fichier était alors la seule possible. Le schéma JSON fourni à la création
+sur fichier était alors la seule possible. Le schéma de partitionnement fourni à la création
 réserve désormais `sda5` et `sdb5`, et la Forge tourne sur un **miroir ZFS
 natif**. Le partitionnement ne se change plus après la
 livraison : il se décide à la commande. Voir le §8 du [DAT](docs/DAT.md).
@@ -166,6 +167,10 @@ se crée par un geste, et **toutes** ses valeurs viennent de l'environnement :
 sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
 ```
 
+Sur une machine commandée avec le cloud-init que produit `scripts/preparer-forge.py`
+(voir plus bas), l'amorce appelle ce geste elle-même au premier démarrage : le lancer à
+la main reste le geste de secours, ou celui d'une machine installée autrement.
+
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `SPARK_POOL_NAME` | nom du pool à créer | `spark` |
@@ -192,8 +197,8 @@ Sont hors périmètre :
 - toute machine n'offrant qu'un seul support libre.
 
 Un support est un **disque entier libre ou une partition libre** — y compris sur
-un disque qui porte le système, ce qui est précisément le cas du schéma
-ci-dessous. Le remède à une machine inéligible est en amont : la commander
+un disque qui porte le système, ce qui est précisément le cas du schéma que
+produit la commande ci-dessous. Le remède à une machine inéligible est en amont : la commander
 partitionnée, ou lui ajouter un disque. Le produit promet le quota, les
 instantanés **et** le miroir ; il n'offre pas de repli qui n'en tiendrait que
 deux en silence.
@@ -204,77 +209,69 @@ une Forge réelle, et portait la plus grande part de la surface d'installation.
 Une Forge déjà installée ainsi continue de fonctionner ; le préflight la relève
 en avertissement et l'assistant n'en reproduira pas.
 
-### Obtenir d'emblée une machine partitionnée
+### Commander une Forge : une commande produit le partitionnement et le cloud-init
 
+Ni JSON ni YAML à recopier ici. Un schéma de partitionnement n'est **jamais** valable
+pour deux machines — les noms de disques (`sda` ou `nvme0n1`), le mode de démarrage
+(BIOS ou UEFI) et la taille des disques s'y écrivent en dur —, alors que la **règle**
+qui le produit l'est. [`scripts/preparer-forge.py`](scripts/preparer-forge.py)
+l'applique au schéma **par défaut de l'offre**, celui que la console de l'hébergeur
+propose, et écrit sur la sortie standard ce qu'il y a à coller. Chez un hébergeur qui
+accepte un schéma de partitionnement à la création du serveur — Scaleway le fait —,
+c'est ce qui évite tout repartitionnement ultérieur (il ne se change plus après la
+livraison : seule une réinstallation le refait).
 
-Chez un hébergeur qui accepte un schéma de partitionnement à la création du
-serveur — Scaleway le fait —, le fournir évite tout repartitionnement ultérieur.
-Ce schéma laisse **`sda5` et `sdb5` libres** pour le pool :
+1. Dans la console de l'hébergeur, à la commande du serveur, section *Configure disk
+   partitions* : choisir *Custom configuration*, puis *Reset to default*, et copier le
+   JSON affiché dans un fichier, par exemple `defaut.json`.
+2. Produire le partitionnement, à coller dans l'éditeur JSON de la console :
 
-```json
-{
-  "disks": [
-    {
-      "device": "/dev/sda",
-      "partitions": [
-        { "label": "legacy", "number": 1, "size": 536870912 },
-        { "label": "swap",   "number": 2, "size": 4294967296 },
-        { "label": "boot",   "number": 3, "size": 536870912 },
-        { "label": "root",   "number": 4, "size": 214748364800 },
-        { "label": "data",   "number": 5, "size": 5766596526080 }
-      ]
-    },
-    {
-      "device": "/dev/sdb",
-      "partitions": [
-        { "label": "legacy", "number": 1, "size": 536870912 },
-        { "label": "swap",   "number": 2, "size": 4294967296 },
-        { "label": "boot",   "number": 3, "size": 536870912 },
-        { "label": "root",   "number": 4, "size": 214748364800 },
-        { "label": "data",   "number": 5, "size": 5766596526080 }
-      ]
-    }
-  ],
-  "raids": [
-    { "name": "/dev/md0", "level": "raid_level_1",
-      "devices": ["/dev/sda3", "/dev/sdb3"] },
-    { "name": "/dev/md1", "level": "raid_level_1",
-      "devices": ["/dev/sda4", "/dev/sdb4"] }
-  ],
-  "filesystems": [
-    { "device": "/dev/md0", "format": "ext4", "mountpoint": "/boot" },
-    { "device": "/dev/md1", "format": "ext4", "mountpoint": "/" }
-  ],
-  "zfs": null
-}
-```
+   ```bash
+   python3 scripts/preparer-forge.py partitionnement --defaut defaut.json
+   ```
 
-C'est la forme exacte de `scaleway.baremetal.v1.Schema` : `disks`, `raids` et
-`filesystems` sont des **listes**, pas des objets indexés par périphérique. Les
-tailles sont en octets et **totalisent la capacité du disque** — ici
-5 986 713 600 000 octets par disque. Sur des disques d'une autre taille, ajuster
-la dernière partition, ou lui donner `"use_all_available_space": true` au lieu
-d'une taille.
+3. Produire le cloud-init complet, à coller dans *Cloud-init configuration* :
 
-Ce qu'il produit, et pourquoi :
+   ```bash
+   python3 scripts/preparer-forge.py cloud-init --defaut defaut.json --arc-gib 16
+   ```
 
-- les libellés viennent d'une **énumération fermée** — `uefi`, `legacy`, `root`,
-  `boot`, `swap`, `data`, `home`, `raid`, `zfs`. `legacy` est la partition
-  d'amorçage BIOS : cette machine n'amorce pas en UEFI, donc **pas de partition
-  `uefi` ni de `/boot/efi` en fat32**. `data` ne désigne ici qu'une partition
-  que rien ne réclame ;
-- **`sda5` et `sdb5` n'apparaissent ni dans `raids` ni dans `filesystems`** :
-  elles restent des périphériques bloc nus, ce qu'exige le miroir natif. Les
-  confier à `md` reproduirait exactement le problème que le miroir ZFS résout ;
-- **`"zfs": null` est délibéré.** Déclarer le pool ici le ferait créer par
-  l'hébergeur à l'installation ; `creer-pool.sh` verrait alors une signature
-  `zfs_member` sur les deux périphériques et **refuserait** d'écrire dessus. Le
-  pool se crée après livraison, par le geste paramétré, ou pas du tout ;
-- le système reste sur un RAID1 de ~200 Gio, largement suffisant : la Forge de
-  validation en consomme 2,7 Gio.
+4. La console contrôle en direct (« Your JSON file is correct and can be applied ») que
+   les tailles tiennent dans les disques. Commander.
 
-Par l'API, ce bloc se place sous `install.partitioning_schema`. L'hébergeur sait
-le vérifier avant toute installation, et c'est la seule réponse qui engage :
+Chaque sous-commande a son `--help`. La sortie va sur la sortie standard, ce que la
+commande a décidé sur la sortie d'erreur ; un refus sort avec le code `2`, un message,
+et **rien** à coller. `--defaut -` lit l'entrée standard.
+
+| Argument | Sous-commande | Rôle | Défaut |
+|---|---|---|---|
+| `--defaut FICHIER` | les deux | le schéma par défaut de l'offre | obligatoire (ou `--pool-source` pour `cloud-init`) |
+| `--racine-gio N` | les deux | taille de la partition système `root`, en Gio | `200` — la Forge de validation en consomme 2,7 |
+| `--pool-source A,B` | `cloud-init` | les deux supports du miroir, à la place de `--defaut` | déduits du schéma |
+| `--arc-gib N` | `cloud-init` | plafond de l'ARC ZFS, en Gio, retiré de la mémoire allouable | l'amorce garde `16`, **réglé pour 94 Gio de RAM : à adapter** sur une machine qui en a moins |
+| `--net-mbit N` | `cloud-init` | débit du lien, **seulement** si la carte n'en annonce aucun (`virtio`) | absent : le débit est mesuré |
+| `--compresser` | `cloud-init` | embarque les scripts en `gz+b64` : 11,5 Ko au lieu de 19 Ko | absent : texte lisible |
+
+**La règle**, appliquée à chaque disque du schéma par défaut (`docs/DAT.md` §66.3) :
+
+- tout est conservé tel quel — partitions `uefi`, `legacy`, `boot`, `swap`, RAID,
+  systèmes de fichiers ;
+- la partition `root`, qui prend « tout l'espace restant » dans le défaut, est **bornée** ;
+- une partition **`data`** lui succède et prend ce qui reste : `sda5` et `sdb5` (ou
+  `nvme0n1p5` et `nvme1n1p5`) sont les deux supports du pool ;
+- ces deux supports n'apparaissent **ni dans `raids` ni dans `filesystems`** : ils restent
+  des périphériques bloc nus, ce qu'exige le miroir natif. Les confier à `md`
+  reproduirait exactement le problème que le miroir ZFS résout ;
+- **aucun `zfs` n'est déclaré à l'hébergeur.** Il créerait le pool à l'installation ;
+  `creer-pool.sh` verrait alors une signature `zfs_member` sur les deux périphériques et
+  **refuserait** d'écrire dessus. La Forge crée son pool elle-même, au premier démarrage ;
+- la commande **refuse**, en le disant, un schéma qui n'a pas deux disques, qui déclare
+  déjà un pool, dont la partition « reste » n'est pas `root` et dernière, ou qui est déjà
+  dérivé.
+
+**Ce que la commande ne sait pas :** la capacité des disques. La console de l'hébergeur la
+contrôle, et l'hébergeur sait aussi vérifier un schéma avant toute installation par
+l'API — c'est la seule réponse qui engage :
 
 ```bash
 curl -i -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" \
@@ -283,25 +280,38 @@ curl -i -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" \
   https://api.scaleway.com/baremetal/v1/zones/fr-par-2/partitioning-schemas/validate
 ```
 
-Un `204` vaut acceptation. Le partitionnement ne se change plus après coup :
-seule une réinstallation le refait.
+Un `204` vaut acceptation (`{…}` est la sortie de `partitionnement`).
 
-Une fois la machine livrée, il ne reste qu'à créer le pool :
-
-```bash
-sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
-```
+**Limite connue :** la limite de taille du champ cloud-init chez l'hébergeur n'est pas
+documentée. Mesuré le 2026-11-10, le `user-data` fait **environ 19 Ko** (les deux scripts
+embarqués pèsent 16,6 Ko) — au-dessus des 16 Ko que fixent d'autres hébergeurs. La
+commande écrit la taille produite sur la sortie d'erreur ; si l'hébergeur refuse la
+taille, `--compresser` embarque les scripts en `gz+b64` (**11,5 Ko**, décodés par
+cloud-init, illisibles à l'œil). Ce mode n'a pas été joué sur une VM.
 
 ### Amorcer la Forge au premier démarrage, et rejouer l'amorce
 
 Le script d'amorce est [`deploy/cloud-init/spark-amorce.sh`](deploy/cloud-init/spark-amorce.sh).
-Il se fournit à l'hébergeur en `user_data` `cloud-init`, avec
-[`deploy/cloud-init/user-data.yaml`](deploy/cloud-init/user-data.yaml) pour
-gabarit. Il installe Incus depuis le dépôt amont Zabbly, **adopte** le pool
-livré par le schéma ci-dessus sans jamais le formater, pose le paquet `sparkd`,
-puis laisse l'exécuteur `sparkd.forge_install` poser Caddy, `nftables`, l'ARC, le
-bridge, le durcissement SSH et les unités systemd, et finir par la recette
-`préflight` / `healthz` / `readyz`.
+Il n'est pas à copier : le cloud-init que produit la commande ci-dessus
+l'**embarque**, avec [`scripts/creer-pool.sh`](scripts/creer-pool.sh), octet pour octet,
+et le lance. Il installe Incus depuis le dépôt amont Zabbly, **adopte** le pool s'il
+existe — et, sans pool, le **crée** seulement quand on lui donne `--pool-source`, ce
+que fait le cloud-init au premier démarrage : il appelle alors `creer-pool.sh`, qui
+refuse tout support déjà écrit —, pose le paquet `sparkd`, puis laisse l'exécuteur
+`sparkd.forge_install` poser Caddy, `nftables`, l'ARC, le bridge, le durcissement SSH
+et les unités systemd, et finir par la recette `préflight` / `healthz` / `readyz`.
+
+Ses réglages sont des **arguments nommés**, lus dans `--help` — ni variable
+d'environnement, ni texte à éditer :
+
+| Argument | Rôle | Défaut |
+|---|---|---|
+| `--pool-source A,B` | les deux supports du miroir ZFS, ex. `/dev/nvme0n1p5,/dev/nvme1n1p5` ; sans pool existant, l'amorce le crée dessus | absent : l'amorce ne crée **jamais** rien |
+| `--arc-gib N` | plafond de l'ARC ZFS en Gio | `16`, réglé pour 94 Gio de RAM |
+| `--net-mbit N` | débit déclaré, seulement si la carte n'en annonce aucun | absent : mesuré |
+
+Un argument inconnu ou invalide est refusé avant toute écriture. Le pool et le pont
+(`spark`, `sparkbr0`) sont des conventions du produit, pas des réglages.
 
 **L'amorce est idempotente et se rejoue :**
 
@@ -310,7 +320,8 @@ ssh <compte>@<forge> 'sudo /opt/spark-amorce.sh'
 ```
 
 Un second passage réinstalle et remet d'aplomb ce qui a dérivé, et **ne
-réinitialise pas les Sparks existants** : le pool est adopté (`kind: reuse`,
+réinitialise pas les Sparks existants** : le rejeu ne passe pas `--pool-source`, donc
+il ne crée jamais rien ; le pool est adopté (`kind: reuse`,
 jamais `destructive`), le registre `/var/lib/sparkd/spark.db` n'est jamais
 touché par l'installation, et les migrations de schéma sont additives. Ce que le
 rejeu refait, ce sont les paquets, les unités, la configuration du socle et la
@@ -446,7 +457,7 @@ défaut, pas une commodité.
 | `SPARKD_NOTIFY_TEMPLATE` | **REPLI seulement**, même règle que ci-dessus | JSON avec des `{champ}` | non | vide |
 | `SPARKD_FORGE_PUBLIC_ADDRESS` | adresse ou nom public de la Forge, rendu dans le briefing d'un Spark (`docs/DAT.md` §44.8) | IPv4, IPv6 ou nom sans schéma | non | vide : l'adresse est inconnue du plan de contrôle |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
-| `SPARKD_NETWORK_CAPACITY_MBIT` | débit du lien **déclaré**, retenu seulement quand aucune carte n'annonce le sien (carte `virtio`) ; un débit mesuré l'emporte toujours ; posé par l'exécuteur (`networkCapacityMbit`, `NET_MBIT` de l'amorce) ou à la main (`docs/DAT.md` §5.3 bis) | entier > 0, Mbit/s | non — absent, le débit est mesuré | `1000` |
+| `SPARKD_NETWORK_CAPACITY_MBIT` | débit du lien **déclaré**, retenu seulement quand aucune carte n'annonce le sien (carte `virtio`) ; un débit mesuré l'emporte toujours ; posé par l'exécuteur (`networkCapacityMbit`, `--net-mbit` de l'amorce) ou à la main (`docs/DAT.md` §5.3 bis) | entier > 0, Mbit/s | non — absent, le débit est mesuré | `1000` |
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
 | `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | `debug`…`error` | non | `info` |

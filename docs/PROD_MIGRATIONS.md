@@ -18,7 +18,7 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-30, après O
 
 | Élément | État |
 |---|---|
-| Forge cible | `51.158.54.202` — Dell R320, **réinstallée le 2026-09-01** depuis le schéma de partitionnement JSON (SPK-28) |
+| Forge cible | `51.158.54.202` — Dell R320, **réinstallée le 2026-09-01** depuis un schéma de partitionnement qui réservait `sda5` et `sdb5` (SPK-28) |
 | Système | Ubuntu **26.04.1 LTS**, noyau **7.0.0-15**, cgroup v2 |
 | Disposition disque | 2 × 6 To. `md0` RAID1 → `/boot`, `md1` RAID1 200 Gio → `/`, et **`sda5` + `sdb5` libres pour le pool** |
 | Incus | **7.4** installé depuis le dépôt amont Zabbly. Les dépôts Ubuntu sont **inutilisables**, voir §2.0 |
@@ -1303,14 +1303,15 @@ Risque        : nul pour les données. La route ne lit que la table des routes.
                 arbitrage du responsable du 2026-09-02 (SPK-28).
 Ce qui change : cette opération demandait de libérer une paire de partitions pour
                 un pool ZFS natif. C'est FAIT : la machine a été réinstallée
-                depuis le schéma de partitionnement JSON, « sda5 » et « sdb5 »
+                depuis un schéma de partitionnement, « sda5 » et « sdb5 »
                 sont libres, et le pool « spark » est un miroir ZFS natif sur
                 cette paire.
 Motif         : le partitionnement ne se change pas après livraison ; il se
                 décide à la commande. La réinstallation était la voie la moins
                 risquée sur une machine encore vide.
-Ce qui reste  : rien à faire sur cette Forge. Le README porte le schéma de
-                partitionnement à fournir à la création d'un serveur, et
+Ce qui reste  : rien à faire sur cette Forge. Le README décrit la commande qui
+                produit le schéma à fournir à la création d'un serveur
+                (« scripts/preparer-forge.py », SPK-158), et
                 « scripts/creer-pool.sh » crée le miroir sans qu'aucune valeur
                 soit codée en dur.
 À SAVOIR      : le pool sur fichier, qui fut la disposition de cette machine

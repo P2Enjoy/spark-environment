@@ -1,5 +1,7 @@
 """@verifies docs/BACKLOG.md#SPK-28 · docs/DAT.md §8.5 (UNE disposition),
             §8.5 bis (aucune valeur codée en dur, et le refus d'écraser)
+            · docs/BACKLOG.md#SPK-159 · docs/DAT.md §66.1 point 6 (la forme de
+            la source du miroir, telle que Incus la décrit)
 
 Ce que ces preuves gardent : **le script ne détruit rien sans le dire**, et il
 n'invente aucune valeur.
@@ -154,8 +156,11 @@ def test_le_nom_et_le_pilote_restent_CONFIGURABLES(tmp_path):
         "SPARK_POOL_DRIVER": "btrfs",
         "SPARK_POOL_SOURCE": ",".join(BLOCS[:2])})
     assert vu.returncode == 0, vu.stderr
-    assert (f"incus storage create tank btrfs "
-            f"source=mirror {BLOCS[0]} {BLOCS[1]}") in appels
+    # Le nom et le pilote sont ceux demandés. La `source` d'un autre pilote que
+    # `zfs` n'est PAS éprouvée ici : la forme du miroir est celle de ZFS (SPK-159,
+    # DAT §66.1 point 6), et l'asserter pour btrfs ferait de ce doublon la
+    # référence d'une forme que personne n'a vue accepter.
+    assert "incus storage create tank btrfs source=" in appels
 
 
 @besoin_de_blocs
@@ -163,108 +168,37 @@ def test_le_miroir_NATIF_sur_deux_peripheriques_VIDES(tmp_path):
     """La seule disposition : deux supports nommés, et rien d'autre."""
     vu, appels = _lancer(tmp_path, {"SPARK_POOL_SOURCE": ",".join(BLOCS[:2])})
     assert vu.returncode == 0, vu.stderr
+    # La forme que DÉCRIT Incus (reference/storage_zfs, relue le 2026-11-10) :
+    # « To specify a vdev type, use an `=` sign between the vdev type and the block
+    # devices », les périphériques séparés par des virgules. L'ancienne forme,
+    # `source=mirror /dev/a /dev/b`, était assertée ici contre ce doublon : une
+    # preuve dont la référence est l'objet qu'elle garde (SPK-159, DAT §66.1
+    # point 6). Elle n'est établie que par la documentation ; le banc de
+    # redémarrage la joue sur un Incus réel.
     assert (f"incus storage create spark zfs "
-            f"source=mirror {BLOCS[0]} {BLOCS[1]}") in appels
+            f"source=mirror={BLOCS[0]},{BLOCS[1]}\n") in appels
     # …et elle dit ce qu'elle apporte en propre.
     assert "reparee" in vu.stdout
 
 
-# --- Le schéma de partitionnement du README (§8.6) --------------------------
+@besoin_de_blocs
+def test_la_source_du_miroir_ne_contient_AUCUN_espace(tmp_path):
+    """La `source` est UN mot dans la forme décrite par Incus — type de vdev, `=`,
+    périphériques séparés par des virgules —, sans espace. Le doublon journalise
+    `$*` : un espace dans la valeur trahit l'ancienne forme, que le premier test
+    ne distinguerait pas d'une simple coupure de ligne."""
+    vu, appels = _lancer(tmp_path, {"SPARK_POOL_SOURCE": ",".join(BLOCS[:2])})
+    assert vu.returncode == 0, vu.stderr
+    creation = next(l for l in appels.splitlines() if l.startswith("incus storage create"))
+    source = [m for m in creation.split() if m.startswith("source=")]
+    assert source == [f"source=mirror={BLOCS[0]},{BLOCS[1]}"], creation
 
 
-def _schema_du_readme() -> dict:
-    import json
-    import re
-
-    readme = (Path(__file__).resolve().parents[3] / "README.md").read_text("utf-8")
-    bloc = re.search(r"```json\n(.*?)\n```", readme, re.S)
-    assert bloc, "le README doit porter le schéma de partitionnement (SPK-28)"
-    return json.loads(bloc.group(1))
-
-
-# Énumérations fermées de `scaleway.baremetal.v1.Schema`. Un libellé inventé —
-# « bios », « pool » — est refusé par l'hébergeur, et rien dans le dépôt ne le
-# dirait avant la commande d'une machine.
-LIBELLES = {
-    "unknown_partition_label", "uefi", "legacy", "root",
-    "boot", "swap", "data", "home", "raid", "zfs",
-}
-FORMATS = {"unknown_format", "fat32", "ext4", "swap", "zfs", "xfs"}
-NIVEAUX_RAID = {
-    "unknown_raid_level", "raid_level_0", "raid_level_1",
-    "raid_level_5", "raid_level_6", "raid_level_10",
-}
-
-
-def test_le_schema_du_README_a_la_FORME_QUE_L_HEBERGEUR_ATTEND():
-    """Un schéma qu'on copie-colle et que l'hébergeur refuse ne sert à rien.
-
-    Il est relu depuis le README, pas depuis une copie : une copie divergerait,
-    et c'est celle du README qui serait employée. La preuve tient la forme de
-    `scaleway.baremetal.v1.Schema` — des LISTES, et des valeurs prises dans les
-    énumérations — parce que c'est exactement ce qui avait été manqué : un objet
-    indexé par périphérique se lit très bien et n'est jamais accepté.
-    """
-    schema = _schema_du_readme()
-    assert set(schema) >= {"disks", "raids", "filesystems"}
-    assert isinstance(schema["disks"], list)
-    assert isinstance(schema["raids"], list)
-    assert isinstance(schema["filesystems"], list)
-
-    for disque in schema["disks"]:
-        assert disque["device"].startswith("/dev/")
-        numeros = [p["number"] for p in disque["partitions"]]
-        assert numeros == list(range(1, len(numeros) + 1))
-        for partition in disque["partitions"]:
-            assert partition["label"] in LIBELLES, partition["label"]
-            assert partition["size"] > 0
-
-    for raid in schema["raids"]:
-        assert raid["level"] in NIVEAUX_RAID
-    for systeme in schema["filesystems"]:
-        assert systeme["format"] in FORMATS
-
-
-def test_les_partitions_REMPLISSENT_le_disque():
-    """Une somme qui ne tombe pas juste laisse un reliquat inatteignable, ou
-    fait refuser le schéma. La capacité est celle des disques de la Forge."""
-    CAPACITE = 5_986_713_600_000
-    for disque in _schema_du_readme()["disks"]:
-        somme = sum(p["size"] for p in disque["partitions"])
-        assert somme == CAPACITE, f"{disque['device']} totalise {somme}"
-
-
-def test_le_schema_LAISSE_une_paire_de_partitions_LIBRE():
-    """C'est tout l'objet du schéma (§8.6).
-
-    Confier « sda5 » et « sdb5 » à `md` reproduirait exactement le problème que
-    le miroir ZFS résout : `md` ne sait pas laquelle des deux copies est la
-    bonne. Les confier à l'hébergeur via `zfs` serait pire encore : le pool
-    existerait, `creer-pool.sh` verrait une signature et refuserait. La preuve
-    garde donc qu'elles n'apparaissent NI dans un RAID, NI dans un système de
-    fichiers, NI dans un pool.
-    """
-    schema = _schema_du_readme()
-    for disque in schema["disks"]:
-        derniere = disque["partitions"][-1]
-        assert derniere["number"] == 5, f"{disque['device']} doit porter 5 partitions"
-
-    assert schema.get("zfs") is None, "le pool ne se déclare PAS à l'hébergeur"
-
-    engagees = {d for r in schema["raids"] for d in r["devices"]}
-    engagees |= {f["device"] for f in schema["filesystems"]}
-    for libre in ("/dev/sda5", "/dev/sdb5"):
-        assert libre not in engagees, f"{libre} doit rester un périphérique NU"
-
-
-def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
-    """Le schéma réduit « / », il ne le laisse pas sans redondance."""
-    schema = _schema_du_readme()
-    for raid in schema["raids"]:
-        assert raid["level"] == "raid_level_1"
-        assert len(raid["devices"]) == 2
-    montages = {f["mountpoint"] for f in schema["filesystems"]}
-    assert montages == {"/", "/boot"}
+# --- Le schéma de partitionnement : ses preuves sont dans test_preparer_forge.py --
+#
+# Elles relisaient le JSON du README. Depuis SPK-158 le README ne porte plus de
+# JSON : une commande le produit (docs/DAT.md §66), et les mêmes propriétés — forme
+# de l'API, paire libre, système en miroir — sont gardées sur sa SORTIE.
 
 
 def test_le_REMEDE_du_preflight_DESIGNE_le_geste_qui_existe():
