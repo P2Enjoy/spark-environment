@@ -14597,3 +14597,100 @@ près à ce qui a été mesuré.
 **Vérifications.** `make s3-minio` : 38/38. Contre-épreuve : une attente flippée donne
 `✗` et le code de sortie 1, puis rétablie. Aucun conteneur, volume ni dossier ne survit
 (`docker ps -a`, `docker volume ls`, `/tmp`). **Non établi** : tout fournisseur S3 réel.
+
+## 2026-11-10 · SPK-160, étapes 1 à 8 : première mesure exploitable sur la VM
+
+**Problème.** Établir sur un Incus et un ZFS réels ce que le DAT §67.2 n'affirmait que
+d'après la documentation d'Incus : qu'un export optimisé ne répète pas les blocs
+partagés avec les instantanés.
+
+**Deux essais perdus, et pourquoi** — ce sont des défauts de MON harnais.
+
+1. *Premier essai (1 369 s, rien mesuré).* `incus launch`, `snapshot create`, `storage
+   create` et `exec` **lisent leur entrée standard** quand ce n'est pas un terminal : du
+   YAML, ou un flux transmis au processus. Mon script de mesure arrivait à `bash` par un
+   tube ; ces commandes en avalaient la suite (`cannot construct !!str 'zfsinfo' into
+   api.InstanceSnapshotPut`). Les cellules n'ont jamais existé. Correction : le script est
+   un fichier, `bash` reçoit `/dev/null`. À retenir pour toute commande `incus` lancée
+   depuis un script alimenté par un tube — le runbook ne le dit pas encore.
+2. *Le même essai a aussi monté la Forge en 1 073 s* au lieu d'environ 250 s, avec les
+   disques de la VM sur disque (`--travail`). Hypothèse : chaque `flush` invité devient un
+   `fsync` de l'hôte. Avec `cache=unsafe` sur ces disques, le second essai a monté la
+   Forge en **163 s** (VERT en 323 s). La cause reste *corroborée*, pas isolée : l'hôte
+   servait aussi la pile d'un autre projet aux deux moments.
+
+**Méthode.** Incus 7.6.0, ZFS 2.4.1, VM de 6 Gio, pool miroir `vdb`/`vdc` de 15,5 Gio.
+Un Spark `m160` de 2 Gio de données **incompressibles** ; entre deux instantanés, 200 Mio
+de blocs neufs, plus à l'étape 3 une réécriture de 200 Mio de blocs existants (que
+l'instantané retient). `cache=unsafe` sur les disques de la VM : **les chiffres de CPU et
+d'E/S ci-dessous sont indicatifs, et plus encore qu'annoncé** — l'hôte les absorbe dans
+son cache de page.
+
+**Établi (taille).**
+
+| état | export optimisé, sans compression | export NON optimisé |
+|---|---|---|
+| 0 instantané | 2 349 Mio | — |
+| 1 instantané | 2 550 Mio | 5 665 Mio (×2,22) |
+| 3 instantanés | 3 151 Mio | 12 330 Mio (×3,91) |
+| 5 instantanés | **3 552 Mio** | non mesuré (l'espace de travail de la VM n'y suffisait pas) |
+
+De 0 à 5 instantanés l'export optimisé grossit de **1 203 Mio**, pour 1 200 Mio de
+nouveautés (5 × 200 + 200 retenus) : **les blocs partagés ne sont pas répétés.** Sans
+l'optimisation, chaque instantané est une copie, et la taille croît avec leur nombre.
+Les données utiles de référence sont `refer` + `usedbysnapshots` du jeu de données
+(3 327 + 201 = 3 527 Mio) : l'export les dépasse de **26 Mio (0,7 %)**. *Mon verdict (a) a
+d'abord comparé à `used` (3 252 Mio) : il passait, à 9,3 %, par compensation — `used` ne
+compte pas les blocs que le Spark partage avec l'image dont il est le clone. La base de
+comparaison est corrigée pour le prochain essai.* Le critère (a) du §67.2 tient.
+
+**Établi (reste).**
+
+- *Un Spark en marche.* L'état exporté est celui d'un instant situé **pendant** l'export :
+  le témoin écrit 3 s après le début y figure, celui écrit après la fin non. C'est le
+  comportement d'un arrêt brutal du §19.2.
+- *Le sinistre.* Pool de la VM **détruit** (`incus storage delete`, `wipefs`), **recréé**
+  (`source=mirror=/dev/vdb,/dev/vdc`), puis l'export importé dessus en **10,1 s** :
+  `s1` à `s5` présents, six sommes de contrôle `OK`, témoins `avant` et `pendant`
+  présents, `apres` absent. C'est le scénario que toute la fonctionnalité sert.
+- *L'envoi.* 3 553 Mio de la VM vers MinIO en 54,4 s (65 Mio/s, boucle locale), 56 parts
+  de 64 Mio, taille côté S3 **identique**, mémoire maximale du processus **53 Mio**.
+- *La compression* (sur données incompressibles, donc au pire) : `zstd` gagne 2,6 % et
+  coûte 15 s et 32 CPU-s contre 10 s et 20 CPU-s. Elle ne paie que si les données
+  compressent ; **non mesuré sur des données réelles**.
+- *Le voisin* (indicatif) : une boucle CPU passe de 0,69 s à 0,81 s (+17 %), des
+  écritures synchrones de 12,5 à 10,2 Mo/s (−18 %) pendant l'export le plus lourd.
+
+**NON établi — les deux écarts du banc.**
+
+1. **La copie importée ne démarre pas** tant que l'original existe : `incus start
+   m160-copie` échoue (« Try incus info --show-log »), alors que le même export importé
+   après la destruction du pool démarre. Cause **inconnue** ; je n'avais pas capturé le
+   journal. C'est le cas « récupérer sous un autre nom » du §67.11 : à diagnostiquer.
+2. **Le drapeau de restauration de `sparkd` est rejeté par Incus 7.6** : `Invalid device
+   option "zfs.remove_snapshots"` sur le périphérique `root`. C'est l'appel exact de
+   `sparkd/incus.py` (`restore_snapshot(force=True)`, SPK-13). Je n'ai joué qu'une variante
+   (avec `pool`) : **à confirmer avec l'appel littéral de `sparkd`**. Si confirmé, la
+   restauration qui accepte la perte d'instantanés plus récents (§19.1) est cassée sur une
+   Forge en 7.6, indépendamment de ce chantier — et la récupération « rétablit
+   l'instantané » en dépend. *Hors du périmètre de SPK-160 : je le consigne, je ne le
+   corrige pas ici.* (L'essai sans drapeau est bien refusé : « cannot be restored due to
+   subsequent snapshot(s). Set zfs.remove_snapshots to override ».)
+
+**Non établi non plus.** *L'espace de travail* : le fichier d'Incus sous
+`/var/lib/incus/backups` atteint la taille de l'archive au premier export
+(2 463 330 448 o pour 2 463 336 960 o), mais ma sonde rend ensuite **la même valeur** quel
+que soit l'export (2 673 540 288 o à 1, 3 et 5 instantanés) : ce n'est pas une mesure. Elle
+rend 0 pour l'export non optimisé. Les écritures de l'hôte valent environ **deux fois**
+l'archive (le fichier d'Incus, puis celui du client). La règle de l'espace de travail du
+§67.7 ne peut pas encore s'écrire.
+
+**Décision.** Aucune encore sur le format : (a) tient, (b) est ouvert. Prochain essai :
+journal de démarrage de la copie, la copie avec l'original arrêté, l'appel de restauration
+littéral de `sparkd` et la voie par le volume (`incus storage volume set … zfs.remove_snapshots`),
+et une vraie sonde d'espace de travail.
+
+**Écart de procédure, demandé et accordé.** Le §15 bis veut le premier plan ; mon outil
+coupe un premier plan à 10 minutes et la mesure en demande ~15. Le responsable a choisi
+l'arrière-plan avec attente seule ; les préconditions (12 Gio disponibles, aucune épreuve
+lourde, verrou libre) sont vérifiées par un script atomique.

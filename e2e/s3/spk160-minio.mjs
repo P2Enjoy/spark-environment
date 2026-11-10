@@ -29,17 +29,15 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { demarrerMinio, docker, jouerMc, minioVivant, retirerConteneurs } from './minio.mjs';
 
 const RACINE = new URL('../../', import.meta.url).pathname;
 const PYTHON = join(RACINE, 'services/sparkd/.venv/bin/python');
 const SONDES = join(RACINE, 'e2e/s3/spk160_minio_sondes.py');
-const MINIO = 'quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z';
-const MC = 'quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z';
 const BOTO3 = 'boto3==1.43.127';
 const PORTS = { principal: 19090, region: 19092, tls: 19093 };
 const NOMS = ['spk160-minio', 'spk160-minio-region', 'spk160-minio-tls'];
 const VOLUME = 'spk160-minio-data';
-const ROOT = ['-e', 'MINIO_ROOT_USER=spk160root', '-e', 'MINIO_ROOT_PASSWORD=spk160-jetable-pass'];
 
 if (process.argv.includes('--aide') || process.argv.includes('--help')) {
   console.log(new URL(import.meta.url).pathname + '\n'
@@ -53,13 +51,11 @@ if (process.argv.includes('--aide') || process.argv.includes('--help')) {
 const lancer = (commande, args, options = {}) =>
   spawnSync(commande, args, { encoding: 'utf8', ...options });
 
-const docker = (...args) => lancer('docker', args);
-
 const travail = mkdtempSync(join(tmpdir(), 'spk160-minio-'));
 
 /** Retire les conteneurs et le volume de CETTE épreuve (préfixe `spk160-`), et eux seuls. */
 function retirerLesConteneurs() {
-  for (const nom of NOMS) docker('rm', '-f', nom);
+  retirerConteneurs(...NOMS);
   docker('volume', 'rm', '-f', VOLUME);
 }
 function nettoyer() {
@@ -67,17 +63,6 @@ function nettoyer() {
   rmSync(travail, { recursive: true, force: true });
 }
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { nettoyer(); process.exit(130); });
-
-function attendre(port) {
-  for (let i = 0; i < 40; i += 1) {
-    const r = lancer('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', '-m', '2',
-      `http://127.0.0.1:${port}/minio/health/live`]);
-    // Le conteneur TLS ne répond pas en clair : un 000 de curl sur lui est attendu.
-    if (r.stdout === '200') return true;
-    lancer('sleep', ['1']);
-  }
-  return false;
-}
 
 try {
   // Un reste d'une exécution tuée : ces noms sont ceux de CETTE épreuve, et d'elle seule.
@@ -100,16 +85,11 @@ try {
   chmodSync(join(certs, 'public.crt'), 0o644);
 
   console.log('· trois MinIO sur la boucle locale');
-  const demarrer = (nom, port, extra = []) => {
-    const r = docker('run', '-d', '--rm', '--name', nom, '--memory', '768m',
-      '-p', `127.0.0.1:${port}:9000`, ...ROOT, ...extra, MINIO, 'server', '/data');
-    if (r.status !== 0) throw new Error(`${nom} : ${r.stderr.trim()}`);
-  };
-  demarrer(NOMS[0], PORTS.principal, ['-v', `${VOLUME}:/data`]);
-  demarrer(NOMS[1], PORTS.region, ['-e', 'MINIO_SITE_REGION=eu-west-3']);
-  demarrer(NOMS[2], PORTS.tls, ['-v', `${certs}:/root/.minio/certs:ro`]);
+  demarrerMinio({ nom: NOMS[0], port: PORTS.principal, extra: ['-v', `${VOLUME}:/data`] });
+  demarrerMinio({ nom: NOMS[1], port: PORTS.region, extra: ['-e', 'MINIO_SITE_REGION=eu-west-3'] });
+  demarrerMinio({ nom: NOMS[2], port: PORTS.tls, extra: ['-v', `${certs}:/root/.minio/certs:ro`] });
   for (const port of [PORTS.principal, PORTS.region]) {
-    if (!attendre(port)) throw new Error(`MinIO n'est pas vivant sur ${port}`);
+    if (!minioVivant(port)) throw new Error(`MinIO n'est pas vivant sur ${port}`);
   }
   lancer('sleep', ['3']); // le conteneur TLS ne répond pas en clair : on lui laisse le temps
 
@@ -120,9 +100,7 @@ try {
   const lecture = ['s3:GetBucketLocation', 's3:ListBucket', 's3:GetObject'];
   const sansSuppression = [...lecture, 's3:PutObject', 's3:AbortMultipartUpload',
     's3:ListMultipartUploadParts', 's3:ListBucketMultipartUploads'];
-  const script = [
-    'set -e',
-    `mc alias set l http://127.0.0.1:${PORTS.principal} spk160root spk160-jetable-pass >/dev/null`,
+  jouerMc(PORTS.principal, [
     'mc mb --ignore-existing l/spk160 >/dev/null',
     `printf '%s' '${politique(lecture)}' > /tmp/ro.json`,
     `printf '%s' '${politique(sansSuppression)}' > /tmp/nd.json`,
@@ -132,9 +110,7 @@ try {
     'mc admin policy create l sans-suppression /tmp/nd.json >/dev/null',
     'mc admin policy attach l lecture-seule --user lecteur >/dev/null',
     'mc admin policy attach l sans-suppression --user sanssuppr >/dev/null',
-  ].join('\n');
-  const mc = docker('run', '--rm', '--network', 'host', '--entrypoint', '/bin/sh', MC, '-c', script);
-  if (mc.status !== 0) throw new Error(`mc a échoué : ${mc.stderr.trim()}`);
+  ].join('\n'));
 
   console.log('· les sondes\n');
   const sondes = lancer(PYTHON, ['-I', SONDES,

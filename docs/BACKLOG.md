@@ -9820,8 +9820,17 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
   principal, réglé sur `eu-west-3`, TLS auto-signé — et tous tiennent ; une attente
   volontairement fausse la rend rouge (code 1). Elle a **corrigé le contrat** : V4 ne
   peut pas se typer sur un `HEAD`, le balayage des envois abandonnés ne peut pas se fier
-  au préfixe, la région se compare (DAT §67.3, §67.6, §67.13). **Reste** : les étapes 1
-  à 8 sur la VM.
+  au préfixe, la région se compare (DAT §67.3, §67.6, §67.13). **Étapes 1 à 8, première mesure le 2026-11-10** (journal du
+  jour) : **le critère (a) tient** — l'export optimisé à 5 instantanés pèse 3 552 Mio,
+  soit 0,7 % de plus que les données utiles, quand l'export non optimisé pèse ×3,9 dès 3
+  instantanés ; l'import dans un pool **détruit puis recréé** restitue les 5 instantanés
+  et des données intactes ; l'envoi par parts vers MinIO aboutit à l'octet près
+  (mémoire 53 Mio). **Le critère (b) reste ouvert** : la copie importée à côté de
+  l'original ne démarre pas (cause inconnue), et l'appel de restauration forcée de
+  `sparkd` est rejeté par Incus 7.6 (`Invalid device option "zfs.remove_snapshots"`,
+  à confirmer avec l'appel littéral — hors périmètre, à traiter à part). L'espace de
+  travail n'est pas établi (la sonde est invalide). **Reste** : un troisième essai
+  pour ces trois points.
 - Aucune migration, aucune variable d'environnement, aucune opération de production.
 - Une épreuve **lourde** (VM de 6 Gio) : verrou `e2e/verrou.mjs`, et rien n'est lancé
   tant que la mémoire disponible est inférieure à 12 Gio.

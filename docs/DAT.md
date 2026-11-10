@@ -9619,6 +9619,18 @@ installation fraîche ; le banc démontait sa machine en sortant.
   inscrit une fois la ligne `[127.0.0.1]:<port>` de cette clé dans le
   `known_hosts` du poste, et le dit parmi ses écarts. Sans cela, chaque machine
   neuve serait refusée pour « clé d'hôte changée ».
+- **Où la machine écrit ses disques** (SPK-160, argument nommé `--travail <dossier>`).
+  Par défaut, dans `/tmp` — et sur ce poste `/tmp` est un **`tmpfs`** de 19 Gio, donc de
+  la RAM : chaque octet que la VM écrit y est un octet de mémoire de l'hôte, et une
+  mesure qui écrit quelques Gio la ferait tuer (`137`). `--travail` pose les disques
+  (fichiers creux) et le répertoire jetable ailleurs, sur disque ; le défaut est
+  inchangé, l'argument est refusé avant toute allocation s'il ne désigne pas un dossier
+  existant et inscriptible, et le banc le dit parmi ses écarts. **Les disques passent
+  alors en `cache=unsafe`** : la machine est jetable, rien n'est à protéger d'une coupure,
+  et sur disque chaque `flush` invité (dpkg, apt, ZFS) serait un `fsync` de l'hôte. Un
+  premier essai sur disque, sans cela, a monté la Forge en 1 073 s au lieu d'environ 250 s ;
+  la cause n'est pas isolée (l'hôte servait aussi la pile d'un autre projet), cette
+  option est la correction la moins chère à éprouver.
 - **Tout se crée par la console**, depuis l'accueil, souris et clavier
   (`CLAUDE.md` §16) : Spark, route, protection, secret. Les captures vont dans
   `e2e/captures/`, et s'observent.

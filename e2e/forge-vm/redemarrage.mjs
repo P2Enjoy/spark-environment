@@ -9,6 +9,8 @@
  *           une carte qui n'annonce aucun débit, et le débit déclaré retenu)
  * @verifies docs/BACKLOG.md#SPK-137 · docs/DAT.md §51.6 (la machine gardée, la
  *           console branchée sur elle, les épreuves jouées dans ce processus)
+ * @spec     docs/BACKLOG.md#SPK-160 · docs/DAT.md §67.2 (`--travail` : les disques de
+ *           la machine hors du tmpfs, pour qu'une mesure puisse écrire des Gio)
  * @verifies docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3 (le fichier des
  *           secrets reposé après *Redémarrer*, après un `reboot` dans la
  *           cellule, après le redémarrage de la Forge ; la ligne du journal)
@@ -52,6 +54,12 @@
  *   make forge-vm ARGS="--epreuve <a,b>"   # SPK-137 : joue e2e/forge-vm/epreuves/<a>.mjs,
  *                                          # puis <b>.mjs, contre cette console, puis démonte
  *   … --port-ssh <n>                       # port SSH de la machine gardée (2222 par défaut)
+ *   … --travail <dossier>                  # SPK-160 : où la machine écrit ses disques ET son
+ *                                          # répertoire jetable. Défaut : /tmp — qui peut être
+ *                                          # un tmpfs, donc de la RAM : à partir de quelques
+ *                                          # Gio écrits, la machine y serait tuée (137)
+ *                                          # Les disques passent alors en `cache=unsafe` : sur disque,
+ *                                          # chaque flush invité serait un fsync de l'hôte
  *
  * Avec --garder ou --epreuve, trois écarts de plus, imprimés eux aussi : la
  * machine reçoit les clés publiques du poste (celles que la console emploie), une
@@ -71,8 +79,8 @@ prendreLeVerrou();
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync,
-         rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync,
+         readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -117,9 +125,22 @@ const portSshFixe = iPortSsh >= 0 ? Number(args[iPortSsh + 1]) : 2222;
 if (!Number.isInteger(portSshFixe) || portSshFixe < 1024 || portSshFixe > 65535) {
   throw new Error('--port-ssh attend un port entre 1024 et 65535');
 }
-const valeurs = new Set([iRoue + 1, iCarte + 1, iEpreuve + 1, iPortSsh + 1].filter((i) => i > 0));
+// SPK-160 · docs/DAT.md §67.2 : un ARGUMENT nommé (CLAUDE.md §3), jamais `TMPDIR`. Les
+// disques de la machine sont des fichiers creux qui grossissent à mesure qu'elle écrit.
+const iTravail = args.indexOf('--travail');
+const dossierTravail = iTravail >= 0 ? args[iTravail + 1] : null;
+if (iTravail >= 0) {
+  if (!dossierTravail || dossierTravail.startsWith('--')) {
+    throw new Error('--travail attend le chemin d’un dossier existant');
+  }
+  if (!existsSync(dossierTravail) || !statSync(dossierTravail).isDirectory()) {
+    throw new Error(`--travail : « ${dossierTravail} » n’est pas un dossier existant`);
+  }
+  accessSync(dossierTravail, constants.W_OK); // lève avec la cause, avant toute allocation
+}
+const valeurs = new Set([iRoue + 1, iCarte + 1, iEpreuve + 1, iPortSsh + 1, iTravail + 1].filter((i) => i > 0));
 const inconnus = args.filter((a, i) => a.startsWith('--')
-  && !['--roue', '--carte', '--garder', '--epreuve', '--port-ssh'].includes(a) && !valeurs.has(i));
+  && !['--roue', '--carte', '--garder', '--epreuve', '--port-ssh', '--travail'].includes(a) && !valeurs.has(i));
 if (inconnus.length) throw new Error(`arguments inconnus : ${inconnus.join(' ')} (voir --help)`);
 
 // --- outillage --------------------------------------------------------------
@@ -147,7 +168,7 @@ function portLibre(voulu = 0) {
   });
 }
 
-const travail = mkdtempSync(join(tmpdir(), 'spark-vm-'));
+const travail = mkdtempSync(join(dossierTravail ?? tmpdir(), 'spark-vm-'));
 let qemu = null;
 let serveur = null;
 let consoleVm = null;
@@ -242,6 +263,7 @@ if (produit.status !== 0) {
 }
 console.log(`Le cloud-init est celui de « preparer-forge.py ${argsCommande.join(' ')} »`);
 console.log('Écarts du banc à ce cloud-init (docs/DAT.md §51.5, §66.5) :');
+if (dossierTravail) console.log(`  écart du banc — disques et répertoire jetable dans ${dossierTravail} (--travail), pas dans ${tmpdir()} ; disques en cache=unsafe : la machine est jetable`);
 let userData = remplacer(produit.stdout,
   '"git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"',
   `"http://10.0.2.2:${portSeed}/${basename(roue)}"`,
@@ -284,11 +306,15 @@ for (const d of ['d1', 'd2']) {
   executer('qemu-img', ['create', '-q', '-f', 'qcow2', join(travail, `${d}.qcow2`), '16G']);
 }
 const console_ = join(travail, 'console.log');
+// SPK-160 : avec `--travail`, les disques sont sur DISQUE et chaque `flush` du système
+// invité (dpkg, apt, ZFS) devient un `fsync` de l'hôte. La machine est jetable : il n'y a
+// rien à protéger d'une coupure, et sur le tmpfs d'avant ces `flush` ne coûtaient rien.
+const cacheDisque = dossierTravail ? ',cache=unsafe' : '';
 qemu = spawn('qemu-system-x86_64', [
   '-enable-kvm', '-cpu', 'host', '-smp', '4', '-m', String(MEMOIRE_MIO), '-machine', 'q35',
-  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'racine.qcow2')}`,
-  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'd1.qcow2')}`,
-  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'd2.qcow2')}`,
+  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'racine.qcow2')}${cacheDisque}`,
+  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'd1.qcow2')}${cacheDisque}`,
+  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'd2.qcow2')}${cacheDisque}`,
   '-netdev', `user,id=n0,hostfwd=tcp:127.0.0.1:${portSsh}-:22,hostfwd=tcp:127.0.0.1:${portHttp}-:80`,
   // Par défaut, une carte qui ANNONCE son débit, comme la carte physique d'une
   // Forge. `--carte virtio` n'en annonce aucun : sans débit déclaré, le relevé
