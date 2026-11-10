@@ -9987,6 +9987,40 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
   **le lot clos** : `[x]` seulement après la preuve contre le S3 réel du propriétaire
   (action humaine).
 
+### [ ] SPK-167 · L'identité SSH d'un Spark rootless appartient au compte rootless
+
+**Défaut signalé par le responsable le 2026-11-10** : sur un Spark amorcé en rootless,
+l'identité est créée sous `/root/.ssh/id_ed25519`, donc le compte `spark-docker`
+— celui qui fait tourner la pile et qui clone — ne peut pas s'en servir. Classé grave :
+la console affiche une clé que l'exploitant pose chez GitHub, et le clone échoue sans
+que rien n'indique pourquoi.
+
+- Spécification : `docs/DAT.md` **§17.6** (le compte qui présente l'identité), §17.5
+  (la clé privée naît dans la cellule), §42.2 bis (le mode est une observation), §42.2 ter
+  et §42.2 quater (ce que le compte rootless doit pouvoir lire ; le dossier reste à root) ·
+  `docs/MANUAL_PLAN.md` M6 · `docs/manuel/M6-acces.md`.
+- Corrige : SPK-74 (qui posait le chemin en dur) ; dépend de SPK-94 et SPK-95.
+- **Règle.** Mode relevé `rootless` : la paire vit dans
+  `/home/spark-docker/.ssh/` (`spark-docker`, clé `0600`, publique `0644`, dossier
+  `root:spark-docker 0750` inchangé). Sinon : `/root/.ssh/`, comme avant. Le relevé et la
+  création lisent le **même** chemin ; `path` rend celui du compte.
+- **Une identité déjà posée sous `/root` d'un Spark rootless** (l'état laissé par le
+  défaut) : créer sans remplacement donne au compte une **copie de la même paire**, donc la
+  clé de déploiement déjà posée reste valide ; la copie de `root` n'est ni déplacée ni
+  supprimée. Lire n'écrit rien : le relevé rend `absente` tant que ce geste n'a pas eu lieu.
+- Ce que l'unité ne fait pas : elle ne migre aucune clé d'office, ne gère pas
+  `known_hosts` (non mesuré sur une Forge réelle), ne change ni l'écran ni le contrat
+  d'API — le champ `path` existait.
+- DoD : un test unitaire prouve que le script de création vise le foyer du compte en
+  rootless et `/root` sinon, et le **joue pour de vrai** (le shell réel, `ssh-keygen`
+  réel) : refus d'écraser, remplacement, reprise de la paire de `root` ; une preuve dans une
+  vraie cellule Debian montre que le compte `spark-docker` **lit** la clé (`ssh-keygen -y`
+  sous ce compte) alors qu'il ne le pouvait pas sous `/root` ; un test d'API sur un Spark
+  réellement amorcé en rootless couvre créer / relire / refus / remplacer / reprise, et le
+  même Spark enraciné garde `/root` ; un parcours E2E crée l'identité depuis l'écran des
+  clés d'un Spark rootless et lit le chemin du compte ; la vérification visuelle part de
+  l'accueil, à la souris et au clavier ; manuel M6, README, changelog.
+
 ---
 
 ## Réservé, non planifié

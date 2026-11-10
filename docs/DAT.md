@@ -2039,6 +2039,9 @@ Le §17 jusqu'ici décrit qui entre dans un Spark. Cette section décrit le sens
 inverse : ce que le Spark **présente** quand il sort — à GitHub, pour cloner un
 dépôt privé en clé de déploiement.
 
+Pour QUEL compte du Spark l'identité est posée — `root` ou, en rootless,
+`spark-docker` —, voir le §17.6.
+
 Ce sont deux objets différents et l'écran doit les nommer différemment. Une clé
 d'accès autorise quelqu'un à entrer ; une identité authentifie la cellule
 auprès d'un tiers. Les confondre mettrait une clé publique de l'exploitant dans
@@ -2075,6 +2078,79 @@ confirmation pour un geste sans conséquence apprend à confirmer sans lire.
 demanderait un jeton d'API du dépôt, donc un secret de plus sur la Forge, pour
 remplacer un copier-coller que l'exploitant fait une fois. Le produit s'arrête
 où commence le compte du tiers.
+
+### 17.6 Pour QUEL compte le Spark présente son identité — SPK-167
+
+@spec docs/BACKLOG.md#SPK-167 · §42.2 bis (le mode est une observation), §42.2 ter
+(ce que le compte rootless doit pouvoir lire), §42.2 quater (la seconde porte)
+
+**Le défaut.** Le §17.5 posait l'identité sous `/root/.ssh/id_ed25519`, pour tous
+les Sparks. Sur un Spark amorcé en **rootless**, ce n'est pas le compte qui travaille :
+le client Git, `ssh` et le démon qui construit les images tournent sous
+`spark-docker` (§42.2 bis), dont le foyer est `/home/spark-docker`. Il ne peut ni
+traverser `/root` (`0700`) ni lire une clé `0600 root`, et un client SSH ne cherche de
+toute façon que dans le `~/.ssh` de celui qui l'exécute. Le produit créait donc une
+identité que la console affichait, que l'exploitant posait chez GitHub, et que le seul
+compte censé s'en servir ne pouvait pas ouvrir — le défaut du §41.2 pour la quatrième
+fois : poser un fichier ne suffit pas, il faut que celui qui doit le lire puisse le lire.
+
+**La règle : l'identité appartient au compte qui fait tourner la pile.**
+
+| Mode relevé (§42.2 bis) | Compte | Clé privée | Clé publique |
+|---|---|---|---|
+| `enracine`, ou aucun relevé | `root` | `/root/.ssh/id_ed25519` | `/root/.ssh/id_ed25519.pub` |
+| `rootless` | `spark-docker` | `/home/spark-docker/.ssh/id_ed25519` | `…/id_ed25519.pub` |
+
+Le mode est celui du **dernier relevé d'amorçage** — la même source que la seconde
+porte du §42.2 quater et que l'ouverture des fichiers du §42.2 ter —, jamais
+l'existence du compte : un compte créé par une pose interrompue ne dit pas que le
+démon rootless tourne (§42.2 bis). Le relevé n'a besoin ni de l'UID ni du GID : la
+cellule résout le compte par son nom au moment du geste.
+
+**Ce que chaque chemin devient, en rootless :**
+
+```
+/home/spark-docker/.ssh                  root:spark-docker   0750   (inchangé, §42.2 quater)
+/home/spark-docker/.ssh/id_ed25519       spark-docker        0600
+/home/spark-docker/.ssh/id_ed25519.pub   spark-docker        0644
+```
+
+Le dossier reste à `root`, et ce n'est pas un détail : le compte de service lit son
+identité, mais ne peut ni la supprimer, ni la remplacer, ni réécrire son
+`authorized_keys` (le même raisonnement que le §42.2 quater). Remplacer l'identité
+reste un geste de `sparkd`. Si le dossier n'existe pas encore — un Spark amorcé avant la
+seconde porte —, il naît avec ces droits.
+
+`ssh-keygen` s'exécute toujours en root, **dans** la cellule, puis la paire est remise
+au compte par `chown`. Exécuter `ssh-keygen` sous le compte exigerait un dossier qu'il
+puisse écrire, c'est-à-dire le contraire de la ligne précédente. Le §17.5 reste tenu :
+la clé privée naît dans la cellule et n'en sort pas.
+
+**Une identité déjà posée sous `/root` sur un Spark rootless.** C'est l'état que le
+défaut a laissé, et la clé est peut-être déjà posée chez un tiers. La régénérer
+l'invaliderait pour réparer un chemin. Donc : si le compte n'a **pas** d'identité et que
+`root` en a une, **créer** (sans remplacement) **donne au compte une copie de cette
+même paire** — même clé, même empreinte, la clé de déploiement reste valide. La copie
+de `root` n'est ni déplacée ni supprimée : la porte administrative l'utilise peut-être,
+et retirer une clé que le locataire emploie est un geste qu'on ne fait pas pour lui.
+À partir de là, la console ne lit plus que la copie du compte ; celle de `root` n'est
+plus la sienne, et si elle est régénérée à la main elle ne diverge d'aucun affichage.
+
+- **Lire n'écrit rien (§42.1).** Sur un Spark rootless dont seule `root` porte une
+  identité, le relevé rend `absente` : c'est exact pour le compte qui travaille, et
+  l'adoption est un geste, pas un effet de bord de la lecture.
+- **Remplacer** (`replace`) génère une paire neuve pour le compte et ne touche pas la
+  copie de `root`. Elle reste valide chez le tiers tant qu'on ne l'y retire pas ; le
+  manuel le dit.
+- **Le champ `path`** que l'API rend est celui de la clé privée du compte, et c'est ce
+  que le panneau affiche sous « Dans la cellule » : l'exploitant voit où elle vit.
+- **Le journal** (`spark.identity.create`) retient l'empreinte, `replaced` et `adopted`
+  (§21.2 : jamais un corps de clé).
+
+**Ce que cette section ne règle pas.** `known_hosts` : le dossier appartenant à `root`,
+le compte ne peut pas y écrire sa propre liste d'hôtes. `ssh` le signale et continue
+quand l'hôte est accepté ; ce n'est pas un échec d'authentification, mais **ce n'est
+pas mesuré sur une Forge réelle** et le §17.5 excluait déjà `known_hosts` du périmètre.
 
 ## 18. Réconciliation de l'ingress
 

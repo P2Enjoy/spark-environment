@@ -14694,3 +14694,52 @@ et une vraie sonde d'espace de travail.
 coupe un premier plan à 10 minutes et la mesure en demande ~15. Le responsable a choisi
 l'arrière-plan avec attente seule ; les préconditions (12 Gio disponibles, aucune épreuve
 lourde, verrou libre) sont vérifiées par un script atomique.
+
+## 2026-11-10 · SPK-167 : l'identité d'un Spark rootless était posée pour le mauvais compte
+
+**Problème (signalé par le responsable).** Sur un Spark amorcé en rootless, l'identité SSH
+est créée sous `/root/.ssh/id_ed25519`. Le compte `spark-docker` — celui qui clone, qui
+construit et qui fait tourner la pile — ne peut pas s'en servir. Classé grave.
+
+**Observations (lecture du code, pas encore de mesure).**
+
+- `services/sparkd/src/sparkd/identity.py` fixe `CHEMIN_PRIVEE = "/root/.ssh/id_ed25519"` en
+  constante de module et l'interpole dans les deux scripts (relevé, création). La route
+  (`app.py`, `read_identity` / `create_identity`) ne lui passe rien du mode du Spark.
+- Le produit sait pourtant déjà ce mode : `_apply_keys`, `_ouvrir_au_rootless` et
+  `_identite_rootless` le lisent dans le dernier relevé d'amorçage (`docker_mode`) pour poser la
+  seconde porte du §42.2 quater. SPK-74 (septembre) est antérieur à SPK-94/SPK-95 (rootless) et
+  n'a jamais été rouvert : l'identité est le seul geste « vers la cellule » qui ignore le mode.
+- C'est la même famille de défaut que le §42.2 ter et le §42.2 quater : un fichier posé pour
+  root que le seul compte censé le lire ne peut pas lire.
+
+**Hypothèses écartées avant de décider.**
+
+1. *Poser la clé sous `/root` et la rendre lisible au groupe `spark-docker`.* Refusé : `/root`
+   est `0700`, l'ouvrir reprendrait une isolation que le rootless vend (§42.2), et un client SSH
+   cherche `~/.ssh/id_ed25519` dans le foyer de CELUI QUI L'EXÉCUTE — il faudrait écrire un
+   `~/.ssh/config`, que SPK-74 refuse expressément.
+2. *Déduire le mode de l'existence du compte (`id spark-docker`) dans la cellule.* Refusé : un
+   compte créé par une pose interrompue ne dit pas que le démon rootless tourne (§42.2 bis).
+   On lit le relevé d'amorçage, comme partout ailleurs.
+3. *Rendre le dossier `~/.ssh` du compte à `spark-docker`* pour qu'il gère sa clé et son
+   `known_hosts`. Refusé : il pourrait alors supprimer le `authorized_keys` de root et le
+   réécrire — le §42.2 quater a fixé le contraire, et ce défaut n'autorise pas à le défaire.
+4. *Déplacer la clé existante de `/root` vers le compte.* Refusé : la porte administrative l'utilise
+   peut-être ; retirer une clé que le locataire emploie est un geste qu'on ne fait pas pour lui.
+   Copier ne casse rien.
+
+**Décision.** DAT §17.6. Mode `rootless` → paire dans `/home/spark-docker/.ssh/`, propriété du
+compte (`0600` / `0644`), dossier inchangé `root:spark-docker 0750`. `ssh-keygen` reste exécuté
+en root dans la cellule, puis `chown`. Une paire déjà présente sous `/root` sur un Spark
+rootless est **copiée** (même clé, même empreinte) au premier « créer » sans remplacement, pour que la
+clé de déploiement déjà posée chez GitHub ne soit pas invalidée par un correctif de chemin. Lire
+n'écrit rien. Pas de changement d'écran ni d'API : le champ `path` existait et le panneau
+l'affiche déjà.
+
+**Choix que le responsable peut renverser.** La reprise (copie) est un ajout de ma part à la
+demande, justifiée par les Sparks déjà touchés ; sans elle, ces Sparks afficheraient « aucune
+identité » après le correctif et il faudrait créer une clé neuve et la reposer chez le tiers.
+
+**Reste à établir (écrit avant le code, à remplir par la mesure).** Le compte lit-il vraiment la
+clé dans une cellule Debian réelle ? `ssh` écrit-il `known_hosts` malgré le dossier de root ?
