@@ -14873,3 +14873,48 @@ exploitation : écartées. Le constat reste à faire par le responsable (OP-42, 
 
 **Note.** La console du responsable affiche « Console démarrée avant 3 commits » : elle n'a
 pas été redémarrée ; l'écran d'identité n'a pas changé, donc rien n'y manque.
+
+## 2026-11-10 · SPK-167 éprouvé sur la Forge réelle avec un Spark jetable
+
+**Demande du responsable** : tester sur la Forge réelle les unités en attente de vérification, avec des
+Sparks jetables. J'avais d'abord compris « forges jetables » (le banc VM) ; le responsable a précisé
+« des Sparks ». Les deux lectures ont donné un résultat, consigné ci-dessous.
+
+**Banc VM, lancé sur ce premier malentendu** — `make forge-vm ARGS="--carte virtio"` : VERT en 279 s.
+Le cloud-init de la commande passe `--net-mbit 1000` ; `/v1/forge` rend `1000000000` bit/s en source
+`declared` ; secrets reposés après *Redémarrer*, après un `reboot` dans la cellule et après celui de la
+Forge ; pool miroir créé par l'amorce ; préflight 17/17. C'est la variante que SPK-158 et SPK-159
+disaient non rejouée : leurs « Reste » sont mis à jour.
+
+**Inventaire des unités `[~]`** (27). La plupart de celles des lots 133 à 156 n'attendent plus une VM :
+leurs captures sur VM sont observées, et il reste « OP-3x », le geste sur la Forge de production, réservé
+à l'instruction du responsable. Ce qu'un Spark jetable peut éprouver sans effet extérieur, c'est SPK-167 :
+c'est la seule unité traitée ici. Les autres n'ont pas été rejouées.
+
+**Contraintes relevées avant d'agir** (lecture seule) : pool CPU à 3,75 / 4,0 réservés — le plus petit
+Spark (0,25) prend donc TOUT le CPU réservable tant qu'il vit, et la création d'un autre Spark est refusée
+dans l'intervalle ; webhook et SMTP d'alerte tous deux configurés, et `spark.delete` est dans la liste
+fermée des gestes qui alertent (DAT §47.2). Le Spark jetable a vécu environ sept minutes ; sa
+suppression a envoyé l'alerte hors bande. Aucun autre geste de la liste n'a été joué.
+
+**Épreuve** (`e2e/forge-reelle/spk167-identite.mjs`, en quatre phases courtes pour que le nettoyage ne
+dépende jamais d'une phase longue ; tout passe par la console réelle, depuis l'accueil) : voir BACKLOG
+SPK-167 — reprise de la clé (même empreinte), lecture par `spark-docker`, `git clone` par SSH contre un
+`sshd` de la cellule, remplacement puis nouveau clone, suppression. Capacité rendue (CPU 3,75 / 4,0), aucune
+cellule « jetable » restante dans Incus, `crm` intact.
+
+**Défaut du harnais, trouvé en route, corrigé.** La première passe a échoué au clone alors que le clone
+avait réussi : l'avertissement de `ssh` sur `known_hosts` se termine par `\r\n`, et dans le terminal le
+retour chariot ramène le curseur en début de ligne — il écrasait l'étiquette `CLONE=` à l'écran, que le
+motif cherchait. `tr` traite maintenant `\r` autant que `\n`, et la phase est reprenable (la reprise déjà
+faite n'est pas rejouée). Aucune cause côté produit.
+
+**Mesuré sur la Forge réelle** : le compte ne peut pas écrire `known_hosts` ; `ssh` avertit, ne crée pas le
+fichier, et l'authentification comme le clone réussissent (`accept-new`). Le DAT §17.6 le dit désormais
+mesuré sur une cellule Incus. **Non mesuré** : un clone contre GitHub réel, le mode `ask` hors terminal, et
+l'usage de la clé dans la cellule de `crm` — le `git clone` d'OP-42 reste à jouer une fois par le
+responsable.
+
+**Décision.** SPK-167 passe à `[x]` : la preuve sur Forge réelle, seule qui manquait (DAT §28.7), est faite.
+OP-42 est marqué appliqué. Le changelog déplace cette seule entrée vers `[Publié]` : c'est la seule que j'ai
+pu confirmer en production, les autres entrées de `[Non publié]` n'ont pas été vérifiées ici.

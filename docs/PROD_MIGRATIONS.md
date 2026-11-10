@@ -120,18 +120,19 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-42 · L'identité d'un Spark rootless est posée pour le compte rootless : `sparkd` seul (SPK-167)
+### OP-42 · L'identité d'un Spark rootless est posée pour le compte rootless : `sparkd` seul (SPK-167) — **APPLIQUÉ le 2026-11-10**
 
 ```
-État          : `sparkd` DÉPLOYÉ le 2026-11-10 sur `spark-experiment`, sur
-                instruction du responsable (commit `ae21a9dbf`, préflight 17/17,
-                registre sauvegardé avant : `spark-20261110-205045.db`, 2025
-                entrées de journal, chaîne intacte). Le Spark `crm` a repris sa
-                paire sous le compte `spark-docker` (même empreinte
-                `SHA256:DLHp+DvfmO…`, journal : `adopted: true`). RESTE À
-                VÉRIFIER dans la cellule : que `spark-docker` lit sa clé et que
-                `git clone` aboutit — voir « Vérification » ci-dessous ; la
-                relecture par `sparkd` et la console ont, elles, été constatées.
+État          : APPLIQUÉ le 2026-11-10 sur `spark-experiment`, sur instruction du
+                responsable : commit `ae21a9dbf`, préflight 17/17, registre
+                sauvegardé avant (`spark-20261110-205045.db`, 2025 entrées de
+                journal, chaîne intacte). VÉRIFIÉ sur la Forge avec un Spark
+                jetable (clé lue par `spark-docker`, `git clone` par SSH qui
+                aboutit, remplacement, suppression) — DAT §17.6, BACKLOG SPK-167.
+                Spark `crm` : sa paire a été reprise par `spark-docker` depuis la
+                console (même empreinte `SHA256:DLHp+DvfmO…`, journal
+                `adopted: true`) ; son usage DANS la cellule de `crm` n'a pas été
+                exercé — c'est le `git clone` ci-dessous, à jouer une fois.
 Objectif      : sur un Spark amorcé en rootless, « Créer l'identité » pose la
                 paire dans `/home/spark-docker/.ssh/` (propriété du compte
                 `spark-docker`, clé privée 0600), et non plus sous `/root/.ssh`

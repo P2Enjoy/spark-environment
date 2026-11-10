@@ -2148,13 +2148,15 @@ plus la sienne, et si elle est régénérée à la main elle ne diverge d'aucun 
   (§21.2 : jamais un corps de clé).
 
 **Ce que cette section ne règle pas.** `known_hosts` : le dossier appartenant à `root`,
-le compte ne peut pas y écrire sa propre liste d'hôtes. **Mesuré le 2026-11-10** dans un
-conteneur Debian 13 — Docker, pas une cellule Incus — (client lancé sous `spark-docker`, `BatchMode=yes`,
-`StrictHostKeyChecking=accept-new`, contre un vrai `sshd`) : `ssh` écrit « Failed to add the
-host to the list of known hosts » et **l'authentification réussit quand même**. Le fichier
-n'est jamais créé, donc chaque connexion repose la question de l'hôte. Le comportement par
-défaut (`StrictHostKeyChecking=ask`) hors terminal, et un `git clone` contre GitHub réel,
-**ne sont pas mesurés** ; le §17.5 excluait déjà `known_hosts` du périmètre.
+le compte ne peut pas y écrire sa propre liste d'hôtes. **Mesuré le 2026-11-10**, deux fois :
+dans un conteneur Debian 13 (Docker, client `ssh` sous `spark-docker` contre un vrai `sshd`),
+puis **sur la Forge réelle**, dans une cellule Incus rootless jetable, par le terminal de la
+console — `git clone ssh://…` sous `spark-docker`, `BatchMode=yes`,
+`StrictHostKeyChecking=accept-new`. `ssh` écrit « Failed to add the host to the list of known
+hosts (/home/spark-docker/.ssh/known_hosts) », **le fichier n'est jamais créé**, et
+l'authentification comme le clone **réussissent**. Chaque connexion repose donc la question de
+l'hôte. **Non mesurés** : le comportement par défaut (`StrictHostKeyChecking=ask`) hors
+terminal, et un clone contre GitHub réel ; le §17.5 excluait déjà `known_hosts` du périmètre.
 
 ## 18. Réconciliation de l'ingress
 

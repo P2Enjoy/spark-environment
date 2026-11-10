@@ -9689,7 +9689,10 @@ lien et en place des textes bruts ».
     puis **VERT en 284 s** avec le verdict de topologie ajouté. Le cloud-init monte
     la Forge (`status: done`), la route sert la pile avant et après le
     redémarrage sans aucun geste, le préflight est vert (17 sur 17).
-  - **Reste `[~]`** : la variante `--carte virtio` n'a **pas** été rejouée ; le mode
+  - **Variante `--carte virtio` rejouée le 2026-11-10** : VERT en 279 s — le cloud-init de la
+    commande passe `--net-mbit 1000`, `/v1/forge` rend `1000000000` bit/s, source `declared`,
+    et le reste du banc est vert, redémarrage compris.
+  - **Reste `[~]`** : le mode
     `--compresser` n'a pas été joué sur une VM ; les schémas NVMe et UEFI sont
     construits, pas relevés ; et l'acceptation par l'hébergeur, ci-dessus.
 
@@ -9748,10 +9751,11 @@ en éditant le fichier, serveur par serveur.
     `mirror-0` avec `vdb` et `vdc` `ONLINE` après le redémarrage. La forme
     `source=mirror=/dev/a,/dev/b` est donc acceptée — ce n'est plus seulement la
     documentation d'Incus qui le dit. VERT en 409 s, puis en 284 s.
-  - **Reste `[~]`** : `--net-mbit` n'est éprouvé **que par les preuves unitaires** —
-    la variante `make forge-vm ARGS="--carte virtio"`, qui prouvait le débit
-    déclaré (SPK-135) quand c'était un texte remplacé, n'a pas été rejouée sur
-    l'argument ; et l'arbitrage du responsable sur le contrat de SPK-73
+  - **`--net-mbit` éprouvé sur un Incus réel le 2026-11-10** (`make forge-vm
+    ARGS="--carte virtio"`, VM sans débit annoncé) : l'amorce reçoit `--net-mbit 1000`,
+    `/v1/forge` rend `1000000000` bit/s en source `declared` — l'argument, et non plus un
+    texte remplacé. VERT en 279 s, redémarrage compris.
+  - **Reste `[~]`** : l'arbitrage du responsable sur le contrat de SPK-73
     (DAT §66.2 point 6).
 
 ---
@@ -9998,7 +10002,7 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
   **le lot clos** : `[x]` seulement après la preuve contre le S3 réel du propriétaire
   (action humaine).
 
-### [~] SPK-167 · L'identité SSH d'un Spark rootless appartient au compte rootless
+### [x] SPK-167 · L'identité SSH d'un Spark rootless appartient au compte rootless
 
 **Défaut signalé par le responsable le 2026-11-10** : sur un Spark amorcé en rootless,
 l'identité est créée sous `/root/.ssh/id_ed25519`, donc le compte `spark-docker`
@@ -10040,18 +10044,24 @@ que rien n'indique pourquoi.
   constatées) ; captures `e2e/captures/spk167-*.jpg` observées, bureau et mobile. Campagne
   complète : 152 sur 155, les trois rouges étant **les mêmes sur le code du commit
   précédent** (`docs/INCONSISTENCY_REPORT.md`).
-- **Déployé le 2026-11-10 sur la Forge `spark-experiment`** (OP-42, commit `ae21a9dbf`), sur
-  instruction du responsable. Spark `crm` : l'identité posée sous `/root` a été reprise par
-  `spark-docker` depuis la console — même empreinte, le panneau affiche le chemin du compte,
-  le journal porte `adopted: true`. C'est le premier constat sur une Forge réelle, par la
-  relecture de `sparkd` ; **l'usage de la clé par le compte dans la cellule n'est pas encore
-  constaté**.
-- **Reste, donc `[~]` (DAT §28.7 : la pile factice ne conclut pas).** La preuve sur une
-  **Forge réelle** : un Spark amorcé en rootless par un Incus réel, l'identité créée depuis la
-  console, puis `ssh-keygen -y` et un `git clone` sous `spark-docker` — c'est la
-  vérification d'OP-42. Le conteneur Docker n'est pas une cellule Incus (ni `systemd`, ni
-  idmap, ni démon rootless). Le mode `ask` de `ssh` hors terminal et un clone contre GitHub
-  réel ne sont pas mesurés.
+- **Clos le 2026-11-10 — déployé sur la Forge `spark-experiment` (OP-42, commit `ae21a9dbf`) et
+  éprouvé dessus avec un Spark JETABLE**, par la console réelle, depuis l'accueil
+  (`make forge-reelle SCRIPT=spk167-identite`, captures `spk167-reelle-*.jpg` observées) :
+  1. identité créée avant l'amorçage : `/root/.ssh/id_ed25519` ; amorçage rootless (Docker 29.9.3) ;
+  2. la console dit « Aucune identité » (le compte n'en a pas), « Créer l'identité » au clavier la
+     **reprend** : même empreinte, chemin `/home/spark-docker/.ssh/id_ed25519` ;
+  3. dans le terminal de la console, **sous `spark-docker`** : `spark-docker:spark-docker 600`,
+     `ssh-keygen -y` dérive la même empreinte, et **`git clone ssh://…` aboutit** contre un `sshd`
+     de la cellule qui n'accepte que cette clé ;
+  4. « Remplacer… » (frappe du nom) : clé neuve chez le compte, et le clone aboutit encore.
+  Le Spark jetable est supprimé, la capacité rendue (CPU 3,75/4,0 avant et après), l'identité de
+  `crm` — reprise par la console — intacte.
+  **Mesuré** : le compte ne peut pas écrire `known_hosts` (dossier à root) ; `ssh` avertit
+  (« Failed to add the host to the list of known hosts »), le fichier n'est jamais créé, et
+  l'authentification et le clone réussissent (`StrictHostKeyChecking=accept-new`).
+  **Non mesurés, et hors de cette unité** : un clone contre GitHub réel, le mode `ask` hors
+  terminal, et l'usage de la clé *dans la cellule de `crm`* (relue par `sparkd`, pas exercée).
+
 
 ### [ ] SPK-168 · La restauration qui accepte la perte d'instantanés plus récents lève la garde par le volume
 
