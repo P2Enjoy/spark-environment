@@ -85,8 +85,8 @@ echo "   miroir sur  : ${PERIPHERIQUES[*]}"
 # La `source` d'un pool ZFS dans la forme que DECRIT Incus (reference/storage_zfs) :
 # le type de vdev, `=`, puis les peripheriques separes par des virgules —
 # `mirror=/dev/a,/dev/b`. L'ancienne forme, `mirror /dev/a /dev/b`, n'y figure pas
-# (SPK-159, DAT §66.1 point 6). Etabli par la documentation ; le banc de
-# redemarrage la joue sur un Incus reel. Les autres pilotes ne sont pas touches :
+# (SPK-159, DAT §66.1 point 6). Eprouve sur un Incus reel par le banc de
+# redemarrage (mirror-0, 2026-11-10). Les autres pilotes ne sont pas touches :
 # le produit ne supporte le miroir qu'en ZFS (§8.5).
 if [ "$PILOTE" = "zfs" ]; then
   LISTE=$(IFS=,; echo "${PERIPHERIQUES[*]}")

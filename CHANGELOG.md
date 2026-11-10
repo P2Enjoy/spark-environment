@@ -151,9 +151,10 @@
   documentation décrit.** Il écrivait `source=mirror /dev/a /dev/b` ; Incus
   documente `source=mirror=/dev/a,/dev/b` (type de vdev, `=`, périphériques
   séparés par des virgules). Les preuves assertaient la forme fautive contre un
-  `incus` doublé : elles ne pouvaient pas la contredire. **Établi par la
-  documentation, pas par un Incus réel** — le banc de redémarrage est le premier
-  à jouer ce geste. Seul le pilote `zfs` est touché. DAT §66.1 point 6 (SPK-159).
+  `incus` doublé : elles ne pouvaient pas la contredire. **Éprouvé sur un Incus
+  réel** : le banc de redémarrage crée le pool par l'amorce et relève `mirror-0`
+  sur les deux disques (2026-11-10). Seul le pilote `zfs` est touché. DAT §66.1
+  point 6 (SPK-159).
 - **SPK-155 — l'émetteur de certificats est déclaré : Let's Encrypt, et lui
   seul.** Sans déclaration, Caddy 2.6.2 se repliait sur ZeroSSL, qui refuse
   chaque tentative depuis que son API ne délivre plus d'identifiants sans compte

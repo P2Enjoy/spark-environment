@@ -14338,15 +14338,45 @@ utilisateur sur le schéma par défaut réel : la sortie est celle que la consol
 validée. `sh -n` de l'amorce et `bash -n` de `creer-pool.sh`, **extraits de la
 sortie de la commande**.
 
+**Le banc a été rejoué, le jour même, quand le poste a été libre.**
+
+- Une épreuve Playwright d'un autre projet (`p2enjoy-crm`) tenait le poste (3 Gio
+  disponibles pour une VM de 6) ; le responsable a répondu « je l'attends », et
+  j'ai lancé le banc une fois qu'elle s'est terminée, après avoir revérifié
+  processus et mémoire.
+- **Premier passage interrompu par mon propre délai** : mon outil plafonne un
+  premier plan à 10 minutes, j'ai coupé à 590 s, sans verdict ni orphelin (aucun
+  `qemu`, aucun répertoire `/tmp/spark-vm-*`, aucun verrou). Les passages suivants
+  ont duré 409 s et 284 s ; **je n'établis pas pourquoi le premier était plus
+  long**. Le §15 bis exige le premier plan : le responsable a autorisé la tâche de
+  fond, **seule**, comme écart à la lettre pour ce seul motif technique.
+- **VERT en 409 s** sur le cloud-init produit par la commande (`--pool-source
+  /dev/vdb,/dev/vdc --arc-gib 1`) : `status: done` à 208 s, la route sert avant et
+  après le redémarrage sans aucun geste, Caddy porté par `caddy-api.service`,
+  pare-feu posé, pool `ONLINE`, préflight 17 sur 17.
+- Ce passage ne vérifiait que « pool en ligne », pas la **topologie** — or tout le
+  défaut de `creer-pool.sh` portait sur la forme de la source du miroir. J'ai
+  ajouté au banc un verdict : `zpool status -P spark` doit montrer `mirror-0` avec
+  `vdb` et `vdc` `ONLINE`.
+- Le second passage a été interrompu à 323 s : la session s'est arrêtée (la
+  machine n'a pas redémarré ; `make` a rendu `Error 130`, SIGINT). Aucun orphelin
+  n'a survécu ; vérifié avant de relancer (§15 bis point 3).
+- **VERT en 284 s** au troisième passage, verdict de topologie compris : « le pool
+  est un MIROIR natif sur vdb et vdc, créé par l'amorce — `mirror-0` ». **La forme
+  `source=mirror=/dev/a,/dev/b` est donc acceptée par un Incus réel** : ce n'est
+  plus seulement la documentation qui le dit. Le banc ne crée plus le pool, donc
+  c'est bien l'amorce qui l'a créé.
+
 **Ce qui n'a PAS été vérifié.**
 
-- `make forge-vm` n'a pas été rejoué : une épreuve Playwright d'un autre projet
-  (`p2enjoy-crm`) tenait le poste depuis plus de 20 minutes, 3 Gio disponibles sur
-  37 pour une VM de 6. CLAUDE.md §15 bis interdit d'en lancer une seconde à côté ;
-  je n'ai pas tué un processus qui n'est pas de ce dépôt. Le banc est adapté
-  (`node --check`, ancres du texte vérifiées). **C'est lui qui dira si `creer-pool.sh`
-  est accepté par un Incus réel** avec la forme que la documentation décrit.
+- La variante `make forge-vm ARGS="--carte virtio"` : elle éprouve le débit déclaré
+  (SPK-135), qui passe désormais par l'argument `--net-mbit` de l'amorce. Mon
+  contrôle préalable a refusé de la lancer : une nouvelle épreuve Playwright du
+  même autre projet venait de démarrer. `--net-mbit` n'est donc éprouvé que par les
+  preuves unitaires.
 - `--compresser` n'a pas été joué dans un cloud-init réel.
 - Les schémas NVMe et UEFI sont construits d'après le défaut BIOS, pas relevés.
 - La sortie `partitionnement` n'a pas été collée dans la console : le même JSON,
   dérivé à la main, y avait été validé — pas la sortie de la commande elle-même.
+- L'arbitrage du responsable sur le contrat de SPK-73 (§66.2 point 6) reste à
+  rendre.

@@ -9684,13 +9684,14 @@ lien et en place des textes bruts ».
   - **Mesuré** : le `user-data` fait environ **19 Ko** en clair (l'estimation
     écrite d'abord, 13 Ko, était fausse) ; `--compresser` le ramène à 11,5 Ko. La
     limite du champ chez l'hébergeur reste inconnue.
-  - **Reste `[~]`** : le banc `make forge-vm`, qui monte la Forge avec le
-    cloud-init produit, **n'a pas été rejoué** — il est adapté (`node --check`,
-    ancres du texte vérifiées) mais le poste portait une épreuve d'un autre projet
-    (3 Gio disponibles pour une VM de 6) ; CLAUDE.md §15 bis interdit d'en lancer
-    une seconde. Le mode `--compresser` n'a pas été joué sur une VM. Les schémas
-    NVMe et UEFI sont construits, pas relevés. Et l'acceptation par l'hébergeur,
-    ci-dessus.
+  - **Banc `make forge-vm` rejoué le 2026-11-10, sur le cloud-init que produit la
+    commande** (`--pool-source /dev/vdb,/dev/vdc --arc-gib 1`) : **VERT en 409 s**,
+    puis **VERT en 284 s** avec le verdict de topologie ajouté. Le cloud-init monte
+    la Forge (`status: done`), la route sert la pile avant et après le
+    redémarrage sans aucun geste, le préflight est vert (17 sur 17).
+  - **Reste `[~]`** : la variante `--carte virtio` n'a **pas** été rejouée ; le mode
+    `--compresser` n'a pas été joué sur une VM ; les schémas NVMe et UEFI sont
+    construits, pas relevés ; et l'acceptation par l'hébergeur, ci-dessus.
 
 ### [~] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
 
@@ -9720,8 +9721,9 @@ en éditant le fichier, serveur par serveur.
      `source=mirror=/dev/a,/dev/b` — le type de vdev, `=`, puis les
      périphériques séparés par des virgules. Ses preuves assertaient la forme
      fautive contre un `incus` doublé : elles ne pouvaient pas la contredire.
-     Établi par la documentation, **pas encore par un Incus réel** : c'est le
-     banc de redémarrage qui en fait la preuve.
+     Établi par la documentation, **puis éprouvé sur un Incus réel le 2026-11-10** :
+     le banc de redémarrage crée le pool par l'amorce et relève `mirror-0` sur les
+     deux disques.
 - Aucune migration. Aucune variable d'environnement nouvelle (`creer-pool.sh`
   lit toujours les trois du README, inchangées).
 - DoD : preuves unitaires (arguments, refus, création gardée, rejeu sans
@@ -9740,10 +9742,17 @@ en éditant le fichier, serveur par serveur.
     variable d'environnement lue. Suite sparkd : **1 809 sur 1 809**.
   - Contrat de SPK-73 reformulé (« jamais » → « seulement sur `--pool-source` ») :
     **arbitrage du responsable demandé** (DAT §66.2 point 6).
-  - **Reste `[~]`** : `make forge-vm` n'a **pas** été rejoué, pour la raison
-    donnée à SPK-158. C'est lui qui prouve que le pool est créé par l'amorce sur
-    un Incus réel, donc que la forme `source=mirror=…` — établie par la
-    documentation d'Incus, pas par une exécution — est acceptée.
+  - **Éprouvé sur un Incus réel le 2026-11-10** (`make forge-vm`, VM Ubuntu 26.04
+    à deux disques vierges) : le banc ne crée plus le pool, **l'amorce le crée**
+    par `creer-pool.sh` sur `--pool-source`, et le verdict ajouté relève
+    `mirror-0` avec `vdb` et `vdc` `ONLINE` après le redémarrage. La forme
+    `source=mirror=/dev/a,/dev/b` est donc acceptée — ce n'est plus seulement la
+    documentation d'Incus qui le dit. VERT en 409 s, puis en 284 s.
+  - **Reste `[~]`** : `--net-mbit` n'est éprouvé **que par les preuves unitaires** —
+    la variante `make forge-vm ARGS="--carte virtio"`, qui prouvait le débit
+    déclaré (SPK-135) quand c'était un texte remplacé, n'a pas été rejouée sur
+    l'argument ; et l'arbitrage du responsable sur le contrat de SPK-73
+    (DAT §66.2 point 6).
 
 ---
 

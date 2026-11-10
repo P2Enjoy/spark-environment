@@ -16121,7 +16121,8 @@ et à la lecture du dépôt :
    `source=mirror=/dev/a,/dev/b` — « To specify a vdev type, use an `=` sign
    between the vdev type and the block devices », les périphériques séparés par
    des virgules. Ses preuves assertaient la forme fautive contre un `incus`
-   doublé. Jamais joué sur un Incus réel : §66.5.
+   doublé. **Joué sur un Incus réel le 2026-11-10** (§66.5) : la forme de la
+   documentation est acceptée, et le pool est un miroir `mirror-0`.
 
 ### 66.2 La décision
 
@@ -16219,15 +16220,19 @@ croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
   `zpool create` direct, rejeu sans création.
 - **E2E de la commande** : lancée comme un utilisateur (fichier, entrée standard,
   codes de sortie), sur ce même schéma ; chaque script embarqué passe `sh -n`.
-- **E2E de l'amorce, `make forge-vm`** : la Forge est montée par le cloud-init
+- **E2E de l'amorce, `make forge-vm`** — **joué le 2026-11-10, VERT** (409 s, puis
+  284 s avec le verdict de topologie) : la Forge est montée par le cloud-init
   **produit par la commande**, sur une VM à deux disques vierges ; **le pool est
-  créé par l'amorce** ; tout reprend après redémarrage. Les écarts du banc
+  créé par l'amorce** et le banc relève `mirror-0` sur `vdb` et `vdc` ; tout reprend
+  après redémarrage, préflight 17 sur 17. Les écarts du banc
   passent de quatre à trois : « le pool est créé avant l'amorce » disparaît ; le
   plafond de l'ARC (1 Gio) et le débit déclaré deviennent des arguments de la
   commande, et non plus un remplacement de texte dans l'amorce ; restent la roue
   construite sur le poste, la clé SSH jetable et ce plafond de 1 Gio.
 - **Non prouvé par la session** : l'acceptation de la sortie `partitionnement`
-  par l'hébergeur, sur une offre réelle (SPK-158, « Reste »).
+  par l'hébergeur, sur une offre réelle (SPK-158, « Reste ») ; la variante
+  `--carte virtio` du banc, qui éprouve `--net-mbit` sur l'argument, n'a pas été
+  rejouée ; `--compresser` n'a pas été joué sur une VM.
 
 ### 66.6 Ce qui reste ouvert
 

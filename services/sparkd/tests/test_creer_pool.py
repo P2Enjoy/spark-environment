@@ -173,8 +173,8 @@ def test_le_miroir_NATIF_sur_deux_peripheriques_VIDES(tmp_path):
     # devices », les périphériques séparés par des virgules. L'ancienne forme,
     # `source=mirror /dev/a /dev/b`, était assertée ici contre ce doublon : une
     # preuve dont la référence est l'objet qu'elle garde (SPK-159, DAT §66.1
-    # point 6). Elle n'est établie que par la documentation ; le banc de
-    # redémarrage la joue sur un Incus réel.
+    # point 6). Éprouvée sur un Incus réel par le banc de redémarrage
+    # (`mirror-0`, 2026-11-10) : ce doublon n'en est plus la seule référence.
     assert (f"incus storage create spark zfs "
             f"source=mirror={BLOCS[0]},{BLOCS[1]}\n") in appels
     # …et elle dit ce qu'elle apporte en propre.

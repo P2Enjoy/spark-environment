@@ -467,6 +467,16 @@ try {
   verdict('après : le pare-feu du bridge est posé', pareFeu === 'posé', pareFeu || 'absent');
   const pool = ssh('sudo zpool list -H -o health spark', { tolerer: true }).sortie;
   verdict('après : le pool est en ligne', pool === 'ONLINE', pool || 'absent');
+  // SPK-159 · docs/DAT.md §66.2 point 6 : ce pool a été CRÉÉ par l'amorce, par
+  // creer-pool.sh, avec `source=mirror=/dev/vdb,/dev/vdc` — la forme que décrit Incus.
+  // « En ligne » ne dit pas la topologie, et c'est elle que la correction vise : un
+  // miroir NATIF est ce que le produit promet, pas deux disques en bande.
+  const topologie = ssh('sudo zpool status -P spark', { tolerer: true }).sortie;
+  const miroir = /^\s+mirror-0\s+ONLINE/m.test(topologie)
+    && /\/dev\/vdb\S*\s+ONLINE/.test(topologie) && /\/dev\/vdc\S*\s+ONLINE/.test(topologie);
+  verdict('après : le pool est un MIROIR natif sur vdb et vdc, créé par l’amorce', miroir,
+    miroir ? 'mirror-0 : vdb et vdc, ONLINE'
+           : (topologie || 'absent').split('\n').slice(0, 14).join(' | '));
   const pf = ssh('sudo /opt/sparkd/venv/bin/python -m sparkd.preflight', { tolerer: true, delai: 120 });
   const rouges = (pf.sortie.match(/^\[ECHEC \] \S+/gm) || []).map((l) => l.split(/\s+/).pop());
   verdict('après : le préflight est vert', pf.code === 0,
