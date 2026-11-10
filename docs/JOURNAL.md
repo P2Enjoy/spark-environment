@@ -14743,3 +14743,60 @@ identité » après le correctif et il faudrait créer une clé neuve et la repo
 
 **Reste à établir (écrit avant le code, à remplir par la mesure).** Le compte lit-il vraiment la
 clé dans une cellule Debian réelle ? `ssh` écrit-il `known_hosts` malgré le dossier de root ?
+
+## 2026-11-10 · SPK-160 : la mesure complète — la décision de format confirmée, trois faits d'Incus 7.6
+
+**Problème.** Après le point d'étape (essai 2), trois points restaient ouverts : la copie
+importée à côté de l'original ne démarrait pas, l'appel de restauration forcée de `sparkd`
+était rejeté, et l'espace de travail d'Incus n'était pas mesuré.
+
+**Deux incidents de procédure, dits tels quels.**
+
+- *Essai 3 : rien mesuré.* La VM a disparu à 181 s, huit secondes après la fin du
+  cloud-init (`ssh … port 2222: Connection refused` : plus de QEMU). **Cause inconnue.**
+  Aucun OOM au journal du noyau ni de l'utilisateur ; pic mémoire du scope 5,4 Go, sous le
+  plafond de 8 Go. Le moment coïncide avec la fin de ma session précédente (18 h 15) :
+  indice, pas preuve.
+- *Essai 4 : retardé de sept minutes* par une campagne Playwright d'un autre projet que le
+  script d'attente a reconnue (« épreuves lourdes = 3 ») et attendue, puis relancé seul
+  (§15 bis). Le responsable avait libéré de la mémoire ; ce n'était pas la seule condition.
+
+**Observations (essai 4, VERT en 291 s pour le socle, mesure en 346 s).** Tout est dans le
+DAT §67.2 (« Ce que la mesure a établi »). Les faits nouveaux :
+
+- *La copie ne démarre pas* : `MAC address "10:66:6a:05:16:fa" already defined on another
+  NIC`. Le diff de configuration entre l'original et la copie est **vide** : l'import
+  conserve tout le `volatile.*` de l'original, MAC comprise, et Incus refuse la même MAC
+  sur deux interfaces **même si l'original est arrêté** (mon hypothèse « l'original
+  arrêté » était fausse). L'import dans un pool recréé, sans homonyme, démarre.
+- *La restauration forcée* : l'appel **littéral** de `sparkd` (`PATCH` du périphérique
+  `root`) est rejeté — `Invalid device option "zfs.remove_snapshots"`. L'option du
+  **volume** fonctionne : il reste `s1 s2`, base d'avant la réécriture, somme `OK`. Mon
+  premier essai avait ajouté `pool` au corps : le rejet est le même sans.
+- *L'espace de travail* : le fichier d'Incus (`/var/lib/incus/backups/incus_backup_zfs<n>`,
+  sur la racine) plafonne à **2 550 Mio** à 1, 3 et 5 instantanés alors que l'archive passe
+  de 2 550 à 3 552 Mio : c'est le flux complet de l'état le plus ancien. Mon ancienne sonde
+  (`du`) rendait une valeur constante parce qu'elle mesurait ce fichier-là sans que je le
+  sache ; la nouvelle (croissance de la racine moins ce que le client a écrit) est
+  cohérente avec `find` : 2 673 549 280 o vus 5 s après le début.
+
+**Solutions envisagées pour la suite.** (1) Clore SPK-160 sur les preuves de l'essai 2 et
+déplacer les trois points : écarté, la cause du premier n'aurait pas été connue. (2) Un
+cinquième essai pour éprouver le remède de la MAC : écarté, c'est du code de SPK-166 et il
+y sera éprouvé par une épreuve E2E, avec le code qui le pose.
+
+**Décision.** **Le format est confirmé** (export complet par Spark + manifeste) ; le repli
+sur l'archive par instantané n'est pas retenu. La règle de l'espace de travail (§67.7) est
+écrite sur la mesure. Le défaut de `sparkd` devient **SPK-168**, qui précède SPK-166. SPK-160
+reste `[~]` pour une seule raison, déjà écrite au backlog : le coût pour les Sparks voisins
+n'est établi que sur des disques virtuels, et sa confirmation sur la Forge réelle (action
+humaine) est reportée dans le DoD de SPK-166.
+
+**Conséquences.** DAT §19.1 (note mesurée), §67.2, §67.7, §67.11 ; backlog : SPK-160, -162,
+-166, nouveau -168. `make forge-vm ARGS="--travail … --epreuve spk160-export"` rejoue la
+mesure ; **trois verdicts y restent rouges à dessein** (la MAC, la copie démarrée, l'appel de
+`sparkd`) : ce sont les faits mesurés, non des défauts du banc.
+
+**Vérifications.** Deux passes complètes concordantes ; aucun orphelin à la fin (processus,
+conteneur, dossier de travail). **Non vérifié** : le remède de la MAC, Incus 7.4, tout
+disque mécanique, des données compressibles.

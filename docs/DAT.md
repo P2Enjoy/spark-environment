@@ -2776,6 +2776,15 @@ La demande explicite est un drapeau de la requête, jamais une option de
 configuration : une configuration se pose une fois et s'oublie, alors que la
 perte est décidée instantané par instantané.
 
+**Mesuré le 2026-11-10 (Incus 7.6.0, SPK-160).** Le refus par défaut est bien rendu en
+l'état (« cannot be restored due to subsequent snapshot(s). Set zfs.remove_snapshots to
+override »). Mais la levée de la garde **par le périphérique `root` de l'instance** — ce que
+fait `sparkd` — est **rejetée** : `Invalid device option "zfs.remove_snapshots"`. Seule
+l'option du **volume** (`incus storage volume set <pool> container/<nom>
+zfs.remove_snapshots=true`, remise ensuite) lève la garde : `s1 s2` restent, avec les données
+d'avant la réécriture. Si la Forge accepte l'ancien appel (elle est documentée en Incus 7.4),
+cela n'a pas été vérifié ici. Défaut SPK-168.
+
 ### 19.2 Un instantané ne suspend pas le Spark
 
 Mesuré : la création d'un instantané sur un Spark en marche n'interrompt pas son
@@ -16399,22 +16408,62 @@ l'emporte sur trois points :
 
 Sur ZFS, l'export *optimisé* est un flux `zfs send` : les instantanés y partagent leurs
 blocs. Un Spark de 10 Gio à 5 instantanés devrait donc peser ses données plus les
-écarts, non cinq fois ses données. **C'est la documentation d'Incus qui l'affirme, pas
-une mesure** — d'où SPK-160, première unité du lot.
+écarts, non cinq fois ses données. **La documentation d'Incus l'affirmait ; SPK-160
+l'a mesuré le 2026-11-10** (ci-dessous).
 
-**Le seuil d'infirmation (mesure).** La décision tient si, sur la VM de `make
-forge-vm` : (a) l'export optimisé d'un Spark à 5 instantanés pèse au plus ses données
-utiles plus la somme des écarts plus 10 % ; (b) son import sous un autre nom restitue
-les 5 instantanés, restaurables ; (c) le coût en CPU et en E/S pour les Sparks voisins
-est jugé acceptable par le responsable, sur les chiffres. **Décidé le 2026-11-10 : la
-mesure se joue sur la VM seule, avec 2 Gio de données.** Les points (a) et (b) s'y
-établissent. Le point (c) **n'y est qu'indicatif** — disques virtuels, pas des disques
-mécaniques sur un lien partagé — et reste à confirmer sur la Forge réelle avant la
-première mise en production ; le DAT le dira tel quel avec les chiffres, sans le
-promouvoir en preuve. **Sinon, repli** sur une
-archive autonome par instantané (image publiée depuis l'instantané) : le reste du
-contrat — destination, chiffrement, coches, fenêtre, récupération — tient, et seuls
-§67.2 et §67.3 sont réécrits.
+**Le seuil, écrit à l'avance.** La décision tenait si, sur la VM de `make forge-vm` :
+(a) l'export optimisé d'un Spark à 5 instantanés pèse au plus ses données utiles plus la
+somme des écarts plus 10 % ; (b) son import sous un autre nom restitue les 5 instantanés,
+restaurables ; (c) le coût en CPU et en E/S pour les Sparks voisins est jugé acceptable par
+le responsable, sur les chiffres. Sinon, repli sur une archive autonome par instantané
+(image publiée depuis l'instantané), qui ne réécrivait que §67.2 et §67.3. **Décidé le
+2026-11-10 : la mesure se joue sur la VM seule, avec 2 Gio de données.** (c) n'y est
+qu'indicatif — disques virtuels, pas des disques mécaniques sur un lien partagé — et reste
+à confirmer sur la Forge réelle avant la première mise en production.
+
+#### Ce que la mesure a établi (SPK-160, 2026-11-10)
+
+*Incus 7.6.0, ZFS 2.4.1, VM de 6 Gio, pool miroir de 15,5 Gio, un Spark de 2 Gio de
+données incompressibles, 200 Mio de blocs neufs entre deux instantanés et, à l'étape 3,
+200 Mio de blocs existants réécrits. Deux passes complètes (essais 2 et 4) : les tailles
+diffèrent de moins de 30 Ko.*
+
+| instantanés | export optimisé | avec `zstd` | export non optimisé | données utiles (`refer` + instantanés) |
+|---|---|---|---|---|
+| 0 | 2 349 Mio | 2 257 Mio | — | 2 326 Mio |
+| 1 | 2 550 Mio | 2 457 Mio | 5 665 Mio (×2,22) | 2 526 Mio |
+| 3 | 3 151 Mio | 3 059 Mio | 12 330 Mio (×3,91) | 3 126 Mio |
+| 5 | **3 552 Mio** | 3 460 Mio | non mesuré | 3 527 Mio |
+
+- **(a) tient.** L'export optimisé dépasse les données utiles de **24 à 26 Mio, constants**
+  (index, en-têtes), soit 0,73 % à 5 instantanés. De 0 à 5 instantanés il grossit de
+  1 203 Mio pour 1 200 Mio de nouveautés (5 × 200, plus 200 retenus par l'instantané) :
+  **les blocs partagés ne sont pas répétés.** L'export non optimisé répète chaque
+  instantané en entier. *La base de comparaison est `refer` + `usedbysnapshots` ; `used`
+  ne compte pas les blocs que le Spark partage avec l'image dont il est le clone.*
+- **(b) tient.** L'import sous un autre nom restitue `s1` à `s5` (10,8 s). La restauration
+  de `s2` en acceptant la perte de `s3` à `s5` laisse `s1 s2` et la base **d'avant** la
+  réécriture (somme `OK`) — mais **par l'option du volume, pas par le périphérique
+  `root`** (§19.1, §67.11, SPK-168).
+- **Le scénario du sinistre tient.** Pool détruit (`incus storage delete`, `wipefs`),
+  recréé (`source=mirror=/dev/vdb,/dev/vdc`), export importé dessus en 8,7 s : 5
+  instantanés, six sommes `OK`.
+- **Un Spark en marche** : l'état exporté est celui d'un instant situé *pendant* l'export
+  (le témoin écrit 3 s après le début y figure, celui écrit après la fin non) — un arrêt
+  brutal, comme au §19.2.
+- **L'envoi** : 3 553 Mio en 56 s (63 Mio/s, boucle locale), 56 parts de 64 Mio, taille
+  exacte côté S3, **53 Mio de mémoire**.
+- **La compression** (au pire, données incompressibles) : `zstd` gagne 2,6 % et coûte 48 %
+  de durée et 57 % de CPU en plus. Non mesurée sur des données réelles.
+- **(c) indicatif seulement.** Pendant l'export le plus lourd, une boucle CPU voisine passe
+  de +17 % (essai 2) à +31 % (essai 4) et des écritures synchrones de −18 % à −43 %. Disques
+  virtuels, hôte en `cache=unsafe` : cela ne dit rien des disques mécaniques de la Forge.
+  Un export de 3,5 Gio coûte 10 s et 21 CPU-s sur 4 vCPU ; l'hôte écrit **deux fois**
+  l'archive quand le client écrit un fichier (7 110 Mio pour 3 552 Mio).
+
+**Décision de format : confirmée le 2026-11-10. Le repli sur l'archive par instantané n'est
+pas retenu.** Trois faits d'Incus 7.6 en découlent, aux §67.7 (l'espace de travail) et
+§67.11 (la copie, la restauration).
 
 **Le manifeste est écrit en dernier, et c'est lui qui valide.** Une génération sans
 manifeste n'existe pas : c'est un envoi interrompu, un **orphelin**. Cela remplace tout
@@ -16671,11 +16720,22 @@ tient dans l'envoi.
 vérifié, fiche relevée) → `export` → `envoi` (parts chiffrées) → `validation` (taille et
 empreinte relues, **puis** manifeste) → `validée` → *nettoyage* (règle du §67.2).
 
-**L'espace de travail (mesure).** Incus écrit l'archive avant de la servir. Où, et
-combien il en faut, est mesuré par SPK-160 ; `/` ne mesure que 200 Gio sur la Forge
-cible. Avant tout export, la Forge compare l'espace requis à l'espace libre : **sinon la
-génération attend** (état `en attente d'espace`, avec les deux chiffres) — ce n'est pas
-un échec et cela ne réveille personne.
+**L'espace de travail (mesuré, SPK-160).** Pour un export optimisé, Incus écrit côté
+serveur un fichier `/var/lib/incus/backups/incus_backup_zfs<n>` — **sur la racine**,
+`storage.backups_volume` étant vide par défaut — dont la taille est celle du **flux
+complet de l'état le plus ancien**, non de l'archive : 2 349 Mio à 0 instantané (l'archive
+entière), puis 2 550 Mio à 1, 3 et 5 instantanés, alors que l'archive passe de 2 550 à
+3 552 Mio. Les instantanés suivants sont envoyés en flux, sans fichier. Un export non
+optimisé n'écrit rien de gros côté serveur (19 Ko). Si le client écrit lui-même
+l'archive, la racine grandit d'autant en plus (mesuré : 5 099 Mio pour 3 552 Mio
+d'archive). `sparkd` lit donc le flux et l'envoie par parts **sans le poser sur disque**,
+et sa règle d'attente est : espace libre de la racine (ou du volume de sauvegardes d'Incus
+s'il est posé) ≥ `refer` + `usedbysnapshots` du Spark — une borne haute de ce qui a été
+relevé (3 527 Mio de borne pour 2 550 Mio relevés à 5 instantanés). `/` ne mesure que 200
+Gio sur la Forge cible : **poser `storage.backups_volume` sur le pool est une décision
+d'installation, à prendre avec SPK-162.** Faute d'espace, **la génération attend** (état
+`en attente d'espace`, avec les deux chiffres) — ce n'est pas un échec et cela ne réveille
+personne.
 
 **La reprise.** Un échec ne perd rien : la génération passe à `échouée` avec sa cause
 typée (celles du §67.6, plus `export`, `espace`, `instance_absente`, `integrite`) ;
@@ -16836,6 +16896,22 @@ S3 intact** : récupérer ne l'écrit jamais.
    surprise.
 7. Un **rapport de récupération** : ce qui est rétabli, ce qui ne l'a pas été et pourquoi.
    Journal et notification `backup.recover`.
+
+**Deux faits d'Incus 7.6, mesurés (SPK-160), que la récupération doit connaître.**
+
+1. *L'import conserve toute la configuration `volatile.*` de l'original* — le diff de
+   configuration entre l'original et la copie est vide —, donc la MAC de `eth0`. Incus
+   refuse alors de démarrer la copie : `MAC address "…" already defined on another NIC`,
+   **même quand l'original est arrêté**. Récupérer une **copie** (le nom ou l'identifiant
+   est déjà pris) doit donc effacer `volatile.eth0.hwaddr` avant de démarrer. *Ce remède
+   n'est pas encore éprouvé : c'est l'une des preuves de SPK-166.* Récupérer **après une
+   destruction**, sans homonyme, n'y est pas exposé : l'import dans un pool recréé a démarré.
+2. *Ramener la copie à un instantané ancien passe par l'option du **volume*** —
+   `incus storage volume set <pool> container/<nom> zfs.remove_snapshots=true`, la
+   restauration, puis le retrait de l'option — et **non** par le périphérique `root` :
+   Incus 7.6 rejette ce dernier (`Invalid device option "zfs.remove_snapshots"`). C'est
+   pourtant l'appel de `sparkd` pour « Restaurer en perdant ces instantanés » : défaut
+   SPK-168, qui précède SPK-166.
 
 **Une autre Forge, ou une clé perdue de vue.** Le sélecteur de la fenêtre liste les Forges
 trouvées sous le préfixe (`forge.json`). Récupérer l'une d'elles demande **sa clé de

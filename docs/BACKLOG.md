@@ -9820,17 +9820,18 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
   principal, réglé sur `eu-west-3`, TLS auto-signé — et tous tiennent ; une attente
   volontairement fausse la rend rouge (code 1). Elle a **corrigé le contrat** : V4 ne
   peut pas se typer sur un `HEAD`, le balayage des envois abandonnés ne peut pas se fier
-  au préfixe, la région se compare (DAT §67.3, §67.6, §67.13). **Étapes 1 à 8, première mesure le 2026-11-10** (journal du
-  jour) : **le critère (a) tient** — l'export optimisé à 5 instantanés pèse 3 552 Mio,
-  soit 0,7 % de plus que les données utiles, quand l'export non optimisé pèse ×3,9 dès 3
-  instantanés ; l'import dans un pool **détruit puis recréé** restitue les 5 instantanés
-  et des données intactes ; l'envoi par parts vers MinIO aboutit à l'octet près
-  (mémoire 53 Mio). **Le critère (b) reste ouvert** : la copie importée à côté de
-  l'original ne démarre pas (cause inconnue), et l'appel de restauration forcée de
-  `sparkd` est rejeté par Incus 7.6 (`Invalid device option "zfs.remove_snapshots"`,
-  à confirmer avec l'appel littéral — hors périmètre, à traiter à part). L'espace de
-  travail n'est pas établi (la sonde est invalide). **Reste** : un troisième essai
-  pour ces trois points.
+  au préfixe, la région se compare (DAT §67.3, §67.6, §67.13). **Étapes 1 à 8 faites le 2026-11-10 (essais 2 et 4,
+  deux passes concordantes à 30 Ko près)** : **la décision de format est confirmée, le
+  repli n'est pas retenu** (DAT §67.2, « Ce que la mesure a établi »). (a) tient — 3 552
+  Mio pour 3 527 Mio de données utiles, +0,7 %, quand l'export non optimisé pèse ×3,9 dès 3
+  instantanés. (b) tient — l'import sous un autre nom restitue `s1` à `s5` et la
+  restauration de `s2` rend les données d'avant la réécriture ; l'import dans un pool
+  **détruit puis recréé** aussi (8,7 s). L'envoi vers MinIO est exact à l'octet (53 Mio de
+  mémoire). **Trois faits d'Incus 7.6, mesurés et reportés dans les unités qui les
+  portent** : la copie à côté de l'original ne démarre pas faute d'une MAC effacée
+  (→ SPK-166) ; l'espace de travail est le flux complet de l'état le plus ancien, sur la
+  racine (→ SPK-162) ; **l'appel de restauration forcée de `sparkd` est rejeté** (→
+  SPK-168, défaut).
 - Aucune migration, aucune variable d'environnement, aucune opération de production.
 - Une épreuve **lourde** (VM de 6 Gio) : verrou `e2e/verrou.mjs`, et rien n'est lancé
   tant que la mémoire disponible est inférieure à 12 Gio.
@@ -9892,7 +9893,12 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
   5. `backup_generation`, `backup_generation_snapshot` (migration) ;
   6. `POST /v1/sparks/{nom}/backup` (une génération maintenant) et
      `GET /v1/sparks/{nom}/backup` (générations, couverture), journal
-     `backup.generation`.
+     `backup.generation`;
+  7. **l'espace de travail, mesuré par SPK-160** : `sparkd` lit le flux d'export et l'envoie par
+     parts sans le poser sur disque ; avant chaque export, l'attente d'espace compare l'espace
+     libre de la racine (ou du volume de sauvegardes d'Incus) à `refer` + `usedbysnapshots`
+     (DAT §67.7) ; la décision de poser `storage.backups_volume` sur le pool, que la
+     racine de 200 Gio ne porte pas pour un gros Spark, est prise ici.
 - DoD : unitaires — les **cinq altérations** du flux sont refusées (segment altéré,
   segments permutés, flux tronqué, mauvaise clé, objet déplacé), la règle `⊆` par
   tableau de cas (dont la restauration qui détruit `b`), la fiche qui échoue quand une
@@ -9968,7 +9974,7 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
 
 - Spécification : `docs/DAT.md` §67.11, §67.4 (clés de lecture), §14.2 · `docs/DAT.md`
   §35 (protection) · `docs/CONTINGENCE.md` (à étendre).
-- Dépend de : SPK-162, SPK-165.
+- Dépend de : SPK-162, SPK-165, SPK-168 (le retour à un instantané choisi).
 - Portée :
   1. les contrôles préalables, l'admission control par la fonction de création, le
      nom, l'adresse ;
@@ -9983,7 +9989,12 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
   écrire, nom pris, empreinte différente) ; intégration contre MinIO et Incus réel ;
   **E2E du parcours canonique du §67.15** : détruire un Spark, le récupérer, retrouver le
   témoin d'avant l'instantané et perdre celui d'après ; une Forge neuve (registre
-  vide) qui récupère avec la seule clé ; `CONTINGENCE.md`, manuel, README, changelog ;
+  vide) qui récupère avec la seule clé ; **la récupération d'une COPIE à côté de
+  l'original démarre** (le remède de SPK-160 — `volatile.eth0.hwaddr` effacé — est ici
+  éprouvé, il ne l'a pas été) ; le retour à un instantané choisi passe par la voie du
+  volume (dépend de SPK-168) ; **avant la première mise en production, le coût d'un
+  export pour les Sparks voisins est mesuré sur la Forge réelle** (critère (c) de
+  SPK-160, action humaine, feu vert écrit) ; `CONTINGENCE.md`, manuel, README, changelog ;
   **le lot clos** : `[x]` seulement après la preuve contre le S3 réel du propriétaire
   (action humaine).
 
@@ -10020,6 +10031,32 @@ que rien n'indique pourquoi.
   même Spark enraciné garde `/root` ; un parcours E2E crée l'identité depuis l'écran des
   clés d'un Spark rootless et lit le chemin du compte ; la vérification visuelle part de
   l'accueil, à la souris et au clavier ; manuel M6, README, changelog.
+
+### [ ] SPK-168 · La restauration qui accepte la perte d'instantanés plus récents lève la garde par le volume
+
+**Défaut trouvé par la mesure de SPK-160, le 2026-11-10** (journal), sur Incus 7.6.0 — hors
+du périmètre de cette unité, consigné ici et **non corrigé**.
+
+`sparkd/incus.py` (`restore_snapshot(force=True)`) lève la garde du DAT §19.1 en posant
+`zfs.remove_snapshots` sur le **périphérique `root`** de l'instance, par un `PATCH`. Incus 7.6
+**rejette** cet appel : `Invalid device option "zfs.remove_snapshots"` — mesuré avec le corps
+littéral de `sparkd`, sur une instance à 5 instantanés (2 essais). Conséquence : « Restaurer
+en perdant ces instantanés » (SPK-13, DAT §26.5) échoue sur une Forge en 7.6, et le retour à
+un instantané choisi de SPK-166 en dépend. **La voie qui fonctionne a été mesurée** :
+`incus storage volume set <pool> container/<nom> zfs.remove_snapshots=true`, la restauration,
+puis le retrait de l'option — il reste `s1 s2`, avec les données d'avant la réécriture.
+
+- Spécification : `docs/DAT.md` §19.1 (note mesurée), §26.5 · SPK-13.
+- Dépend de : rien. **Précède** SPK-166.
+- Portée : (1) la preuve **rouge d'abord**, sur un Incus réel (`make forge-vm`, épreuve) ;
+  (2) l'option de volume dans le protocole `IncusClient`, `UnixSocketIncus` et `FakeIncus` ;
+  (3) la garde est **reposée dans tous les cas**, comme aujourd'hui (`finally`) ; (4) établir
+  si la Forge accepte l'ancien appel — elle est documentée en Incus 7.4 : régression de
+  version, ou défaut ancien masqué par un `FakeIncus` qui ne valide rien.
+- Non établi : le comportement d'Incus 7.4. `incus.py` est en cours de modification par
+  SPK-167 : lire son état committé avant d'y toucher.
+- DoD : preuve rouge puis verte sur Incus réel ; unitaires ; DAT §19.1 ; changelog ;
+  `@spec` / `@verifies`.
 
 ---
 
