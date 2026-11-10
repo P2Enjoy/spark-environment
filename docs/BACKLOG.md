@@ -10040,6 +10040,12 @@ que rien n'indique pourquoi.
   constatées) ; captures `e2e/captures/spk167-*.jpg` observées, bureau et mobile. Campagne
   complète : 152 sur 155, les trois rouges étant **les mêmes sur le code du commit
   précédent** (`docs/INCONSISTENCY_REPORT.md`).
+- **Déployé le 2026-11-10 sur la Forge `spark-experiment`** (OP-42, commit `ae21a9dbf`), sur
+  instruction du responsable. Spark `crm` : l'identité posée sous `/root` a été reprise par
+  `spark-docker` depuis la console — même empreinte, le panneau affiche le chemin du compte,
+  le journal porte `adopted: true`. C'est le premier constat sur une Forge réelle, par la
+  relecture de `sparkd` ; **l'usage de la clé par le compte dans la cellule n'est pas encore
+  constaté**.
 - **Reste, donc `[~]` (DAT §28.7 : la pile factice ne conclut pas).** La preuve sur une
   **Forge réelle** : un Spark amorcé en rootless par un Incus réel, l'identité créée depuis la
   console, puis `ssh-keygen -y` et un `git clone` sous `spark-docker` — c'est la

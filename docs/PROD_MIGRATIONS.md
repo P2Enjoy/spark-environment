@@ -123,7 +123,15 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-42 · L'identité d'un Spark rootless est posée pour le compte rootless : `sparkd` seul (SPK-167)
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable.
+État          : `sparkd` DÉPLOYÉ le 2026-11-10 sur `spark-experiment`, sur
+                instruction du responsable (commit `ae21a9dbf`, préflight 17/17,
+                registre sauvegardé avant : `spark-20261110-205045.db`, 2025
+                entrées de journal, chaîne intacte). Le Spark `crm` a repris sa
+                paire sous le compte `spark-docker` (même empreinte
+                `SHA256:DLHp+DvfmO…`, journal : `adopted: true`). RESTE À
+                VÉRIFIER dans la cellule : que `spark-docker` lit sa clé et que
+                `git clone` aboutit — voir « Vérification » ci-dessous ; la
+                relecture par `sparkd` et la console ont, elles, été constatées.
 Objectif      : sur un Spark amorcé en rootless, « Créer l'identité » pose la
                 paire dans `/home/spark-docker/.ssh/` (propriété du compte
                 `spark-docker`, clé privée 0600), et non plus sous `/root/.ssh`

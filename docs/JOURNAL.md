@@ -14837,3 +14837,39 @@ mesuré en remettant provisoirement les quatre fichiers de code à leur version 
 restaurant, sommes de contrôle vérifiées). Les deux derniers passent seuls et ne figuraient pas
 au rapport d'incohérences : ils y sont consignés, sans diagnostic. Statut : `[~]`, parce que le
 DAT §28.7 interdit de conclure sur la pile factice.
+
+## 2026-11-10 · SPK-167 déployé sur la Forge, et l'identité de `crm` reprise
+
+**Demande du responsable** : mettre la Forge à jour, puis refaire l'identité du Spark `crm`.
+
+**Interprétation.** « Refaire » est ambigu : régénérer invaliderait la clé de déploiement
+posée chez GitHub. J'ai pris le geste non destructif — « Créer l'identité » sans
+remplacement, qui reprend la paire existante (DAT §17.6). Si une clé neuve était voulue,
+« Remplacer » reste à demander.
+
+**Ce que la mise à jour embarquait**, vérifié avant de la jouer : la Forge était sur
+`601c10036` (5 novembre) ; onze commits plus loin, le paquet `sparkd` ne diffère que par
+`app.py` / `identity.py` (SPK-167) et `incus.py` (doublon de test) ; aucune migration, aucun
+changement d'installation, de pare-feu ni d'unités ; `pyproject.toml` ne gagne qu'une
+dépendance de test. Le delta déployé est donc exactement SPK-167.
+
+**Opérations** : sauvegarde du registre (`spark-20261110-205045.db`, structure ok, 2025
+entrées, chaîne intacte) ; `pip install` depuis `main` puis `sparkd.install` (runbook A.2) ;
+préflight 17 contrôles, 0 bloquant ; `/healthz` rend `ae21a9dbf`, `dirty: false`. `crm` est
+resté en marche, en `rootless`, sans redémarrage.
+
+**Constaté.** Avant la reprise, le relevé de `crm` à son nouveau chemin rendait `absente`
+(sa paire était sous `/root`) — comme prévu au §17.6. Depuis la console réelle, de l'accueil à
+l'onglet Clés puis « Créer l'identité » : clé `ssh-ed25519 …Ujyg… spark:crm`, empreinte
+`SHA256:DLHp+DvfmO/HYKQEI+LGLJCLUmKPlhH6ec3IWFMyCsY` — **identique à celle d'avant** —, chemin
+`/home/spark-docker/.ssh/id_ed25519`. `sparkd` relit `presente` ; le journal porte « reprise
+de root », `adopted: true`, `replaced: false`.
+
+**Non constaté, et pourquoi.** La lecture de la clé par `spark-docker` et un `git clone` dans
+la cellule : une commande `incus exec` dans la cellule de production a été refusée par le
+classifieur de la session, et je ne l'ai pas contournée. Elle contenait par ailleurs deux
+sondes (`rm`, écriture dans `authorized_keys`) qu'il ne fallait pas jouer sur une cellule en
+exploitation : écartées. Le constat reste à faire par le responsable (OP-42, « Vérification »).
+
+**Note.** La console du responsable affiche « Console démarrée avant 3 commits » : elle n'a
+pas été redémarrée ; l'écran d'identité n'a pas changé, donc rien n'y manque.
