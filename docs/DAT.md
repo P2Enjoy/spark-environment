@@ -16410,7 +16410,13 @@ tout (réglage de la destination).
   les tailles. Seul le contenu est chiffré. Le manuel le dit.
 - **Envoi par parts** : `max(64 Mio, ⌈taille chiffrée / 9 000⌉)`, arrondi au Mio, dans la
   limite de 5 Gio par part. Un envoi abandonné est annulé (`AbortMultipartUpload`) :
-  ne jamais laisser de parts facturées sans objet.
+  ne jamais laisser de parts facturées sans objet. **Mesuré (SPK-160)** : un envoi dont
+  l'erreur n'est pas rattrapée laisse ses parts sur le S3 (« envois ouverts avant = 2,
+  après abandon = 1 »). Chaque sonde **balaie** donc les envois ouverts depuis plus de
+  24 h sous notre préfixe (`ListMultipartUploads`, puis `AbortMultipartUpload`) —
+  **sans passer le préfixe au S3 et en filtrant côté client** : sur MinIO, un préfixe
+  qui finit par `/` ne rend **rien** (`Prefix='t/'` → aucun envoi, `Prefix='t/orphelin'`
+  → les deux). Un balayage qui s'y fie se déclare propre en laissant les orphelins.
 
 ### 67.4 Le chiffrement et la clé de sauvegarde — arbitré
 
@@ -16510,17 +16516,29 @@ clé non confirmée) · `saine` · `dégradée` (cause, depuis quand, prochaine 
 | # | Contrôle | Bloquant | Ce qu'il établit | Cause typée |
 |---|---|---|---|---|
 | V1 | Adresse | oui | schéma admis, hôte résoluble | `adresse` |
-| V2 | Joignabilité | oui | TCP + TLS en 10 s, chaîne valide, nom conforme ; échéance < 14 j = avertissement | `dns` · `connexion` · `tls` · `delai` |
-| V3 | Horloge | au-delà de 14 min | écart Forge / en-tête `Date` ; avertit dès 5 min (SigV4 refuse à 15) | `horloge` |
-| V4 | Identité | oui | la requête signée est acceptée (`HeadBucket`) | `authentification` · `signature` · `bucket_introuvable` · `region` |
+| V2 | Joignabilité | oui | TCP + TLS en 10 s, chaîne valide, nom conforme ; échéance < 14 j = avertissement. **Mesuré** : un certificat auto-signé donne `CERTIFICATE_VERIFY_FAILED` ; parler `http` à un port TLS donne un `400` **sans code** — le message le suppose (« ce point d'accès attend peut-être du TLS ») | `dns` · `connexion` · `tls` · `delai` |
+| V3 | Horloge | au-delà de 14 min | écart Forge / en-tête `Date` ; avertit dès 5 min. **Mesuré** : ±14 min acceptées, ±16 min refusées en `403 RequestTimeTooSkewed` | `horloge` |
+| V4 | Identité | oui | une requête **GET** signée est acceptée (`GetBucketLocation`) **et sa réponse est comparée à la région configurée**. **Jamais un `HEAD`** : mesuré, il rend un `403` ou un `404` **sans corps ni code** — mauvaise clé secrète, identifiant inconnu et bucket absent y sont indiscernables | `authentification` (`InvalidAccessKeyId`) · `signature` (`SignatureDoesNotMatch`) · `bucket_introuvable` (`NoSuchBucket`) · `region` |
 | V5 | Liste | oui | `ListObjectsV2` sous le préfixe | `permission_liste` |
 | V6 | Écriture | oui | `PutObject` d'une sonde sous `.sonde/` | `permission_ecriture` |
 | V7 | Relecture | oui | `GetObject`, empreinte identique | `permission_lecture` · `integrite` |
-| V8 | Envoi par parts | oui | `CreateMultipartUpload`, **une part de 5 Mio (à la configuration seulement)**, `AbortMultipartUpload` | `permission_multipart` |
+| V8 | Envoi par parts | oui | `CreateMultipartUpload`, **une part de 5 Mio (à la configuration seulement)**, `AbortMultipartUpload`, `ListMultipartUploads` (le balayage du §67.3). Une part non finale de moins de 5 Mio est refusée (`400 EntityTooSmall`, mesuré) | `permission_multipart` |
 | V9 | Suppression | oui | `DeleteObject` de la sonde — sans lui, aucune génération ne se remplace | `permission_suppression` |
 | V10 | Versionnage et verrou | non | versionnage ou verrou actifs → « supprimer ne libère pas l'espace » ; refus de lecture → « non vérifiable » | — |
 | V11 | Exposition publique | non | bucket public → avertissement fort ; refus de lecture → « non vérifiable » | — |
 | V12 | Ce qui ne se vérifie pas | — | espace libre et quota du fournisseur : l'API S3 ne les donne pas ; **l'écran le dit** | — |
+
+**Deux limites de cette table, mesurées et à ne pas masquer.**
+
+- **Un compte restreint ne distingue pas un bucket absent d'un refus.** Mesuré : pour le
+  compte en lecture seule, `ListObjectsV2` sur un bucket inexistant rend `403
+  AccessDenied`, non `404 NoSuchBucket`. Le message de V4 dit alors « bucket absent **ou**
+  accès refusé » ; il n'invente pas une cause qu'il ne peut pas lire.
+- **La région se compare, elle ne s'attend pas d'un refus.** Mesuré : MinIO, même réglé
+  sur `eu-west-3`, **accepte** une opération de bucket signée en `us-east-1` ;
+  `GetBucketLocation` rend, lui, la vraie région. V4 compare donc la région configurée à
+  celle que le S3 annonce, et la cause `region` n'attend pas que le serveur refuse — un
+  S3 réel (AWS) refuse ou redirige, un autre non.
 
 **Quand.** À la configuration (V1–V12 entières) ; à la demande (« Vérifier maintenant ») ;
 puis **toutes les heures** par une sonde légère (V1–V9 sans la part de 5 Mio) —
@@ -16769,15 +16787,27 @@ ici — « fixées par la décision, pas par un réglage » — et la fenêtre a
 styles d'adressage, les reprises, les parts ; lourd, et à régler pour les S3 qui
 refusent ses sommes de contrôle par défaut) ou une **signature SigV4 maison sur `httpx`**,
 déjà présent (léger, mais la compatibilité entre fournisseurs devient celle du produit).
-*Par défaut, faute d'objection : `boto3`.* Le choix s'établit sur une mesure — poids
-installé, démarrage, comportement contre MinIO — consignée au journal.
+*Par défaut, faute d'objection : `boto3`.* Mesuré le 2026-11-10 (SPK-160) : `boto3`
+1.43.127 pèse **32 Mo installé** (dont `botocore`, 27 Mo), contre `httpx` déjà présent ;
+avec **ses sommes de contrôle par défaut**, il parle correctement à MinIO
+`RELEASE.2025-04-22T22-12-26Z` (écriture, relecture, envoi par parts de 45 Mio en 9
+parts, ~95 Mio/s sur la boucle locale). Le réglage `when_required` n'est donc pas
+nécessaire **contre MinIO** ; il reste à établir contre le S3 du propriétaire, où il se
+peut qu'il le soit. Le choix définitif se tranche dans SPK-161.
 
 **Le S3 de développement est un vrai S3 local** (CLAUDE.md §3, §15) : MinIO, image
 épinglée, démarrée par la pile (`make runDev`) avec des identifiants locaux qui ne
 valent que sur la boucle locale. Cela **fait tomber l'écart du §28.1** : un service réel
 entre dans la pile, et Docker devient un prérequis du développement. Les preuves
 d'autorisation s'écrivent contre des utilisateurs MinIO aux politiques restreintes
-(lecture seule, sans suppression). Le seed configure la destination par **la même API
+(lecture seule, sans suppression). **Licence : MinIO est sous AGPLv3** (CLAUDE.md §19) :
+il ne sert qu'aux preuves et au développement, il n'est ni distribué ni installé avec le
+produit. **Validé le 2026-11-10 par `e2e/s3/spk160-minio.mjs`** — trois conteneurs
+éphémères (principal, réglé sur `eu-west-3`, TLS auto-signé), 38 faits, dont chaque
+refus de la batterie V1–V11 : l'image épinglée démarre en 2 s, accepte `http` sur la
+boucle locale, et se prête aux comptes restreints. **Ce que MinIO ne prouve pas** : le
+comportement d'un fournisseur réel (région imposée, redirections, limites de taille
+d'objet, sommes de contrôle). Le seed configure la destination par **la même API
 que l'écran** et couvre : un instantané ✓, un ✗ planifié, un en échec, un en cours, un
 Spark détruit et récupérable, une ancienne génération conservée.
 

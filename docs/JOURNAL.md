@@ -14552,3 +14552,48 @@ Gio : les écarts entre instantanés sont fixés à 200 Mio pour rester lisibles
 **Vérifications à ce stade.** Documentation seule. `memoire disponible`, `tmpfs` et les
 tailles de disque relevés par `free`, `df` et la lecture du banc ; rien n'est encore
 mesuré.
+
+## 2026-11-10 · SPK-160, étape 0 : MinIO validé seul — et ce que la mesure a corrigé
+
+**Problème.** Le DAT §67.13 s'appuyait sur MinIO sans l'avoir lancé, et la batterie V1 à
+V12 du §67.6 décrivait des causes que personne n'avait provoquées.
+
+**Méthode.** Trois conteneurs éphémères sur `127.0.0.1` (19090, 19092, 19093 — la plage
+9000-9001 est celle du MinIO d'un autre projet, jamais touché), image épinglée
+`RELEASE.2025-04-22T22-12-26Z`, `boto3` 1.43.127 installé par `pip --target` dans un
+dossier jetable (le venv du produit n'est pas modifié). D'abord des sondes à la main
+(deux passes), puis consolidées en `make s3-minio` : 38 faits, chacun comparé à l'octet
+près à ce qui a été mesuré.
+
+**Deux fois, mon propre test m'a trompé** — et c'est ce qui compte ici.
+
+1. *Dérive d'horloge.* Mon premier décalage (`botocore.auth.datetime` remplacé) n'a rien
+   décalé : cette version de `botocore` signe avec `get_current_datetime`. Résultat
+   « accepté à ±16 min », **faux**. Avec le bon point d'entrée : ±14 min acceptées, ±16
+   min refusées en `403 RequestTimeTooSkewed`. Le seuil de 15 min du §67.6 tient.
+2. *Balayage des envois abandonnés.* `list_multipart_uploads(Prefix='t/')` a rendu `[]`
+   alors qu'un orphelin existait : « après balayage : 0 » était un **faux vert**. Le même
+   appel sans préfixe, ou avec `Prefix='t/orphelin'`, le voit. Sur MinIO, un préfixe qui
+   finit par `/` ne rend rien.
+
+**Ce qui a corrigé le contrat** (DAT §67.3, §67.6, §67.13).
+
+- **V4 ne se type pas sur un `HEAD`** : `403` ou `404` sans corps ni code ; mauvaise clé
+  secrète, identifiant inconnu et bucket absent y sont indiscernables. V4 passe par un
+  GET (`GetBucketLocation`) : `SignatureDoesNotMatch`, `InvalidAccessKeyId`,
+  `NoSuchBucket`.
+- **Un compte restreint ne distingue pas bucket absent et refus** (`403 AccessDenied`) :
+  le message dit « absent ou refusé ».
+- **La région se compare** : MinIO accepte une région fausse sur un bucket, mais
+  `GetBucketLocation` rend la vraie.
+- **Les envois abandonnés se balaient côté client**, sans préfixe côté S3 ; un envoi
+  non rattrapé laisse ses parts (« avant = 2, après abandon = 1 »).
+- **TLS** : auto-signé → `CERTIFICATE_VERIFY_FAILED` ; `http` sur port TLS → `400` sans
+  code.
+- **`boto3`** : 32 Mo installé ; ses sommes de contrôle par défaut passent contre MinIO
+  (le réglage `when_required` n'y est pas nécessaire — reste à établir sur le S3 réel).
+- **Licence** : MinIO est AGPLv3, preuves seulement, jamais distribué (CLAUDE.md §19).
+
+**Vérifications.** `make s3-minio` : 38/38. Contre-épreuve : une attente flippée donne
+`✗` et le code de sortie 1, puis rétablie. Aucun conteneur, volume ni dossier ne survit
+(`docker ps -a`, `docker volume ls`, `/tmp`). **Non établi** : tout fournisseur S3 réel.

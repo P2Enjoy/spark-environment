@@ -8,7 +8,7 @@ PY     := $(VENV)/bin/python
 
 .PHONY: help bootstrap sparkd-install sparkd-test sparkd-run webui-install \
         contract contract-check hooks test gestes e2e captures manuel runDev runProd seed build clean \
-        forge-vm
+        forge-vm s3-minio
 
 help:
 	@echo "bootstrap       installe les dependances des deux livrables"
@@ -26,6 +26,7 @@ help:
 	@echo "manuel          reproduit les illustrations du manuel utilisateur"
 	@echo "captures        captures d'interface, a OBSERVER (CLAUDE.md §16)"
 	@echo "forge-vm        Forge du cloud-init dans une VM, redemarree pour de vrai (SPK-129)"
+	@echo "s3-minio        les faits du protocole S3 contre trois MinIO ephemeres (SPK-160)"
 	@echo "test            toutes les suites de tests"
 	@echo "build           build de tous les paquets"
 
@@ -127,6 +128,12 @@ forge-reelle:
 # make forge-vm ARGS="--roue <x.whl>" une roue donnée — la preuve rouge d'avant
 forge-vm:
 	$(PLAFOND) node e2e/forge-vm/redemarrage.mjs $(ARGS)
+
+# SPK-160 · DAT §67.13 : les faits du protocole S3 (V1 a V11), contre trois MinIO
+# ephemeres sur la boucle locale. Rouge si un fait mesure cesse de tenir : c'est ce qui
+# garde le DAT vrai. Pas de VM ; docker, openssl et le venv de sparkd suffisent.
+s3-minio:
+	node e2e/s3/spk160-minio.mjs $(ARGS)
 
 # Les illustrations du manuel sont PRODUITES depuis l'application (DAT §30.1),
 # jamais collectees a la main.

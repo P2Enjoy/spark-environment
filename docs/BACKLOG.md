@@ -9781,7 +9781,7 @@ propre sauvegarde) reste vrai pour les données applicatives, pas pour le Spark.
   le README, le DAT, le design system, `docs/PROD_MIGRATIONS.md` et le changelog sont à
   jour **dans le changement qui livre**, pas après.
 
-### [ ] SPK-160 · Mesurer l'export Incus optimisé avec instantanés, et son import sous un autre nom
+### [~] SPK-160 · Mesurer l'export Incus optimisé avec instantanés, et son import sous un autre nom
 
 **Mesure d'abord**, comme SPK-143 et SPK-145. La décision de format du §67.2 repose sur
 une propriété que la documentation d'Incus affirme et que personne n'a mesurée ici :
@@ -9815,6 +9815,13 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
   7. **l'import dans un pool recréé** : détruire le pool de la VM, le recréer, importer
      l'export dessus — le scénario du sinistre, celui que toute la fonctionnalité sert ;
   8. **la compression** : l'export sans compression et avec `zstd`, taille et CPU.
+- **Étape 0 faite le 2026-11-10** : `make s3-minio` (`e2e/s3/spk160-minio.mjs`, sondes
+  `e2e/s3/spk160_minio_sondes.py`) joue **38 faits** contre trois MinIO éphémères —
+  principal, réglé sur `eu-west-3`, TLS auto-signé — et tous tiennent ; une attente
+  volontairement fausse la rend rouge (code 1). Elle a **corrigé le contrat** : V4 ne
+  peut pas se typer sur un `HEAD`, le balayage des envois abandonnés ne peut pas se fier
+  au préfixe, la région se compare (DAT §67.3, §67.6, §67.13). **Reste** : les étapes 1
+  à 8 sur la VM.
 - Aucune migration, aucune variable d'environnement, aucune opération de production.
 - Une épreuve **lourde** (VM de 6 Gio) : verrou `e2e/verrou.mjs`, et rien n'est lancé
   tant que la mémoire disponible est inférieure à 12 Gio.
