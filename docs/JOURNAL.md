@@ -14507,3 +14507,48 @@ rejouée. Relu : l'absence d'écriture de la table `backup` (recherche dans
 `notification.ACTIONS`, le garde de `canaux.py`. **Non vérifié** : tout ce qui touche à
 Incus (taille de l'export, espace de travail, import sous un autre nom), à MinIO, et à
 un S3 réel.
+
+## 2026-11-10 · SPK-160 : le périmètre de la mesure, arrêté avec le responsable
+
+**Problème.** Démarrer SPK-160 (mesurer l'export Incus optimisé). Avant d'écrire le
+script, ce que le banc impose a été relevé, puis quatre décisions demandées.
+
+**Observations** (lues, non déduites).
+
+- Le banc `make forge-vm` crée les disques de la VM par `mkdtempSync(tmpdir())`
+  (`e2e/forge-vm/redemarrage.mjs:150`). Ici `/tmp` est un **`tmpfs` de 19 Gio** : chaque
+  octet que la VM écrit consomme de la RAM de l'hôte.
+- Mémoire de l'hôte relevée à 14 h : 37 Gio au total, 27 utilisés, **9 disponibles** —
+  la pile Docker de `p2enjoy-crm` (une quinzaine de conteneurs) occupe le reste. La VM
+  fait 6 Gio. Un Playwright de ce même projet tournait peu avant et avait fini à la
+  relecture ; aucune épreuve lourde n'était en cours.
+- Les disques de la VM sont des `qcow2` de 16 G (`vdb`, `vdc`) : un miroir ZFS d'environ
+  16 Gio utiles, ce qui borne le Spark de test et l'espace de travail de l'export.
+- Une VM sur disques virtuels ne dit rien de fidèle sur le coût en E/S d'un export pour
+  des Sparks voisins : cela demande des disques mécaniques et un lien partagé.
+- MinIO n'avait **pas** été lancé jusque-là (question du responsable) : les affirmations
+  du DAT §67.13 qui s'y appuient étaient des hypothèses.
+
+**Solutions envisagées.** Pour le placement des disques : rester en `tmpfs` avec un jeu
+réduit ; ajouter un argument au banc ; dupliquer la montée de la VM dans un script à
+part (deux endroits qui divergent, écarté). Pour le lieu de la mesure : la VM seule, la
+VM puis la Forge de validation avec un Spark jetable, la Forge seule.
+
+**Décisions du responsable.**
+
+1. Mesure sur **la VM du banc seulement**. Le coût en E/S pour les voisins n'y est
+   qu'**indicatif** : le DAT §67.2 et SPK-160 le disent, et la confirmation sur la Forge
+   réelle est une action humaine à rendre avant la première mise en production.
+2. Le banc gagne **`--travail <dossier>`** (défaut inchangé), argument nommé conforme à
+   CLAUDE.md §3 : aucune variable d'environnement.
+3. **2 Gio** de données incompressibles pour le Spark de test.
+4. Au périmètre : **valider MinIO seul d'abord**, **importer dans un pool recréé**,
+   **comparer la compression** (aucune / `zstd`).
+
+**Conséquences.** SPK-160 est réécrit en conséquence (BACKLOG) ; le §67.2 du DAT porte
+le statut du critère (c). Le jeu de 2 Gio rend les rapports de taille moins nets que 5
+Gio : les écarts entre instantanés sont fixés à 200 Mio pour rester lisibles.
+
+**Vérifications à ce stade.** Documentation seule. `memoire disponible`, `tmpfs` et les
+tailles de disque relevés par `free`, `df` et la lecture du banc ; rien n'est encore
+mesuré.

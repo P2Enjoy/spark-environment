@@ -9790,22 +9790,43 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
 - Spécification : `docs/DAT.md` §67.2 (la décision et son seuil d'infirmation), §67.7
   (l'espace de travail), §8.5.
 - Dépend de : SPK-129 (le banc `make forge-vm` : un Incus et un ZFS réels).
-- Portée, sur la VM, avec un Spark de données incompressibles connues, à 0, 1, 3 et 5
-  instantanés dont les écarts sont connus :
+- **Périmètre arrêté avec le responsable le 2026-11-10** : la mesure se joue **sur la
+  VM du banc seulement** ; le Spark de test porte **2 Gio** de données incompressibles ;
+  le banc gagne un argument nommé `--travail <dossier>` (défaut inchangé : `/tmp`, qui est
+  un `tmpfs`, donc de la RAM) pour que les disques de la VM s'écrivent sur disque ;
+  MinIO est **validé seul, d'abord**, avant que la VM ne démarre.
+- Portée, sur la VM, avec un Spark de 2 Gio de données incompressibles, à 0, 1, 3 et 5
+  instantanés. Entre deux instantanés : **200 Mio de blocs neufs**, plus une étape qui
+  **réécrit 200 Mio de blocs existants** (l'instantané retient alors les anciens) :
+  0. **MinIO seul, avant la VM** : un conteneur éphémère sur `127.0.0.1`, identifiants
+     jetables ; aller-retour `PutObject` / `GetObject`, envoi par parts de plus de 5
+     Mio, utilisateurs en lecture seule et sans suppression, forme exacte de chaque
+     refus. Rien d'autre ne démarre tant que ce n'est pas vert ;
   1. la taille de l'export optimisé, de l'export non optimisé, et des données utiles ;
   2. la durée, le CPU et les E/S de la Forge pendant l'export, Spark au repos puis en
-     écriture, et l'effet sur un Spark voisin ;
+     écriture, et l'effet sur un Spark voisin — **indicatif seulement** : disques
+     virtuels, pas des disques mécaniques (§67.2, critère (c)) ;
   3. **où** Incus écrit l'archive avant de la servir, l'espace de travail requis, et si
      elle se lit en flux pendant sa production ;
   4. l'import sous un autre nom : instantanés intacts, restauration d'un instantané,
      démarrage ;
   5. l'export d'un Spark **en marche** : un témoin écrit avant, pendant et après ;
-  6. un envoi par parts de l'export vers MinIO : débit, mémoire du processus.
+  6. un envoi par parts de l'export vers MinIO : débit, mémoire du processus ;
+  7. **l'import dans un pool recréé** : détruire le pool de la VM, le recréer, importer
+     l'export dessus — le scénario du sinistre, celui que toute la fonctionnalité sert ;
+  8. **la compression** : l'export sans compression et avec `zstd`, taille et CPU.
 - Aucune migration, aucune variable d'environnement, aucune opération de production.
+- Une épreuve **lourde** (VM de 6 Gio) : verrou `e2e/verrou.mjs`, et rien n'est lancé
+  tant que la mémoire disponible est inférieure à 12 Gio.
 - DoD : les chiffres consignés dans le DAT §67.2 et au journal ; la décision
   **confirmée, ou infirmée avec repli sur l'archive par instantané** (§67.2), §67.2 et
-  §67.3 réécrits en conséquence ; le seuil (c) du §67.2 tranché par le responsable sur
-  ces chiffres ; `@spec` sur le script de mesure.
+  §67.3 réécrits en conséquence ; `@spec` sur le script de mesure et sur la modification
+  du banc ; l'aide du banc et `scripts/README.md` à jour pour `--travail`.
+- **Reste, dès la mesure faite : le critère (c) du §67.2 (coût pour les Sparks voisins)
+  n'est établi que sur des disques virtuels.** Il est tranché par le responsable sur ces
+  chiffres, **à confirmer sur la Forge réelle avant la première mise en production**
+  (SPK-166) : nécessite une action humaine, la session n'a pas le feu vert pour charger
+  une machine qui héberge de vrais Sparks.
 
 ### [ ] SPK-161 · La destination S3 d'une Forge : configurer, vérifier, rester vérifiée
 

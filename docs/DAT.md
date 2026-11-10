@@ -16318,7 +16318,12 @@ une mesure** — d'où SPK-160, première unité du lot.
 forge-vm` : (a) l'export optimisé d'un Spark à 5 instantanés pèse au plus ses données
 utiles plus la somme des écarts plus 10 % ; (b) son import sous un autre nom restitue
 les 5 instantanés, restaurables ; (c) le coût en CPU et en E/S pour les Sparks voisins
-est jugé acceptable par le responsable, sur les chiffres. **Sinon, repli** sur une
+est jugé acceptable par le responsable, sur les chiffres. **Décidé le 2026-11-10 : la
+mesure se joue sur la VM seule, avec 2 Gio de données.** Les points (a) et (b) s'y
+établissent. Le point (c) **n'y est qu'indicatif** — disques virtuels, pas des disques
+mécaniques sur un lien partagé — et reste à confirmer sur la Forge réelle avant la
+première mise en production ; le DAT le dira tel quel avec les chiffres, sans le
+promouvoir en preuve. **Sinon, repli** sur une
 archive autonome par instantané (image publiée depuis l'instantané) : le reste du
 contrat — destination, chiffrement, coches, fenêtre, récupération — tient, et seuls
 §67.2 et §67.3 sont réécrits.
