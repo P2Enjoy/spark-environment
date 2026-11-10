@@ -16071,3 +16071,149 @@ exactement les règles que rend `pare_feu` : deux textes, une seule règle.
   responsable a reçu un `RST` sans atteindre la Forge (compteur de
   `ip spark_ipopts` à 0) : le réseau du poste traite lui-même les paquets à
   options.
+
+## 66. Commander une Forge : une commande produit le schéma de partitionnement et le cloud-init complets : contrat (SPK-158, SPK-159)
+
+*Écrit le 2026-11-10, avant le code. Les sections qu'il remplace (§8.2, §8.6, le
+README, l'en-tête de l'amorce) restent vraies de l'état du dépôt jusqu'à la
+livraison du code, qui les corrige dans le même changement.*
+
+### 66.1 Le constat
+
+Relevé en commandant une machine neuve (2 disques de 12 To), par le responsable
+et à la lecture du dépôt :
+
+1. **Le schéma du README est celui d'une machine.** Ses tailles totalisent
+   5 986 713 600 000 octets, la capacité des disques du R320. Sur 2 × 12 To la
+   moitié de chaque disque reste inutilisée ; sur des disques plus petits, la
+   somme dépasse la capacité et l'hébergeur refuse. Il n'a en outre **jamais été
+   soumis à l'hébergeur** (SPK-28).
+2. **La console de l'hébergeur fournit le schéma de départ.** Elle propose un
+   schéma *par défaut* propre à l'offre (noms de disques, démarrage BIOS ou UEFI,
+   RAID), éditable, **validé en direct** — « Your JSON file is correct and can be
+   applied » — et qui rappelle que les tailles ne doivent pas dépasser la
+   capacité. Il s'écrit en camelCase : `useAllAvailableSpace`, avec `size: 0` sur
+   la partition qui prend le reste. Le README écrivait `use_all_available_space`,
+   et aucun `size: 0`.
+3. **Le gabarit `user-data.yaml` collé tel quel est une amorce vide.** Son
+   `content:` ne porte qu'un commentaire marqueur (`# <<< contenu integral … >>>`) ;
+   `cloud-init` écrit un fichier sans commande, le lance, il réussit, et rien
+   n'est installé. Le YAML est valide : aucun message ne le dit. La substitution
+   était une étape manuelle que le README ne mentionnait pas.
+4. **L'amorce suppose un pool que le schéma ne livre pas.** `"zfs": null` est
+   délibéré (§8.6), donc au premier démarrage `zpool import -f spark` échoue sous
+   `set -eu`, après l'installation d'Incus et de ZFS. Le banc de redémarrage
+   (SPK-129) masquait l'écart : il créait le pool avant l'amorce, « comme
+   l'hébergeur le livre ».
+5. **Deux réglages dépendent de la machine** — `ARC_GIB=16` (calé sur 94 Gio de
+   RAM) et `NET_MBIT` (une carte `virtio`) — et se changent en éditant le texte
+   de l'amorce, serveur par serveur. Le banc en remplaçait le texte par chaînes.
+
+### 66.2 La décision
+
+1. **Le README ne porte plus ni JSON ni YAML.** Il nomme une commande et dit
+   d'où vient son entrée.
+2. **`scripts/preparer-forge.py`** (Python ≥ 3.11, bibliothèque standard seule),
+   deux sous-commandes qui lisent le **schéma par défaut de l'offre** :
+   `partitionnement` écrit sur la sortie standard le JSON à coller dans la
+   console ; `cloud-init` écrit le YAML complet à coller dans le champ
+   *Cloud-init configuration*. Le schéma par défaut est la seule source qui
+   connaisse les noms de disques et le mode de démarrage : on le **dérive**, on ne
+   le **reconstruit** pas. Chaque sous-commande a son `--help`.
+3. **Une règle, pas un fichier** : le JSON n'est jamais universel (noms de
+   disques, BIOS ou UEFI, taille des disques), la règle qui le produit l'est
+   (§66.3).
+4. **Le cloud-init est produit, jamais assemblé à la main.** Il embarque
+   `spark-amorce.sh` et `creer-pool.sh` octet pour octet. Le gabarit à marqueur
+   est supprimé : une seule source.
+5. **L'amorce prend ses réglages en arguments nommés** — `--pool-source`,
+   `--arc-gib`, `--net-mbit`, `--help` — conformément au CLAUDE.md §3. Restent en
+   constantes `POOL=spark` et `BRIDGE=sparkbr0` (le pool et le pont sont des
+   conventions du produit : l'adressage du registre dépend de `10.77.0.1/24`) et
+   les deux réserves `MEM_RESERVE_GIB`, `CPU_RESERVE` (une politique, pas une
+   propriété de la machine).
+6. **L'amorce crée le pool, mais seulement sur demande écrite dans la commande.**
+   `--pool-source` donné **et** aucun pool importable : elle appelle
+   `creer-pool.sh`, qui refuse tout support portant déjà une signature (§8.5 bis).
+   Sans `--pool-source`, elle adopte et n'a jamais rien créé : le rejeu manuel
+   `sudo /opt/spark-amorce.sh` ne peut donc pas écrire sur un disque. **Ceci
+   reformule le contrat de SPK-73**, qui disait « l'amorce ne crée jamais » : la
+   protection qui comptait — un rejeu ne détruit pas les Sparks — tient par
+   construction (l'argument est absent du rejeu) et par le refus de
+   `creer-pool.sh`, plus par l'absence totale du geste. *Arbitrage du responsable
+   demandé : c'est lui qui a fixé l'ancien contrat.*
+7. **Le plafond de l'ARC reste 16 Gio par défaut.** Le dériver de la RAM serait
+   une décision de dimensionnement qui n'a pas été prise ; `--arc-gib` se règle
+   dans la commande, donc à la vue. Un défaut dérivé reste possible, séparément.
+
+### 66.3 La règle de dérivation du schéma
+
+Entrée : l'objet JSON du schéma par défaut — `disks`, `filesystems`, `raids`,
+éventuellement `zfs`.
+
+- **Au moins deux disques** (§8.5), sinon refus.
+- **`zfs` déclaré** (non nul, non vide) : refus. Un pool créé par l'hébergeur
+  laisserait une signature `zfs_member` que `creer-pool.sh` refuse d'écraser
+  (§8.6).
+- **Sur chaque disque, une et une seule partition porte « tout l'espace
+  restant »** (`useAllAvailableSpace` ou `use_all_available_space` : le dialecte
+  du schéma lu est conservé), elle est la dernière par numéro et son libellé est
+  `root`. Sinon refus, avec le disque et la partition nommés.
+- **Cette partition est bornée** à `--racine-gio` Gio (200 par défaut : la Forge
+  de validation en consomme 2,7) et perd le drapeau ; **une partition `data`**
+  lui succède (numéro suivant, `size: 0`, drapeau levé).
+- **Les supports du pool** sont les `data` de chaque disque : `/dev/sda5`,
+  `/dev/sdb5` ; `/dev/nvme0n1p5` quand le nom du disque finit par un chiffre.
+  Aucun ne figure dans `raids` ni dans `filesystems`, sinon refus : ils restent
+  nus, comme l'exige le miroir natif (§8.5).
+- **Tout le reste est recopié tel quel**, ordre des clés compris : partitions
+  `uefi`, `legacy`, `boot`, `swap`, RAID, systèmes de fichiers.
+- La commande **ne connaît pas la capacité des disques**. Ce contrôle est celui de
+  la console de l'hébergeur (« Ensure the partition sizes do not exceed… ») et de
+  `partitioning-schemas/validate`.
+
+### 66.4 Le cloud-init produit
+
+`#cloud-config`, deux fichiers dans `write_files` (`/opt/spark-amorce.sh` et
+`/opt/creer-pool.sh`, `0755`, `root:root`, `encoding: text/plain`, contenu
+indenté de 6 espaces — une fois le YAML lu, le contenu est identique à la source),
+puis un `runcmd` d'**une ligne** :
+`/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5` suivi de `--arc-gib N`
+et `--net-mbit N` s'ils sont demandés.
+
+Aucune valeur issue d'un fichier d'entrée n'atteint le YAML ni le shell sans
+validation : un support doit être un chemin `/dev/…` de caractères sûrs, les
+entiers sont des entiers. La commande écrit sur **la sortie d'erreur** la taille
+produite : la limite du champ chez l'hébergeur n'est pas documentée (recherche du
+2026-11-10 ; il n'accepte que `text/plain`), et la seule autre limite rencontrée,
+chez un autre hébergeur, est de 16 Ko. Deux scripts de 11,8 Ko donnent un fichier
+d'environ 13 Ko.
+
+### 66.5 La preuve
+
+- **Unitaire** : la dérivation sur le schéma par défaut relevé le 2026-11-10 (le
+  résultat est celui validé par la console), sur un NVMe, sur un UEFI, dans le
+  dialecte snake_case ; chacun des refus du §66.3 ; le YAML relu par un
+  analyseur, contenu embarqué identique aux sources ; l'amorce — arguments,
+  refus avant écriture, `sh -n`, création gardée par `--pool-source`, aucun
+  `zpool create` direct, rejeu sans création.
+- **E2E de la commande** : lancée comme un utilisateur (fichier, entrée standard,
+  codes de sortie), sur ce même schéma ; chaque script embarqué passe `sh -n`.
+- **E2E de l'amorce, `make forge-vm`** : la Forge est montée par le cloud-init
+  **produit par la commande**, sur une VM à deux disques vierges ; **le pool est
+  créé par l'amorce** ; tout reprend après redémarrage. Les écarts du banc
+  passent de quatre à trois : « le pool est créé avant l'amorce » disparaît ; le
+  plafond de l'ARC (1 Gio) et le débit déclaré deviennent des arguments de la
+  commande, et non plus un remplacement de texte dans l'amorce ; restent la roue
+  construite sur le poste, la clé SSH jetable et ce plafond de 1 Gio.
+- **Non prouvé par la session** : l'acceptation de la sortie `partitionnement`
+  par l'hébergeur, sur une offre réelle (SPK-158, « Reste »).
+
+### 66.6 Ce qui reste ouvert
+
+- Jamais exécuté sur une machine livrée par l'hébergeur : la VM du banc n'en est
+  qu'une approximation.
+- Limite de taille du champ cloud-init chez l'hébergeur : inconnue.
+- `creer-pool.sh` lit toujours ses réglages dans l'environnement
+  (`SPARK_POOL_*`, documentées au README) : non modifié ici.
+- L'ARC par défaut n'est pas dérivé de la RAM (§66.2 point 7).

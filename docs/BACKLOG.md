@@ -9619,6 +9619,80 @@ n'exige le second facteur (SPK-120 sur la Forge de validation).
 
 ---
 
+## Lot 8 — Commander une Forge sans rien éditer à la main
+
+Deux unités ouvertes le 2026-11-10 sur demande du responsable, à partir d'un
+constat fait en commandant une machine neuve (journal du jour) : le schéma de
+partitionnement du README était celui du Dell R320 et pas celui de la machine
+commandée ; le gabarit `user-data.yaml`, collé tel quel, posait une amorce
+**vide** ; l'amorce supposait un pool que le schéma ne livre pas. Contrat au
+`docs/DAT.md` §66, **écrit et committé avant le code**.
+
+### [ ] SPK-158 · Une commande produit le schéma de partitionnement et le cloud-init complets d'une Forge
+
+**Demandé par le responsable le 2026-11-10** : « une commande qui output le json de
+format et le cloud init complet prêt à copier-coller, renseignée dans le README en
+lien et en place des textes bruts ».
+
+- Spécification : `docs/DAT.md` **§66.1 à §66.5**, §8.5, §8.6 · `README.md`
+  (« Obtenir d'emblée une machine partitionnée ») · `scripts/README.md` ·
+  `docs/AGENT_RUNBOOK.md` §A · manuel M2.
+- Dépend de : SPK-159 (l'amorce dont le cloud-init porte le texte), SPK-28 (le
+  schéma de partitionnement), SPK-73 (l'amorce).
+- Portée :
+  1. `scripts/preparer-forge.py`, bibliothèque standard seule : `partitionnement`
+     et `cloud-init`, qui lisent le **schéma par défaut de l'offre** (`--defaut`) ;
+  2. la règle de dérivation du §66.3 : tout est conservé, la partition `root` est
+     bornée, une partition `data` prend le reste, sur chaque disque ;
+  3. le cloud-init embarque `spark-amorce.sh` et `creer-pool.sh` **octet pour
+     octet**, et lance l'amorce avec ses arguments nommés ;
+  4. le README, le runbook et le manuel nomment la commande et ne portent plus
+     ni JSON ni YAML ; `deploy/cloud-init/user-data.yaml` est supprimé ;
+  5. le banc `make forge-vm` monte sa Forge avec le cloud-init **que la commande
+     produit**.
+- Aucune migration, aucune variable d'environnement, aucune opération de
+  production.
+- DoD : preuves unitaires (dérivation, refus, NVMe, UEFI, YAML relu, contenu
+  embarqué identique aux sources) ; preuve E2E de la commande lancée comme un
+  utilisateur, sur le schéma par défaut relevé le 2026-11-10 ; banc de redémarrage
+  vert sur le cloud-init produit ; README, DAT §8.2 et §8.6, runbook, manuel,
+  `scripts/README.md`, changelog à jour ; `@spec` / `@verifies`.
+- **Reste, dès le code livré, pour passer `[x]` : nécessite une action humaine** —
+  coller la sortie `partitionnement` dans la console de l'hébergeur et lire sa
+  validation (ou appeler `partitioning-schemas/validate`). La session ne peut pas
+  le faire : ni offre ni clé valide.
+
+### [ ] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
+
+**Constaté le 2026-11-10**, en lisant l'amorce contre le schéma : elle adopte un
+pool « livré », or le schéma ne déclare pas de pool (`"zfs": null`, §8.6). Au
+premier démarrage elle installe Incus et ZFS puis s'arrête à `zpool import -f
+spark`. Ses réglages dépendants de la machine (`ARC_GIB`, `NET_MBIT`) se changent
+en éditant le fichier, serveur par serveur.
+
+- Spécification : `docs/DAT.md` **§66.2 points 5 à 7 et §66.4**, §50.4 à §50.6,
+  §8.5 bis · `README.md` (« Amorcer la Forge au premier démarrage ») ·
+  CLAUDE.md §3 (« un réglage d'installation est un argument nommé »).
+- Dépend de : SPK-73.
+- Portée :
+  1. `spark-amorce.sh` prend `--pool-source`, `--arc-gib`, `--net-mbit` et
+     `--help` ; un argument inconnu ou une valeur invalide est refusé avant
+     toute écriture ;
+  2. **le pool n'est créé que si `--pool-source` est donné et qu'aucun pool ne
+     peut être importé** — par `creer-pool.sh`, qui refuse un support non vide ;
+     sans l'argument, l'amorce n'a jamais créé et ne crée toujours rien : le rejeu
+     manuel `sudo /opt/spark-amorce.sh` reste sans danger pour les Sparks (le
+     contrat de SPK-73, reformulé) ;
+  3. le banc `make forge-vm` ne crée plus le pool avant l'amorce et ne modifie
+     plus le texte de l'amorce : il lui passe ses arguments.
+- Aucune migration. Aucune variable d'environnement nouvelle (`creer-pool.sh`
+  lit toujours les trois du README, inchangées).
+- DoD : preuves unitaires (arguments, refus, création gardée, rejeu sans
+  création, `sh -n`) ; banc de redémarrage vert, **le pool créé par l'amorce
+  elle-même** ; README et DAT à jour ; `@spec` / `@verifies`.
+
+---
+
 ## Réservé, non planifié
 
 - **Serveur MCP sur un Spark** : piste étudiée le 2026-09-02 et laissée hors

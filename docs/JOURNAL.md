@@ -14209,3 +14209,85 @@ la persistance vient avec `sparkd` (OP-41).
 l'amorce ; OP-41 décrit la mise à jour de `sparkd` et le noyau à poser dès sa
 publication. Le poste du responsable, sous Ubuntu et `7.0.0-38`, est lui aussi
 vulnérable ; son exposition n'a pas été relevée.
+
+## 2026-11-10 · SPK-158 et SPK-159 : commander une Forge sans rien éditer à la main
+
+**Problème.** Le responsable commande une machine neuve et applique le README :
+« le partitionnement du README ne marche pas ». Il colle ensuite le gabarit
+`user-data.yaml` dans la console et remarque qu'« on n'a jamais uploadé le
+fichier sh ». Puis : « pourquoi tu as fait les choses à moitié ? Il me faudrait une
+commande qui produit le JSON et le cloud-init complet, prêts à copier-coller,
+renseignée dans le README en place des textes bruts. »
+
+**Observations.**
+
+- *Le schéma du README* : tailles fixes totalisant 5 986 713 600 000 octets, la
+  capacité des disques du R320. La machine commandée a **2 disques de 12 To**
+  (lu sur la console de l'hébergeur, capture du responsable). Sur ces disques le
+  schéma serait accepté et gaspillerait la moitié de chaque disque ; sur des
+  disques plus petits il serait refusé. Le journal du 2026-08-28 le disait déjà :
+  jamais soumis à l'hébergeur. La cause exacte du « ne marche pas » **n'a pas été
+  établie** : le message d'erreur n'a pas été fourni.
+- *La console de l'hébergeur* propose un schéma par défaut, éditable, **validé en
+  direct**. Le schéma dérivé à la main de ce défaut (root bornée à 200 Gio, `data`
+  prenant le reste, dialecte camelCase du défaut) a affiché « Your JSON file is
+  correct and can be applied » : **premier retour de l'hébergeur** sur la paire de
+  partitions libre, sans être l'appel `partitioning-schemas/validate`.
+- *Le gabarit* : `content:` ne porte que le commentaire marqueur ; collé tel quel,
+  `/opt/spark-amorce.sh` est un fichier sans commande. Rien n'échoue, rien n'est
+  posé. Le README disait « avec `user-data.yaml` pour gabarit » sans mentionner la
+  substitution. J'avais pourtant lu le gabarit en répondant aux deux questions
+  précédentes sans relever ce piège : défaut du dépôt, et de ma lecture.
+- *L'amorce* : lignes 137 à 140, `zpool list spark || zpool import -f spark` sous
+  `set -eu`. Le schéma met `"zfs": null` (§8.6), donc aucun pool n'existe au
+  premier démarrage : l'amorce s'arrête après avoir installé Incus et ZFS. Le
+  banc `make forge-vm` créait le pool avant l'amorce « comme l'hébergeur le
+  livre » : ce qu'il prouvait ne pouvait pas arriver sur une vraie machine.
+  Écart entre §8.2 (« le pool `spark` est un miroir natif », créé en fait par
+  `creer-pool.sh` après livraison) et l'en-tête de l'amorce (« livré »).
+- *Réglages* : `ARC_GIB=16` (94 Gio de RAM) et `NET_MBIT` s'éditent dans le texte ;
+  le banc les remplace par chaînes (`'ARC_GIB=16 '` → `'ARC_GIB=1  '`).
+- *Limite de taille du champ cloud-init* : recherche du jour, aucune limite
+  documentée par l'hébergeur pour l'Elastic Metal ; il n'accepte que `text/plain`.
+  Deux scripts de 11,8 Ko donnent environ 13 Ko.
+- *Le poste* : une épreuve Playwright d'un autre projet tournait (3 Gio disponibles
+  sur 37). Aucune épreuve lourde lancée par moi tant que c'est le cas (CLAUDE.md
+  §15 bis).
+
+**Solutions envisagées.**
+
+1. Un JSON « universel » dans le README, tailles génériques : impossible, noms de
+   disques et mode de démarrage s'y écrivent en dur.
+2. Reconstruire le schéma depuis des arguments (`--disques`, `--boot`) : exige que
+   l'exploitant connaisse ce que la console lui montre déjà, et réinvente un
+   modèle que l'hébergeur tient.
+3. **Dériver du schéma par défaut de l'offre** — retenu : la règle est universelle,
+   le JSON ne l'est pas.
+4. Cloud-init qui télécharge l'amorce depuis `main` : une exécution en `root` d'un
+   texte non épinglé, au premier démarrage d'une machine exposée. Écarté ; on
+   embarque.
+5. Dériver l'ARC de la RAM : une décision de dimensionnement non prise. Écarté
+   pour ce changement (DAT §66.2 point 7).
+6. Pour le pool : (a) laisser l'amorce s'arrêter et documenter un second passage ;
+   (b) créer le pool avant l'amorce dans le `runcmd` ; (c) **l'amorce crée sur
+   `--pool-source` explicite** — retenu, parce que l'argument est absent du rejeu
+   manuel et que `creer-pool.sh` refuse un support non vide.
+
+**Décision.** DAT §66 (contrat), SPK-158 (la commande, `scripts/preparer-forge.py`)
+et SPK-159 (l'amorce à arguments nommés, qui crée le pool sur demande). SPK-159
+d'abord, puisque le cloud-init de SPK-158 porte son texte ; le banc est adapté
+dans le même changement que l'amorce, car il en remplaçait le texte par chaînes.
+
+**Ce qui touche un contrat existant, à arbitrer par le responsable** : SPK-73 et
+`test_amorce.py` disaient « l'amorce ne crée jamais un pool ». La nouvelle règle
+(§66.2 point 6) est plus étroite que le geste, pas plus permissive que la
+protection : sans argument, rien ne se crée.
+
+**Conséquences.** `user-data.yaml` est supprimé à la livraison de SPK-158 ; les
+preuves qui relisaient le JSON du README (`test_creer_pool.py`) relisent la sortie
+de la commande ; DAT §8.2 et §8.6, README, runbook et manuel sont corrigés dans
+les mêmes changements que le code.
+
+**Vérifications à ce stade.** Documentation seule, committée avant le code :
+aucun code n'a été écrit, aucune preuve rejouée. La sortie de la commande n'a pas
+encore été soumise à l'hébergeur.
