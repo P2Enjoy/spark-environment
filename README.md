@@ -380,7 +380,7 @@ pas encore sont marquées.
 |---|---|---|
 | `make bootstrap` | installe les dépendances des deux livrables | **oui** |
 | `make sparkd-install` | crée le venv et installe le runtime serveur | **oui** |
-| `make sparkd-test` | tests unitaires du runtime serveur | **oui** |
+| `make sparkd-test` | tests unitaires du runtime serveur. Une preuve (`test_identite_rootless_conteneur_debian.py`, SPK-167) joue le script d'identité dans un **conteneur Debian 13** : elle demande `docker` et le réseau (image `debian:13-slim`, paquets `openssh`), et s'**ignore avec sa raison** sans eux | **oui** |
 | `make sparkd-run` | lance `sparkd` sur `127.0.0.1:9876` — migre le registre puis sert | **oui** |
 | `make test` | toutes les suites de tests, contrat compris | **oui** |
 | `make contract` | régénère le contrat d'API et ses types | **oui** |

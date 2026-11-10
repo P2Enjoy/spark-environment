@@ -1217,24 +1217,46 @@ class FakeIncus:
         # SPK-74 · §17.5 : le doublon porte l'EFFET de la creation d'identite,
         # pas seulement son passage. Sans lui, un second appel retrouverait la
         # cellule vierge et le refus d'ecrasement — qui est le point de la DoD —
-        # serait ineprouvable. La reconnaissance porte sur la COMMANDE entiere :
-        # l'identite passe son script en `sh -c <script> sh <commentaire> <oui>`,
-        # donc le dernier argument n'est pas le script.
+        # serait ineprouvable.
+        #
+        # SPK-167 · §17.6 : et il porte CHEZ QUI elle est posee. Une seule cle
+        # `identity` ne pouvait pas dire si la paire etait sous `/root` ou chez le
+        # compte rootless — c'est-a-dire le defaut lui-meme. L'etat est donc une
+        # table `chemin de la cle privee -> {pub, owner}`, que les preuves lisent
+        # pour constater OU la paire a ete posee et pour QUI.
+        #
+        # La reconnaissance porte sur la COMMANDE entiere. Les deux scripts
+        # recoivent leurs chemins en ARGUMENTS (`sh -c <script> sh <dossier>
+        # <compte> <reprise> <commentaire> <oui|non>` pour la creation,
+        # `sh -c <script> sh <publique>` pour le releve) : le doublon les lit la,
+        # jamais dans le corps du script.
         entier = " ".join(command)
-        if "ssh-keygen -t ed25519" in entier:
-            remplacer = command[-1] == "oui"
-            if runtime.get("identity") and not remplacer:
+        if "ssh-keygen -t ed25519" in entier and len(command) >= 9:
+            dossier, compte, reprise, comment, remplacer = command[4:9]
+            identites = runtime.setdefault("identity_files", {})
+            privee = f"{dossier}/id_ed25519"
+            existe = privee in identites
+            if existe and remplacer != "oui":
                 return (3, "", "")
-            comment = command[-2] if len(command) >= 2 else "spark"
-            graine = f"{name}:{comment}:{len(runtime.get('identity_history', []))}"
-            runtime["identity"] = f"ssh-ed25519 {_faux_ed25519(graine)} {comment}"
-            runtime.setdefault("identity_history", []).append(runtime["identity"])
+            code = 0
+            origine = f"{reprise}/id_ed25519" if reprise else ""
+            if not existe and remplacer != "oui" and origine in identites:
+                # La paire de root est COPIEE : meme cle, nouveau proprietaire.
+                cle = identites[origine]["pub"]
+                code = 5
+            else:
+                graine = f"{name}:{comment}:{len(runtime.get('identity_history', []))}"
+                cle = f"ssh-ed25519 {_faux_ed25519(graine)} {comment}"
+                runtime.setdefault("identity_history", []).append(cle)
+            identites[privee] = {"pub": cle, "owner": compte or "root"}
             self._persist()
-            return (0, runtime["identity"] + "\n", "")
-        if "id_ed25519.pub" in entier:
-            if not runtime.get("identity"):
+            return (code, cle + "\n", "")
+        if "id_ed25519.pub" in entier and len(command) >= 5:
+            privee = command[4].removesuffix(".pub")
+            fiche = runtime.get("identity_files", {}).get(privee)
+            if fiche is None:
                 return (4, "", "")
-            return (0, runtime["identity"] + "\n", "")
+            return (0, fiche["pub"] + "\n", "")
 
         # Le doublon représente l'EFFET de la commande, pas seulement son
         # passage. Sans cela, un second amorçage retrouverait la cellule vierge

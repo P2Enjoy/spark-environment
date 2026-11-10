@@ -9998,7 +9998,7 @@ qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instanta
   **le lot clos** : `[x]` seulement après la preuve contre le S3 réel du propriétaire
   (action humaine).
 
-### [ ] SPK-167 · L'identité SSH d'un Spark rootless appartient au compte rootless
+### [~] SPK-167 · L'identité SSH d'un Spark rootless appartient au compte rootless
 
 **Défaut signalé par le responsable le 2026-11-10** : sur un Spark amorcé en rootless,
 l'identité est créée sous `/root/.ssh/id_ed25519`, donc le compte `spark-docker`
@@ -10025,12 +10025,27 @@ que rien n'indique pourquoi.
 - DoD : un test unitaire prouve que le script de création vise le foyer du compte en
   rootless et `/root` sinon, et le **joue pour de vrai** (le shell réel, `ssh-keygen`
   réel) : refus d'écraser, remplacement, reprise de la paire de `root` ; une preuve dans une
-  vraie cellule Debian montre que le compte `spark-docker` **lit** la clé (`ssh-keygen -y`
+  conteneur Debian 13 montre que le compte `spark-docker` **lit** la clé (`ssh-keygen -y`
   sous ce compte) alors qu'il ne le pouvait pas sous `/root` ; un test d'API sur un Spark
   réellement amorcé en rootless couvre créer / relire / refus / remplacer / reprise, et le
   même Spark enraciné garde `/root` ; un parcours E2E crée l'identité depuis l'écran des
   clés d'un Spark rootless et lit le chemin du compte ; la vérification visuelle part de
   l'accueil, à la souris et au clavier ; manuel M6, README, changelog.
+- **Établi le 2026-11-10 (code et diagnostics).** 28 preuves `pytest` neuves (le vrai `sh` et
+  `ssh-keygen`, l'API sur un Spark amorcé en rootless) et 6 dans un conteneur Debian 13 où
+  `spark-docker` s'authentifie auprès d'un vrai `sshd` avec la paire reprise ; la suite
+  `sparkd` entière passe (1843) ; une mutation du `chown` rougit 6 preuves. Le parcours E2E
+  « sur un Spark rootless, l'identité est créée POUR LE COMPTE qui clone » passe (créé au
+  clavier, chemin du compte lu à l'écran, commande passée à la cellule et ligne de journal
+  constatées) ; captures `e2e/captures/spk167-*.jpg` observées, bureau et mobile. Campagne
+  complète : 152 sur 155, les trois rouges étant **les mêmes sur le code du commit
+  précédent** (`docs/INCONSISTENCY_REPORT.md`).
+- **Reste, donc `[~]` (DAT §28.7 : la pile factice ne conclut pas).** La preuve sur une
+  **Forge réelle** : un Spark amorcé en rootless par un Incus réel, l'identité créée depuis la
+  console, puis `ssh-keygen -y` et un `git clone` sous `spark-docker` — c'est la
+  vérification d'OP-42. Le conteneur Docker n'est pas une cellule Incus (ni `systemd`, ni
+  idmap, ni démon rootless). Le mode `ask` de `ssh` hors terminal et un clone contre GitHub
+  réel ne sont pas mesurés.
 
 ### [ ] SPK-168 · La restauration qui accepte la perte d'instantanés plus récents lève la garde par le volume
 
@@ -10053,8 +10068,7 @@ puis le retrait de l'option — il reste `s1 s2`, avec les données d'avant la r
   (3) la garde est **reposée dans tous les cas**, comme aujourd'hui (`finally`) ; (4) établir
   si la Forge accepte l'ancien appel — elle est documentée en Incus 7.4 : régression de
   version, ou défaut ancien masqué par un `FakeIncus` qui ne valide rien.
-- Non établi : le comportement d'Incus 7.4. `incus.py` est en cours de modification par
-  SPK-167 : lire son état committé avant d'y toucher.
+- Non établi : le comportement d'Incus 7.4.
 - DoD : preuve rouge puis verte sur Incus réel ; unitaires ; DAT §19.1 ; changelog ;
   `@spec` / `@verifies`.
 

@@ -1140,6 +1140,20 @@ def create_app(config: Config) -> FastAPI:
             return None
         return {"uid": int(uid), "gid": int(gid)}
 
+    def _identite_au_compte_rootless(connection, spark: dict) -> bool:
+        """Le Spark présente-t-il son identité POUR `spark-docker` ? (SPK-167, §17.6)
+
+        Oui quand le dernier relevé d'amorçage dit `rootless` — la même source
+        que la seconde porte —, jamais d'après l'existence du compte (§42.2 bis).
+
+        Contrairement à `_identite_rootless`, l'UID et le GID n'entrent pas ici :
+        la cellule résout le compte par son NOM au moment du geste. Exiger l'UID
+        reproduirait le défaut sur précisément les Sparks amorcés avant la
+        migration 015, dont la ligne dit `rootless` sans identité numérique.
+        """
+        releve = briefing_service.observation(connection, spark["id"])
+        return bool(releve) and releve.get("docker_mode") == bootstrap_service.ROOTLESS
+
     def _ouvrir_au_rootless(connection, spark: dict, dossiers: tuple[str, ...],
                             fichiers: tuple[str, ...],
                             inscriptibles: tuple[str, ...] = ()) -> None:
@@ -3054,7 +3068,8 @@ def create_app(config: Config) -> FastAPI:
     def read_identity(name: str) -> dict:
         """La clé PUBLIQUE que le Spark présente. N'écrit rien (§17.5).
 
-        @spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §14.6
+        @spec docs/BACKLOG.md#SPK-74 · docs/BACKLOG.md#SPK-167 · docs/DAT.md §17.5,
+              §17.6, §14.6
 
         Lire ne refuse PAS sur un Spark arrêté, contrairement à créer : on doit
         pouvoir regarder l'écran des clés d'un Spark éteint sans tomber sur une
@@ -3068,16 +3083,20 @@ def create_app(config: Config) -> FastAPI:
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
+            # SPK-167 · §17.6 : le COMPTE qui présente l'identité, lu au relevé
+            # d'amorçage. Même un Spark arrêté dit où sa clé vit.
+            rootless = _identite_au_compte_rootless(connection, spark)
             indisponible = {
                 "spark": name, "state": identity_service.INDISPONIBLE,
                 "public_key": None, "fingerprint": None, "comment": None,
-                "key_type": None, "path": identity_service.CHEMIN_PRIVEE,
+                "key_type": None,
+                "path": identity_service.emplacement(rootless).privee,
             }
             if not spark.get("incus_name") or spark.get("state") != "running":
                 return indisponible
             try:
                 return {"spark": name, **identity_service.relever(
-                    app.state.incus, spark["incus_name"])}
+                    app.state.incus, spark["incus_name"], rootless=rootless)}
             except (IncusError, InstanceAbsente):
                 # Une cellule qui ne répond pas n'est pas une identité absente.
                 return indisponible
@@ -3089,7 +3108,8 @@ def create_app(config: Config) -> FastAPI:
     def create_identity(name: str, body: dict = Body(default={})) -> dict:
         """Fait naître l'identité DANS la cellule (§17.5).
 
-        @spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §17.2, §42.5
+        @spec docs/BACKLOG.md#SPK-74 · docs/BACKLOG.md#SPK-167 · docs/DAT.md §17.5,
+              §17.6, §17.2, §42.5
 
         La clé privée ne traverse jamais cette route : `ssh-keygen` s'exécute
         dans le Spark et seule la partie publique remonte. Le journal reçoit
@@ -3097,6 +3117,10 @@ def create_app(config: Config) -> FastAPI:
 
         `replace` est refusé par défaut : régénérer invalide la clé de
         déploiement déjà posée chez le tiers, et rien sur la Forge ne le sait.
+
+        SPK-167 : sur un Spark rootless, la paire est posée pour `spark-docker`
+        — le compte qui clone —, et une paire déjà posée sous `/root` est REPRISE
+        au lieu d'être régénérée (`adopted`).
         """
         remplacer = bool((body or {}).get("replace"))
         with registry() as connection:
@@ -3106,7 +3130,8 @@ def create_app(config: Config) -> FastAPI:
             protection_service.ensure_writable(connection, name, "identity")
             try:
                 cree = identity_service.creer(
-                    app.state.incus, spark["incus_name"], name, remplacer=remplacer)
+                    app.state.incus, spark["incus_name"], name, remplacer=remplacer,
+                    rootless=_identite_au_compte_rootless(connection, spark))
             except InstanceAbsente as erreur:
                 raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
@@ -3115,14 +3140,22 @@ def create_app(config: Config) -> FastAPI:
             except identity_service.IdentityError as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "identity_exists", "message": str(erreur)}) from erreur
+            if cree["adopted"]:
+                resume = ("Identité SSH reprise de root pour le compte rootless de "
+                          f"« {name} » ({cree['fingerprint']}) : même clé, rien à "
+                          "changer chez le tiers.")
+            else:
+                resume = (("Identité SSH remplacée" if remplacer else "Identité SSH créée")
+                          + f" pour « {name} » ({cree['fingerprint']}).")
             audit_service.record(
-                connection, None, "spark.identity.create", "ok",
-                ("Identité SSH remplacée" if remplacer else "Identité SSH créée")
-                + f" pour « {name} » ({cree['fingerprint']}).",
+                connection, None, "spark.identity.create", "ok", resume,
                 target_type="spark", target_id=spark["id"],
-                # §21.2 : l'EMPREINTE, jamais le corps de la clé.
+                # §21.2 : l'EMPREINTE, jamais le corps de la clé. `path` dit pour
+                # QUEL compte (SPK-167) : c'est ce qu'on cherchera le jour où un
+                # clone échoue alors que la console montre une clé.
                 payload={"fingerprint": cree["fingerprint"],
-                         "replaced": remplacer},
+                         "replaced": remplacer, "adopted": cree["adopted"],
+                         "path": cree["path"]},
             )
             return {"spark": name, **cree}
 

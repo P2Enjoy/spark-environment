@@ -2,6 +2,24 @@
 
 ## [Non publié]
 
+### Corrigé
+- **SPK-167 — l'identité SSH d'un Spark rootless est posée pour le compte qui clone.**
+  Sur un Spark amorcé en rootless, « Créer l'identité » posait la paire sous
+  `/root/.ssh/id_ed25519` : la console l'affichait, l'exploitant la collait chez
+  GitHub, et `spark-docker` — le compte qui lance la pile et clone — ne pouvait pas
+  la lire (`Permission denied`), donc le clone échouait. Elle est désormais posée dans
+  `/home/spark-docker/.ssh/` (clé privée `0600`, propriété du compte ; dossier inchangé
+  `root:spark-docker 0750`, donc le compte lit sa clé sans pouvoir la supprimer ni
+  réécrire ses accès). Le mode est celui du dernier relevé d'amorçage. Un Spark
+  enraciné est inchangé. **Une paire déjà posée sous `/root` d'un Spark rootless est
+  reprise par le compte au premier « Créer l'identité »** — même clé, même empreinte :
+  la clé de déploiement déjà posée chez le tiers reste valide ; la copie de `root` n'est
+  ni déplacée ni supprimée. Le journal retient `adopted` et le chemin, jamais un corps
+  de clé. Preuves : le vrai shell et `ssh-keygen`, et un conteneur Debian 13 (Docker, pas une cellule
+  Incus) où le compte `spark-docker` s'authentifie auprès d'un vrai `sshd` avec la clé
+  reprise (alors que sous `/root` il ne la lit pas). Aucune migration, aucune variable
+  d'environnement, aucun changement d'écran. DAT §17.6 ; manuel M6 ; OP-42.
+
 ### Sécurité
 - **SPK-157 — CVE-2026-98432 : aucun paquet TCP IPv4 porteur d'options n'atteint
   la Forge ni ses Sparks.** Le pare-feu que `sparkd` pose

@@ -45,3 +45,18 @@ génération sont triables par le temps sans ULID (SCHEMA §8 bis).
 **Arbitrage demandé** : corriger le schéma (`spark.id` = 24 hexadécimaux), ou migrer
 les identifiants. La première voie suffit tant que personne n'a besoin du tri par le
 temps.
+
+## 2026-11-10 · Deux parcours E2E rouges en campagne, verts seuls — antérieurs à SPK-167
+
+**Constaté** en rejouant la campagne complète pour SPK-167 : « un geste sensible envoie une alerte
+hors bande, un geste ordinaire non » (`parcours.test.mjs:1599`, « la levée de protection a produit
+une alerte ») et « révoquer une clé malgré le gel, par la confirmation qui NOMME »
+(`parcours.test.mjs:1914`, `[data-accepte-protege]` jamais visible). **Mesuré** : rouges à
+l'identique sur deux campagnes consécutives, et rouges sur le code du commit précédent
+(`648b5c4`, qui porte le même code que `b7af511`) — 154 tests, 151 verts, avec le parcours « MODE
+CPU » de l'entrée du 2026-10-11 comme troisième rouge. Joués **seuls**, les deux passent. Le défaut
+est donc l'ordre ou l'état laissé par un parcours antérieur, comme pour l'entrée du 2026-09-30.
+
+**Non diagnostiqué.** Aucune cause n'est établie ; ce n'est pas lié à SPK-167, dont les parcours
+s'exécutent après eux (lignes 1940 et suivantes). À arbitrer par le responsable : isoler ou
+rejouer contre la VM (DAT §28.7).

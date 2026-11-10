@@ -120,6 +120,51 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-42 · L'identité d'un Spark rootless est posée pour le compte rootless : `sparkd` seul (SPK-167)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable.
+Objectif      : sur un Spark amorcé en rootless, « Créer l'identité » pose la
+                paire dans `/home/spark-docker/.ssh/` (propriété du compte
+                `spark-docker`, clé privée 0600), et non plus sous `/root/.ssh`
+                où ce compte — celui qui clone — ne pouvait pas la lire
+                (docs/DAT.md §17.6). Un Spark enraciné est inchangé. Aucune
+                migration, aucune variable d'environnement, aucun changement
+                d'écran : seul le chemin affiché sous « Dans la cellule » change.
+Dépend de     : rien.
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2). La console n'est pas à
+                   relancer : elle n'a pas changé.
+Vérification  : `/healthz` rend le commit déployé. Sur un Spark rootless :
+                Spark → Clés → Identité du Spark → « Dans la cellule » affiche
+                `/home/spark-docker/.ssh/id_ed25519`. Dans la cellule,
+                `incus exec <cellule> -- ls -l /home/spark-docker/.ssh` montre
+                `id_ed25519` (`-rw-------`) et `id_ed25519.pub` (`-rw-r--r--`)
+                tous deux à `spark-docker`, dans un dossier resté
+                `root:spark-docker` en 0750. Depuis la seconde porte,
+                `ssh-keygen -y -f ~/.ssh/id_ed25519` rend la clé publique.
+Sparks déjà touchés : un Spark rootless qui porte une identité sous `/root/.ssh`
+                (l'état laissé par le défaut) affichera « Aucune identité » après
+                la mise à jour — le compte, lui, n'en a pas. Un seul geste suffit :
+                « Créer l'identité ». La paire de `root` est alors COPIÉE au
+                compte (même clé, même empreinte), donc la clé de déploiement déjà
+                posée chez GitHub reste valide et rien n'est à y changer. Le
+                journal (`spark.identity.create`) dit « reprise » et porte
+                l'empreinte. Un « Remplacer » en revanche génère une clé neuve et
+                invalide celle du tiers.
+Retour arrière: réinstaller la build précédente (runbook A.2). Les paires posées
+                chez le compte restent en place sans effet, et celles de `root`
+                n'ont jamais été modifiées ni supprimées : l'ancienne build relit
+                simplement la copie de `root`.
+Risques       : la paire reprise existe désormais à DEUX endroits (`root` et
+                `spark-docker`) — c'est voulu : la porte administrative l'utilise
+                peut-être, et retirer une clé que le locataire emploie ne se fait
+                pas pour lui. Le compte ne peut ni supprimer ni remplacer sa
+                paire (dossier à root, DAT §17.6). `known_hosts` : le compte ne
+                peut pas y écrire ; `ssh` le signale et continue quand l'hôte est
+                accepté (mesuré dans un conteneur Debian 13, pas sur une Forge).
+```
+
 ### OP-41 · CVE-2026-98432 : le filtre des options IPv4, puis le noyau corrigé (SPK-157)
 
 ```

@@ -1954,6 +1954,11 @@ test('l’identité se crée d’un bouton, et sa clé publique se copie au pres
 
     const cle = (await page.textContent('.bloc-cle')).trim();
     assert.match(cle, /^ssh-ed25519 /, 'la clé publique est affichée en entier');
+    // SPK-167 · §17.6 : un Spark qui n'est PAS rootless garde `root`. Le
+    // correctif ne doit rien changer pour lui.
+    assert.equal(
+      (await page.textContent('section.identite .def:has(dt:text-is("Dans la cellule")) dd')).trim(),
+      '/root/.ssh/id_ed25519', 'hors rootless, l’identité reste celle de root');
     assert.ok(!/PRIVATE KEY/i.test(await page.content()),
       'la clé privée n’atteint JAMAIS l’écran (§17.2)');
 
@@ -4923,6 +4928,86 @@ test('sur un Spark rootless, le terminal OFFRE la seconde porte et l’emprunte'
 
     await page.click('[data-terminal="fermer"]');
     await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 20000 });
+  });
+});
+
+// --- SPK-167 · l'identité d'un Spark ROOTLESS appartient au compte rootless ---
+//
+// @verifies docs/BACKLOG.md#SPK-167 · docs/DAT.md §17.6 (pour QUEL compte le
+//           Spark présente son identité), §17.5, §42.2 bis, §42.2 quater ·
+//           docs/manuel/M6-acces.md (Identité du Spark) · docs/DESIGN_SYSTEM.md
+//           §14.6 (zéro, en cours, indisponible) · CLAUDE.md §16
+//
+// Le défaut : l'identité était posée sous `/root/.ssh`, que le compte
+// `spark-docker` — celui qui clone et qui construit — ne peut pas lire. La
+// console l'affichait pourtant, et l'exploitant la collait chez GitHub.
+
+test('sur un Spark rootless, l’identité est créée POUR LE COMPTE qui clone', async () => {
+  await parcours('identite-rootless', async () => {
+    // « boutique » est rootless depuis « cocher le rootless » (comme pour les
+    // parcours voisins). L'écran n'affiche pas le mode des Sparks : on LIT le
+    // journal pour constater la précondition, et on dit laquelle manque.
+    const { corps: amorcages } = await pile.lireSparkd(
+      '/v1/audit?action=spark.bootstrap&limit=50');
+    const rootless = amorcages.entries.some((e) => e.message.includes('boutique')
+      && JSON.parse(e.payload).mode === 'rootless');
+    assert.ok(rootless, '« boutique » doit avoir été amorcée en rootless par le ' +
+      'parcours « cocher le rootless amorce dans ce mode » : rejouer la série');
+
+    // §29.3 : on y va à la souris, depuis l'accueil.
+    await ouvrir('boutique', 'cles');
+    await page.waitForSelector('#titre-cles', { timeout: 10000 });
+    await page.waitForSelector('[data-identite-creer]', { timeout: 20000 });
+    const avant = await page.textContent('section.identite');
+    assert.match(avant, /Aucune identité/);
+    assert.ok(!/illisible/.test(avant), '« absente » n’est pas « illisible » (§14.6)');
+    await capturer('spk167-identite-rootless-absente');
+
+    // Au CLAVIER, cette fois : le bouton reçoit le focus, Entrée engage le geste.
+    await page.focus('[data-identite-creer]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.bloc-cle', { timeout: 20000 });
+
+    const cle = (await page.textContent('.bloc-cle')).trim();
+    assert.match(cle, /^ssh-ed25519 /);
+    assert.match(cle, /spark:boutique$/, 'le commentaire nomme le Spark');
+    assert.ok(!/PRIVATE KEY/i.test(await page.content()),
+      'la clé privée n’atteint JAMAIS l’écran (§17.2)');
+
+    // Ce que l'exploitant LIT : où la clé vit, et pour qui.
+    const chemin = (await page.textContent(
+      'section.identite .def:has(dt:text-is("Dans la cellule")) dd')).trim();
+    assert.equal(chemin, '/home/spark-docker/.ssh/id_ed25519',
+      'la clé est chez le compte qui clone, pas sous /root');
+    await capturer('spk167-identite-rootless');
+    await capturer('spk167-identite-rootless-mobile', { largeur: 390, hauteur: 844 });
+
+    // EFFET constaté sur `sparkd` : le relevé rend ce que la cellule porte.
+    const { corps } = await pile.lireSparkd('/v1/sparks/boutique/identity');
+    assert.equal(corps.state, 'presente');
+    assert.equal(corps.path, '/home/spark-docker/.ssh/id_ed25519');
+    assert.equal(corps.public_key, cle, 'l’écran montre ce que la CELLULE porte');
+
+    // EFFET dans la cellule : la commande passée vise le foyer du compte et
+    // NOMME le compte. Sans cela, rien ne prouverait le propriétaire des fichiers.
+    const { corps: fiche } = await pile.lireSparkd('/v1/sparks/boutique');
+    const commandes = await pile.commandesCellule(fiche.incus_name);
+    const creation = commandes.filter((c) => c.includes('ssh-keygen -t ed25519'));
+    assert.equal(creation.length, 1, JSON.stringify(creation));
+    assert.match(creation[0],
+      / sh \/home\/spark-docker\/\.ssh spark-docker \/root\/\.ssh spark:boutique non$/,
+      'dossier du compte · compte · paire de root à reprendre · commentaire · sans remplacement');
+
+    // Le journal dit POUR QUEL compte (c'est ce qu'on cherchera le jour où un
+    // clone échoue alors que la console montre une clé), sans corps de clé.
+    const { corps: journal } = await pile.lireSparkd(
+      '/v1/audit?action=spark.identity.create&limit=20');
+    const sienne = journal.entries.find((e) => e.message.includes('boutique'));
+    assert.ok(sienne, 'le geste doit laisser une ligne au journal');
+    assert.equal(JSON.parse(sienne.payload).path, '/home/spark-docker/.ssh/id_ed25519');
+    assert.equal(JSON.parse(sienne.payload).adopted, false);
+    assert.ok(!sienne.payload.includes(cle.split(' ')[1]),
+      '§21.2 : jamais le corps d’une clé au journal');
   });
 });
 

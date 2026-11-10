@@ -1026,7 +1026,8 @@ export interface paths {
          * Read Identity
          * @description La clé PUBLIQUE que le Spark présente. N'écrit rien (§17.5).
          *
-         *     @spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §14.6
+         *     @spec docs/BACKLOG.md#SPK-74 · docs/BACKLOG.md#SPK-167 · docs/DAT.md §17.5,
+         *           §17.6, §14.6
          *
          *     Lire ne refuse PAS sur un Spark arrêté, contrairement à créer : on doit
          *     pouvoir regarder l'écran des clés d'un Spark éteint sans tomber sur une
@@ -1040,7 +1041,8 @@ export interface paths {
          * Create Identity
          * @description Fait naître l'identité DANS la cellule (§17.5).
          *
-         *     @spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §17.2, §42.5
+         *     @spec docs/BACKLOG.md#SPK-74 · docs/BACKLOG.md#SPK-167 · docs/DAT.md §17.5,
+         *           §17.6, §17.2, §42.5
          *
          *     La clé privée ne traverse jamais cette route : `ssh-keygen` s'exécute
          *     dans le Spark et seule la partie publique remonte. Le journal reçoit
@@ -1048,6 +1050,10 @@ export interface paths {
          *
          *     `replace` est refusé par défaut : régénérer invalide la clé de
          *     déploiement déjà posée chez le tiers, et rien sur la Forge ne le sait.
+         *
+         *     SPK-167 : sur un Spark rootless, la paire est posée pour `spark-docker`
+         *     — le compte qui clone —, et une paire déjà posée sous `/root` est REPRISE
+         *     au lieu d'être régénérée (`adopted`).
          */
         post: operations["create_identity_v1_sparks__name__identity_post"];
         delete?: never;

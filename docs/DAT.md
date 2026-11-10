@@ -2148,9 +2148,13 @@ plus la sienne, et si elle est régénérée à la main elle ne diverge d'aucun 
   (§21.2 : jamais un corps de clé).
 
 **Ce que cette section ne règle pas.** `known_hosts` : le dossier appartenant à `root`,
-le compte ne peut pas y écrire sa propre liste d'hôtes. `ssh` le signale et continue
-quand l'hôte est accepté ; ce n'est pas un échec d'authentification, mais **ce n'est
-pas mesuré sur une Forge réelle** et le §17.5 excluait déjà `known_hosts` du périmètre.
+le compte ne peut pas y écrire sa propre liste d'hôtes. **Mesuré le 2026-11-10** dans un
+conteneur Debian 13 — Docker, pas une cellule Incus — (client lancé sous `spark-docker`, `BatchMode=yes`,
+`StrictHostKeyChecking=accept-new`, contre un vrai `sshd`) : `ssh` écrit « Failed to add the
+host to the list of known hosts » et **l'authentification réussit quand même**. Le fichier
+n'est jamais créé, donc chaque connexion repose la question de l'hôte. Le comportement par
+défaut (`StrictHostKeyChecking=ask`) hors terminal, et un `git clone` contre GitHub réel,
+**ne sont pas mesurés** ; le §17.5 excluait déjà `known_hosts` du périmètre.
 
 ## 18. Réconciliation de l'ingress
 

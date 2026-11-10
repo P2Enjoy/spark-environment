@@ -50,13 +50,33 @@ Ensuite :
 Le commentaire de la clé porte le nom du Spark (`spark:mon-spark`) : dans une
 liste de clés de déploiement, vous saurez laquelle retirer le jour venu.
 
+**Pour quel compte la clé est-elle faite ?** La ligne **Dans la cellule** du panneau
+vous le dit.
+
+- Sur un Spark **enraciné** (ou jamais amorcé), la clé est celle de `root` :
+  `/root/.ssh/id_ed25519`.
+- Sur un Spark amorcé en **rootless**, la clé est celle du compte `spark-docker`,
+  celui qui fait tourner votre pile et qui clone vos dépôts :
+  `/home/spark-docker/.ssh/id_ed25519`. Une clé gardée sous `/root` lui serait
+  illisible, et le clone échouerait alors même que GitHub connaît la clé.
+
+Dans ce second cas, le compte **lit** sa clé mais ne peut ni la supprimer ni la
+remplacer : seul le bouton de la console le fait.
+
+**Un Spark rootless qui avait déjà une identité** (créée avant cette correction, donc
+sous `/root`) affiche d'abord *Aucune identité* : le compte `spark-docker`, lui, n'en
+avait pas. Cliquez **Créer l'identité** : la clé existante est **reprise** par le compte,
+sans être changée. C'est la même clé, la même empreinte — vous n'avez rien à modifier
+chez GitHub. L'exemplaire de `root` reste en place.
+
 **Un Spark arrêté ne montre pas son identité.** L'écran dit alors *illisible*, et
 non *aucune identité* — ce n'est pas la même chose, et le geste attendu est de
 démarrer le Spark, pas d'en créer une seconde.
 
 **Remplacer une identité est irréversible.** L'ancienne clé cesse aussitôt d'être
 valide : tout dépôt où vous l'aviez posée refusera ce Spark jusqu'à ce que vous y
-ajoutiez la nouvelle. C'est pourquoi l'écran vous demande de frapper le nom du
+ajoutiez la nouvelle. Sur un Spark rootless, l'exemplaire de `root` reste valide chez le
+tiers tant que vous ne l'y avez pas retiré : pensez à le retirer aussi. C'est pourquoi l'écran vous demande de frapper le nom du
 Spark avant d'engager le geste. Créer une identité qui n'existe pas encore, en
 revanche, ne casse rien et ne demande rien.
 

@@ -14741,8 +14741,35 @@ l'affiche déjà.
 demande, justifiée par les Sparks déjà touchés ; sans elle, ces Sparks afficheraient « aucune
 identité » après le correctif et il faudrait créer une clé neuve et la reposer chez le tiers.
 
-**Reste à établir (écrit avant le code, à remplir par la mesure).** Le compte lit-il vraiment la
-clé dans une cellule Debian réelle ? `ssh` écrit-il `known_hosts` malgré le dossier de root ?
+**Mesuré (dans un conteneur Debian 13 — Docker, donc PAS une cellule Incus —, compte `spark-docker`
+réel, `sshd` réel jouant le tiers).**
+
+- *Le défaut est reproduit.* Paire sous `/root/.ssh` : `ssh-keygen -y` sous `spark-docker` →
+  `Permission denied` ; le tiers, qui connaît la clé, refuse la connexion (`Permission denied
+  (publickey)`).
+- *Le correctif tient.* Création rootless avec reprise (code `5`) : paire `spark-docker:spark-docker`
+  en `0600` / `0644`, dossier resté `root:spark-docker 0750`, `authorized_keys` resté
+  `root:spark-docker 0640`, copie de `root` inchangée (`root:root 0600`). **Même empreinte**
+  (`SHA256:64p9Ukbpt9lq…`) et `spark-docker` s'authentifie auprès du tiers, dont la liste de clés
+  n'a pas bougé : le tiers répond `deploy`.
+- *Le compte ne se réécrit pas.* Sous `spark-docker`, `rm id_ed25519` et la réécriture de
+  `authorized_keys` → `Permission denied`.
+- *Création neuve, refus d'écraser, remplacement* : codes `0`, `3`, `0` ; mêmes propriétaires et
+  droits ; la clé neuve authentifie le compte.
+- *`known_hosts`* : le compte ne peut pas l'écrire (dossier à root). `ssh` avertit et
+  authentifie quand même, avec `accept-new`. **Non mesurés** : le mode `ask` hors terminal et
+  un `git clone` contre GitHub réel.
+- *Mutation.* En remplaçant le `chown` du compte par `chown root:`, six preuves passent au rouge
+  (trois au vrai shell, trois dans le conteneur) : les tests sont sensibles à ce qu'ils gardent.
+
+**Conséquences.** `identity.py` porte un `Emplacement` (dossier, compte) au lieu de constantes ;
+`relever` et `creer` prennent `rootless` ; les scripts reçoivent leurs chemins en arguments, ce
+qui permet de les jouer tels quels hors de la cellule. La route lit le mode au relevé d'amorçage
+(`_identite_au_compte_rootless`) **sans exiger l'UID** : une ligne antérieure à la migration 015
+dit `rootless` sans identité numérique, et exiger l'UID aurait reproduit le défaut sur
+précisément les Sparks qui l'ont. Le contrat OpenAPI est régénéré (descriptions de route).
+Le doublon de pilote retient désormais `chemin de la clé privée → {pub, owner}` au lieu d'une clé
+unique : l'ancien état ne pouvait pas exprimer le défaut.
 
 ## 2026-11-10 · SPK-160 : la mesure complète — la décision de format confirmée, trois faits d'Incus 7.6
 
@@ -14800,3 +14827,13 @@ mesure ; **trois verdicts y restent rouges à dessein** (la MAC, la copie démar
 **Vérifications.** Deux passes complètes concordantes ; aucun orphelin à la fin (processus,
 conteneur, dossier de travail). **Non vérifié** : le remède de la MAC, Incus 7.4, tout
 disque mécanique, des données compressibles.
+
+**Vérifications (E2E).** Parcours « sur un Spark rootless, l'identité est créée POUR LE COMPTE
+qui clone » vert ; garde ajoutée au parcours SPK-74 existant (un Spark non rootless affiche
+`/root/.ssh/id_ed25519`), vert. Campagne complète : **152 sur 155**. Les trois rouges —
+« changer le MODE CPU », « un geste sensible envoie une alerte hors bande », « révoquer une clé
+malgré le gel » — sont **identiques sur le code du commit précédent** (154 tests, 151 verts,
+mesuré en remettant provisoirement les quatre fichiers de code à leur version `HEAD`, puis en les
+restaurant, sommes de contrôle vérifiées). Les deux derniers passent seuls et ne figuraient pas
+au rapport d'incohérences : ils y sont consignés, sans diagnostic. Statut : `[~]`, parce que le
+DAT §28.7 interdit de conclure sur la pile factice.
