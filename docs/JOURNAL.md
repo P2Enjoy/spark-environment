@@ -14380,3 +14380,130 @@ sortie de la commande**.
   dérivé à la main, y avait été validé — pas la sortie de la commande elle-même.
 - L'arbitrage du responsable sur le contrat de SPK-73 (§66.2 point 6) reste à
   rendre.
+
+## 2026-11-10 · La sauvegarde externe des instantanés sur un S3 : le cadrage avec le responsable
+
+**Problème.** Le responsable ouvre une fonctionnalité et sa spécification : « les
+instantanés sauvegardés sur un S3 externe. Chaque Forge peut se voir configurer un S3
+externe (URL, compte, mot de passe…) que l'on vérifie par le fonctionnement, le droit
+d'écriture, etc. : tout doit être nickel, et on remonte les erreurs au propriétaire.
+Quand tout est bon, à côté de chaque instantané un bouton "sauvegarde externe"
+apparaît, avec une croix rouge si ce n'est pas fait et une coche verte si c'est fait.
+Lorsque le S3 est configuré, la sauvegarde externe est faite d'office et ressayée
+périodiquement si elle a échoué. Les sauvegardes sont archivées par Forge et par
+Spark, et retiennent non seulement les instantanés du disque mais aussi les
+informations du Spark. À la destruction d'un Spark, ou à la connexion d'un S3 qui
+contient des Sparks avec des instantanés absents de la Forge, une option de
+récupération recrée le Spark et rétablit l'instantané — dans la fenêtre de gestion
+complète de la sauvegarde externe, visible quand elle est configurée. » Puis :
+« travaille le sujet avec moi » : la spécification se construit en dialogue, pas en
+une rédaction solitaire.
+
+**Ce que la demande renverse.** Deux phrases du dépôt disaient le contraire : le DAT
+§8.3 (« l'export restant une opération manuelle », la planification d'`incus export`
+écartée) et la section *Réservé* du backlog (« Export hors machine planifié : écarté,
+les applications sauvegardent déjà vers un S3 externe par leur propre ordonnanceur »).
+Le motif de l'époque reste vrai pour les données applicatives. Il ne couvre pas le
+système du Spark, ses images, sa configuration, ni la recréation d'un Spark détruit —
+ce que le §8.3 disait lui-même un paragraphe plus haut. Les deux phrases sont
+**remplacées**, avec la raison, pas complétées.
+
+**Observations** (relevées dans le dépôt, lues et non déduites).
+
+- La table `backup` existe depuis la migration 001, **jamais écrite ni lue** par le
+  code, avec `spark_id … REFERENCES spark(id) ON DELETE CASCADE` : une archive
+  disparaîtrait avec son Spark, au moment précis où on en a besoin. Inutilisable
+  telle quelle ; remplacée, pas réutilisée.
+- `forge.id` vaut toujours 1 : rien ne distingue deux Forges qui partageraient un
+  bucket. « Par Forge » exige un identifiant, `forge.uid`.
+- Le §19.5 et SCHEMA §8 imposent que l'instantané ne soit jamais présenté comme une
+  sauvegarde. La coche doit donc dire « existe aussi hors de la machine », pas « est
+  une sauvegarde ».
+- Une destination S3 est un **canal de sortie de tous les disques de la Forge** : qui
+  la redirige exfiltre tout. C'est le raisonnement du §47.3.3 (« qui peut couper le
+  témoin en silence peut agir sans témoin »), retourné : le mot de passe de garde,
+  le journal, la notification s'imposent.
+- Le catalogue d'environnement de la Forge est **à une coche** de l'environnement d'un
+  Spark (§43.6). Le canal SMTP y range pourtant son mot de passe (SCHEMA §11). Pour des
+  identifiants qui ouvrent toutes les archives, ce précédent n'est pas suivi.
+- Briques réutilisables : le coffre AES-256-GCM (§43.9.2), le garde `scrypt`, les
+  canaux webhook et SMTP et leur liste fermée d'actions (§47), les fils de fond à
+  connexion propre (historien, veilleur), `FakeIncus`, la fonction d'admission de la
+  création. `sparkd/sauvegarde.py` sauvegarde le **registre** (SQLite) : même mot,
+  autre chose, nom conservé.
+- Une image MinIO épinglée est déjà présente sur le poste
+  (`quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z`) : un vrai S3 local est
+  disponible pour les preuves sans service cloud (CLAUDE.md §3). Présence constatée ;
+  **non lancée** à ce stade.
+- Où Incus écrit l'archive d'un export avant de la servir, et combien d'espace il
+  faut : **non mesuré**. `/` ne fait que 200 Gio sur la Forge cible.
+- `SCHEMA.md` §4 dit que `spark.id` est un ULID ; `sparks._new_id()` produit
+  `token_hex(12)`. Écart antérieur à ce chantier, consigné au rapport d'incohérences ;
+  le contrat n'en dépend pas (les identifiants de génération sont triables par le
+  temps, sans ULID).
+
+**Solutions envisagées pour le format** (le point qui commande le reste).
+
+1. *Une archive autonome par instantané* (image publiée depuis l'instantané) : la
+   coche est native, la conservation simple ; mais N images pleines par Spark sur S3.
+2. *Un export Incus complet par Spark* : la chaîne entière en un fichier.
+3. *`zfs send` incrémental direct* : le plus économe en octets, mais il touche aux
+   jeux de données internes d'Incus et exige des droits hors du modèle de `sparkd`.
+   Écarté.
+
+J'avais d'abord écrit de l'option 2 qu'elle « répète tout ». **C'était faux sur ZFS** :
+l'export *optimisé* est un flux `zfs send` où les instantanés partagent leurs blocs. Le
+responsable a proposé la variante : un export complet par Spark, une coche globale,
+un **fichier compagnon** listant les instantanés présents, et l'ancienne sauvegarde
+supprimée *seulement après* l'envoi complet de la nouvelle. J'y ai ajouté un piège :
+restaurer un vieil instantané détruit les plus récents (§19.1) ; si la génération
+suivante remplaçait aussitôt l'ancienne, le filet disparaîtrait à cet instant. D'où la
+règle `⊆` (§67.2). Les chiffres sur la taille de l'export optimisé sont **ceux de la
+documentation d'Incus, pas une mesure** : SPK-160 les établit, avec un seuil
+d'infirmation écrit à l'avance et un repli sur l'option 1.
+
+**Décisions du responsable, le 2026-11-10.**
+
+1. Une destination S3 par Forge, vérifiée (fonctionnement, droit d'écriture…), les
+   erreurs remontées au propriétaire.
+2. Une marque par instantané, croix rouge ou coche verte, une fois la destination bonne.
+3. Sauvegarde **d'office**, ressayée périodiquement.
+4. Archives par Forge et par Spark ; disque *et* informations du Spark.
+5. Récupération qui recrée le Spark et rétablit l'instantané, à la destruction et à la
+   connexion d'un S3 contenant des absents, dans la fenêtre de gestion complète.
+6. **Format : export complet par Spark + manifeste** compagnon, coche par Spark et par
+   instantané déduite du manifeste, règle `⊆` pour les remplacements, SPK-160 d'abord.
+7. **Chiffrement côté Forge avec une clé de sauvegarde** remise au propriétaire ; les
+   secrets d'environnement sont inclus, rechiffrés par cette clé.
+8. **Purge manuelle seulement** : rien ne s'efface de S3 sans un geste (« jamais
+   seule »).
+9. **Destruction : avertir et proposer de sauvegarder d'abord.**
+
+**Proposé par l'agent, non arbitré** (DAT §67.12, à trancher d'un mot) : calme de 10
+minutes avant l'export, sonde horaire, reprises 5 min / 15 min / 1 h / 6 h, rappel de 24
+h, bascule en dégradée, mot de passe de garde propre, `http` vers une adresse
+privée, pas de sauvegarde d'office d'un Spark sans instantané, bouton visible aussi en
+panne, « sauvegarder d'abord » en deux gestes (jamais de destruction différée),
+vérification en profondeur, protection restituée, reprise de l'identité d'un Spark
+détruit, construction STREAM relue par un tiers (`age` en repli), identifiants en
+colonnes propres, un seul export à la fois. Et la dépendance S3 : `boto3` par défaut,
+à trancher sur mesure dans SPK-161.
+
+**Décision de découpage.** Lot 9, sept unités : SPK-160 (mesure), SPK-161 (la
+destination), SPK-162 (une génération), SPK-163 (d'office, reprise, alertes), SPK-164
+(les coches et la destruction), SPK-165 (la fenêtre de gestion), SPK-166 (la
+récupération). Contrat au DAT §67, modèle au SCHEMA §8 bis. La décision est écrite et
+committée **avant** tout code (CLAUDE.md §5).
+
+**Conséquences.** DAT §8.3 corrigé ; ligne « Réservé » retirée du backlog ;
+`CONTINGENCE.md`, le manuel (M9), le README, le design system, `PROD_MIGRATIONS.md` et
+le changelog sont à écrire **avec le code qui les rend vrais**, pas avant : ils
+décrivent l'état réel (CLAUDE.md §5), et rien n'est livré. Aucune variable
+d'environnement. Aucune opération de production.
+
+**Vérifications à ce stade.** Documentation seule ; aucun code écrit, aucune preuve
+rejouée. Relu : l'absence d'écriture de la table `backup` (recherche dans
+`services/sparkd/src`), le `CASCADE` (migration 001), la liste fermée de
+`notification.ACTIONS`, le garde de `canaux.py`. **Non vérifié** : tout ce qui touche à
+Incus (taille de l'export, espace de travail, import sous un autre nom), à MinIO, et à
+un S3 réel.

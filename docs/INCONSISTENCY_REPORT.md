@@ -30,3 +30,18 @@ peu de CPU libre (journal du 2026-10-06, « pourrait manquer » sur le
 formulaire), et le parcours demande un plafond que la capacité ne couvre plus.
 Le refus lui-même est correct : c'est l'attente du parcours, ou le seed, qui
 n'a pas suivi.
+
+## 2026-11-10 · `spark.id` : « ULID » dans le schéma, `token_hex(12)` dans le code
+
+**Constaté** en spécifiant la sauvegarde externe (DAT §67). `docs/SCHEMA.md` §4 déclare
+`spark.id` « ULID » ; `sparks._new_id()` renvoie `token_hex(12)` (24 caractères
+hexadécimaux, non triables par le temps). Les instantanés suivent le même schéma
+(`snapshots.create` : `token_hex(12)`).
+
+**Comportement inchangé.** Rien ne casse : aucun code ne relit l'identifiant comme un
+ULID. Le contrat de la sauvegarde externe n'en dépend pas — ses identifiants de
+génération sont triables par le temps sans ULID (SCHEMA §8 bis).
+
+**Arbitrage demandé** : corriger le schéma (`spark.id` = 24 hexadécimaux), ou migrer
+les identifiants. La première voie suffit tant que personne n'a besoin du tri par le
+temps.

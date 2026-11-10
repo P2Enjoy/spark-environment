@@ -9756,6 +9756,202 @@ en éditant le fichier, serveur par serveur.
 
 ---
 
+## Lot 9 — La sauvegarde externe des instantanés
+
+Sept unités ouvertes le 2026-11-10 sur demande du responsable : chaque Forge se voit
+configurer un S3 externe, vérifié, et ses Sparks y sont sauvegardés d'office — disque
+(instantanés) et fiche —, avec une coche par instantané et une récupération qui
+recrée un Spark détruit. Contrat au `docs/DAT.md` §67, **écrit et committé avant le
+code** ; modèle de données au `docs/SCHEMA.md` §8 bis. Le journal du jour consigne ce
+que le responsable a arbitré et ce qui reste *proposé* (§67.12).
+
+**Remplace** la ligne « Export hors machine planifié : écarté » de la section
+*Réservé*, retirée dans le même changement : son motif (les applications ont leur
+propre sauvegarde) reste vrai pour les données applicatives, pas pour le Spark.
+
+**Règles communes à toutes les unités du lot.**
+
+- Aucune variable d'environnement : tout réglage vit au registre (§67.13).
+- Toute unité qui touche l'interface commence par la **lecture intégrale** de
+  `docs/DESIGN_SYSTEM.md` et de `docs/DESIGN_SYSTEM_APP.md` (CLAUDE.md §4), et se
+  vérifie visuellement **depuis l'accueil, à la souris et au clavier** (§16).
+- Épreuves lourdes (MinIO, `sparkd`, console, Chromium) : une seule à la fois, sous
+  `e2e/verrou.mjs` (CLAUDE.md §15 bis).
+- Le seed couvre chaque état livré (§67.13) ; le manuel (M9 étendu ou chapitre dédié),
+  le README, le DAT, le design system, `docs/PROD_MIGRATIONS.md` et le changelog sont à
+  jour **dans le changement qui livre**, pas après.
+
+### [ ] SPK-160 · Mesurer l'export Incus optimisé avec instantanés, et son import sous un autre nom
+
+**Mesure d'abord**, comme SPK-143 et SPK-145. La décision de format du §67.2 repose sur
+une propriété que la documentation d'Incus affirme et que personne n'a mesurée ici :
+qu'un export optimisé ZFS ne répète pas les blocs partagés avec les instantanés.
+
+- Spécification : `docs/DAT.md` §67.2 (la décision et son seuil d'infirmation), §67.7
+  (l'espace de travail), §8.5.
+- Dépend de : SPK-129 (le banc `make forge-vm` : un Incus et un ZFS réels).
+- Portée, sur la VM, avec un Spark de données incompressibles connues, à 0, 1, 3 et 5
+  instantanés dont les écarts sont connus :
+  1. la taille de l'export optimisé, de l'export non optimisé, et des données utiles ;
+  2. la durée, le CPU et les E/S de la Forge pendant l'export, Spark au repos puis en
+     écriture, et l'effet sur un Spark voisin ;
+  3. **où** Incus écrit l'archive avant de la servir, l'espace de travail requis, et si
+     elle se lit en flux pendant sa production ;
+  4. l'import sous un autre nom : instantanés intacts, restauration d'un instantané,
+     démarrage ;
+  5. l'export d'un Spark **en marche** : un témoin écrit avant, pendant et après ;
+  6. un envoi par parts de l'export vers MinIO : débit, mémoire du processus.
+- Aucune migration, aucune variable d'environnement, aucune opération de production.
+- DoD : les chiffres consignés dans le DAT §67.2 et au journal ; la décision
+  **confirmée, ou infirmée avec repli sur l'archive par instantané** (§67.2), §67.2 et
+  §67.3 réécrits en conséquence ; le seuil (c) du §67.2 tranché par le responsable sur
+  ces chiffres ; `@spec` sur le script de mesure.
+
+### [ ] SPK-161 · La destination S3 d'une Forge : configurer, vérifier, rester vérifiée
+
+- Spécification : `docs/DAT.md` §67.4 (la clé de sauvegarde), §67.5, §67.6, §67.9
+  (`backup.configure`, `backup.disable`, `backup.key_reveal`), §67.10 (l'onglet, état
+  vide et modale de configuration), §67.13 · `docs/SCHEMA.md` §8 bis · §47.3.3 (le
+  garde) · DESIGN_SYSTEM §6.27, §6.23 ; DESIGN_SYSTEM_APP SPK-DS-10, SPK-DS-17.
+- Dépend de : rien.
+- Portée :
+  1. `forge.uid` et `backup_target` (migration, retour arrière), suppression de
+     l'ancienne table `backup` ;
+  2. le client S3 — dépendance tranchée ici sur mesure et justifiée au DAT (CLAUDE.md
+     §19) ;
+  3. la batterie V1 à V12, typée, avec cause et remède lisibles, chacune prouvée en
+     échec par un cas distinct ;
+  4. les cinq états, la sonde horaire (fil de fond à connexion propre), l'API
+     `GET/PUT /v1/backup/target`, `POST …/verify`, `…/disable`, `…/enable`,
+     `…/key/confirm`, `…/key/reveal`, toutes gardées par le mot de passe (sauf les
+     lectures) ;
+  5. la clé de sauvegarde : génération, affichage unique, confirmation par retape, bloc
+     `cles/<id>.verif`, `forge.json` ;
+  6. l'onglet *Forge → Sauvegarde externe* : état vide, modale de configuration
+     (saisie → rapport → clé), avertissement de coquille ;
+  7. MinIO épinglé dans la pile de développement, destination seedée par l'API.
+- DoD : unitaires (chaque cause typée contre MinIO : mauvaise clé secrète, bucket
+  absent, lecture seule, sans suppression, TLS invalide, hôte injoignable, horloge
+  simulée) ; **API directe** : configurer, désactiver, afficher la clé et vérifier sans
+  mot de passe sont refusés ; **aucun secret** dans une réponse, le journal ou un log
+  (preuve par recherche) ; E2E depuis l'onglet au clavier, y compris le refus de
+  clé non confirmée ; captures observées ; manuel, README, DAT, DESIGN_SYSTEM_APP,
+  PROD_MIGRATIONS, changelog ; `@spec` / `@verifies`.
+- **Reste, pour passer `[x]` : nécessite une action humaine** — la preuve contre le
+  S3 réel du propriétaire (§67.13).
+
+### [ ] SPK-162 · Une génération : fiche, manifeste, chiffrement, export et envoi
+
+- Spécification : `docs/DAT.md` §67.2 (le format, la règle de remplacement), §67.3,
+  §67.4 (la construction), §67.5 · `docs/SCHEMA.md` §8 bis.
+- Dépend de : SPK-160 (la décision de format), SPK-161 (la destination).
+- Portée :
+  1. `export_instance` / `import_instance` dans le protocole `IncusClient`, dans
+     `UnixSocketIncus` et dans `FakeIncus` ;
+  2. la **fiche** du Spark et sa preuve de complétude (§67.2) ;
+  3. le flux chiffré par segments, et sa relecture ;
+  4. l'envoi par parts, le manifeste **en dernier**, la validation, la règle de
+     remplacement `⊆` et la suppression manifeste-d'abord ;
+  5. `backup_generation`, `backup_generation_snapshot` (migration) ;
+  6. `POST /v1/sparks/{nom}/backup` (une génération maintenant) et
+     `GET /v1/sparks/{nom}/backup` (générations, couverture), journal
+     `backup.generation`.
+- DoD : unitaires — les **cinq altérations** du flux sont refusées (segment altéré,
+  segments permutés, flux tronqué, mauvaise clé, objet déplacé), la règle `⊆` par
+  tableau de cas (dont la restauration qui détruit `b`), la fiche qui échoue quand une
+  table à `spark_id` n'est ni couverte ni exclue ; intégration contre MinIO — un
+  envoi coupé laisse un orphelin ignoré et ses parts annulées, aucun octet de clair
+  sur le S3 (lecture directe du bucket) ; **relecture de la construction par une
+  personne qui n'en est pas l'auteur** ; preuve sur Incus réel par `make forge-vm`.
+  Documents, `@spec` / `@verifies`.
+
+### [ ] SPK-163 · Sauvegarder d'office, ressayer, prévenir le propriétaire
+
+- Spécification : `docs/DAT.md` §67.7, §67.9, §67.6 (« remonter au propriétaire ») ·
+  §47.2 (la liste fermée) · §21.5 bis · §52.2.
+- Dépend de : SPK-162.
+- Portée :
+  1. `backup_job` (migration) et le fil d'exécution, une génération à la fois, repris
+     au redémarrage ;
+  2. les déclencheurs : instantané créé (calme de 10 min), finalisation de la
+     destination, « Sauvegarder maintenant » ;
+  3. la reprise à 5 min / 15 min / 1 h / 6 h, « Réessayer maintenant », l'attente
+     d'espace, le plafond de débit ;
+  4. `backup.degraded` et `backup.healed` : transitions, rappel de 24 h, **exception
+     nommée** dans `notification.py`, vocabulaire du journal, preuve de fermeture de
+     la liste ;
+  5. l'avertissement de coquille, tant que la cause dure.
+- DoD : unitaires (déclencheurs, calme, backoff, transitions sans doublon, aucun
+  message sur un échec isolé, file reprise après redémarrage) ; intégration — MinIO
+  arrêté puis relancé, la génération reprend et aboutit, **un seul** message de panne
+  et **un seul** de rétablissement partent ; la panne de tous les canaux ne bloque
+  rien (§47.5) ; E2E avec captures ; documents, `@spec` / `@verifies`.
+
+### [ ] SPK-164 · La coche « Sauvegarde externe » de chaque instantané, et la destruction qui la lit
+
+- Spécification : `docs/DAT.md` §67.8 · §19.5 · DESIGN_SYSTEM §1.5, §6.22, §6.23 ;
+  DESIGN_SYSTEM_APP SPK-DS-29, SPK-DS-26 · `docs/SCHEMA.md` §8 bis
+  (`backup_generation_snapshot`) · manuel M9.
+- Dépend de : SPK-162, SPK-163.
+- Portée :
+  1. la marque et le bouton à côté de chaque instantané, aux quatre états, plus la
+     coche globale du Spark ;
+  2. « Sauvegarder maintenant » depuis ✗ ; le détail et « Vérifier » depuis ✓ ;
+  3. la confirmation de destruction qui liste les marques et offre « Prendre un dernier
+     instantané et le sauvegarder », geste séparé ; le message de sortie qui nomme la
+     dernière sauvegarde ;
+  4. le seed : un ✓, un ✗ planifié, un échec, un en cours, un Spark détruit
+     récupérable.
+- DoD : unitaires et E2E au clavier ; **rien n'est vert avant que le manifeste existe**
+  (preuve) ; la couleur n'est jamais seule (§1.5) ; captures sur les formats d'écran
+  usuels, données longues comprises ; le §19.5 respecté dans les libellés ; M9 mis à
+  jour avec captures renouvelées.
+
+### [ ] SPK-165 · La fenêtre de gestion complète : inventaire, vérification, réglages, purge
+
+- Spécification : `docs/DAT.md` §67.10 · DESIGN_SYSTEM §6.27, §6.13, §6.23 ;
+  DESIGN_SYSTEM_APP SPK-DS-17, SPK-DS-26.
+- Dépend de : SPK-162, SPK-164 (la lecture de l'inventaire et les marques).
+- Portée :
+  1. les cinq sections (*État*, *Sparks sauvegardés*, *Travaux*, *Réglages*, *Clé*) et
+     leur composition, fixée après lecture intégrale du design system ;
+  2. l'inventaire lu sur S3, mis en cache, daté ; les anciennes générations conservées
+     et ce qu'elles portent seules ; les octets retenus ;
+  3. « Vérifier » et « Vérifier en profondeur » ;
+  4. les réglages : plafond de débit, désactiver, réactiver, changer de destination
+     (avec l'avertissement du §67.6) ;
+  5. la **purge** : confirmation dans le flux, frappe du nom du Spark, mot de passe de
+     garde, journal et notification `backup.purge` ;
+  6. le bandeau « N Sparks sauvegardés ne sont pas sur cette Forge ».
+- DoD : unitaires ; API directe — la purge sans mot de passe est refusée ; E2E au
+  clavier ; états chargement / vide / erreur par section ; captures ; manuel, DESIGN_SYSTEM_APP
+  (une règle SPK-DS), changelog.
+
+### [ ] SPK-166 · Récupérer un Spark depuis la sauvegarde externe
+
+- Spécification : `docs/DAT.md` §67.11, §67.4 (clés de lecture), §14.2 · `docs/DAT.md`
+  §35 (protection) · `docs/CONTINGENCE.md` (à étendre).
+- Dépend de : SPK-162, SPK-165.
+- Portée :
+  1. les contrôles préalables, l'admission control par la fonction de création, le
+     nom, l'adresse ;
+  2. le registre d'abord, l'import en flux avec comparaison de l'empreinte, la reprise
+     de l'identité, le rattachement des instantanés, le retour à un instantané choisi ;
+  3. la fiche rattachée ligne par ligne, chaque conflit rapporté ; le Spark rendu
+     arrêté ; le rapport ; `backup.recover` et sa notification ;
+  4. une autre Forge du même bucket : le sélecteur, la clé demandée, la clé de lecture
+     conservée sur coche ;
+  5. les trois portes (fenêtre, message de destruction, bandeau de connexion).
+- DoD : unitaires (chaque étape défaite à l'échec, capacité refusée sans rien
+  écrire, nom pris, empreinte différente) ; intégration contre MinIO et Incus réel ;
+  **E2E du parcours canonique du §67.15** : détruire un Spark, le récupérer, retrouver le
+  témoin d'avant l'instantané et perdre celui d'après ; une Forge neuve (registre
+  vide) qui récupère avec la seule clé ; `CONTINGENCE.md`, manuel, README, changelog ;
+  **le lot clos** : `[x]` seulement après la preuve contre le S3 réel du propriétaire
+  (action humaine).
+
+---
+
 ## Réservé, non planifié
 
 - **Serveur MCP sur un Spark** : piste étudiée le 2026-09-02 et laissée hors
@@ -9766,5 +9962,3 @@ en éditant le fichier, serveur par serveur.
   techniquement ouvert.
 - Multi-serveurs.
 - Quotas d'E/S disque par Spark au-delà de la priorité.
-- Export hors machine planifié : écarté, les applications sauvegardent déjà vers un
-  S3 externe par leur propre ordonnanceur.

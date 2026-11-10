@@ -960,11 +960,15 @@ Une sauvegarde applicative vers S3 protège les **données de l'application**. E
 ne restaure ni le système du Spark, ni ses images, ni sa configuration. Les deux
 mécanismes ne se substituent pas : ils ne protègent pas la même chose.
 
-Ce que la sauvegarde applicative externe **rend effectivement superflu**, et qui
-sort donc du périmètre : la planification d'`incus export` comme voie principale de
-reprise, et toute ambition de réplication `send`/`receive` hors machine. L'unité
-SPK-13 s'en trouve réduite aux instantanés locaux, l'export restant une opération
-manuelle.
+**Révisé le 2026-11-10.** Ce paragraphe écartait la planification d'`incus export` et
+laissait l'export hors machine « une opération manuelle », au motif que la sauvegarde
+applicative externe suffisait. Le responsable l'a renversé : un Spark détruit, ou un
+pool perdu, ne se recrée aujourd'hui qu'à la main et depuis rien, puisque la
+sauvegarde applicative ne rend ni le système, ni les images, ni la configuration (cf.
+ci-dessus). La **sauvegarde externe** (§67) exporte donc chaque Spark vers un S3
+configuré par Forge, d'office, avec ses instantanés et sa fiche. Reste écartée : toute
+ambition de réplication `send`/`receive` continue entre machines. L'unité SPK-13 reste
+réduite aux instantanés locaux ; la sauvegarde externe est le lot 9.
 
 ### 8.4 Capacité des pilotes, relevée dans la documentation Incus
 
@@ -16242,3 +16246,572 @@ croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
 - `creer-pool.sh` lit toujours ses réglages dans l'environnement
   (`SPARK_POOL_*`, documentées au README) : non modifié ici.
 - L'ARC par défaut n'est pas dérivé de la RAM (§66.2 point 7).
+
+## 67. La sauvegarde externe : les instantanés d'un Spark sur un S3 : contrat (SPK-160 à SPK-166)
+
+*Contrat écrit le 2026-11-10 sur arbitrage du responsable, **avant le code** : rien
+n'est livré. Chaque point porte son statut. **Arbitré** : décidé par le responsable
+le 2026-11-10. **Proposé** : posé par l'agent pour que le contrat soit complet, pas
+encore arbitré — la liste est au §67.12. **Mesure** : dépend de SPK-160. Un point
+sans marque est la conséquence de ceux-là.*
+
+### 67.1 Le besoin, et ce qu'il révise
+
+Demande du responsable : chaque Forge peut se voir configurer un **S3 externe** (URL,
+compte, mot de passe…), vérifié par le fonctionnement et par le droit d'écriture, et
+**toute erreur remonte au propriétaire**. Quand la destination est bonne, à côté de
+chaque instantané apparaît un bouton « Sauvegarde externe », **croix rouge** si
+l'instantané n'est pas sauvegardé, **coche verte** s'il l'est. Une fois la destination
+configurée, la sauvegarde est faite **d'office** et **ressayée périodiquement** si elle
+a échoué. Les sauvegardes sont archivées **par Forge et par Spark**, et retiennent non
+seulement les disques (instantanés) mais aussi **les informations du Spark**. Quand un
+Spark est détruit, ou quand on connecte un S3 qui contient des Sparks ou des
+instantanés absents de la Forge, une **option de récupération** recrée le Spark et
+rétablit l'instantané — dans la **fenêtre de gestion complète** de la sauvegarde
+externe, visible quand elle est configurée.
+
+**Ce que cela révise, et qui est remplacé dans le même changement** (pas juxtaposé) :
+
+- le dernier paragraphe du §8.3, qui écartait la planification d'`incus export` et
+  laissait l'export « une opération manuelle » ;
+- la ligne « Export hors machine planifié : écarté » de la section *Réservé* du
+  backlog. Leur motif — les applications sauvegardent déjà vers un S3 par leur propre
+  ordonnanceur — reste vrai **pour les données applicatives**. Il ne couvre ni le
+  système du Spark, ni ses images, ni sa configuration, ni la recréation d'un Spark
+  détruit (§8.3, premier paragraphe).
+
+**Ce que cela ne change pas.** Le §19.5 tient : un instantané n'est pas une sauvegarde,
+et la console ne le présente jamais comme tel. La coche ne dit pas « cet instantané est
+une sauvegarde » ; elle dit **« il existe aussi hors de cette machine »**. Les deux
+notions restent distinctes dans le modèle et à l'écran (`docs/SCHEMA.md` §8).
+
+**Vocabulaire.** La *destination* est le S3 d'une Forge. Une *génération* est une
+sauvegarde complète d'un Spark à un instant. Le *manifeste* est le fichier compagnon
+qui la décrit et la valide. La *fiche* est ce que le registre sait du Spark (§67.2). La
+*clé de sauvegarde* chiffre le tout (§67.4). Le *propriétaire* est le responsable de la
+Forge : celui qui ouvre sa console et reçoit ses alertes (§47). Ce n'est pas un compte :
+le lot 7 n'est pas livré, et aucune identité n'existe encore côté `sparkd`.
+
+**Un nom à ne pas confondre.** Le module `sparkd/sauvegarde.py` existant sauvegarde le
+**registre** (SQLite, §36, §40.7). Il garde son nom et son rôle. La fonctionnalité de
+ce chapitre s'appelle *sauvegarde externe* à l'écran et dans la documentation.
+
+### 67.2 Le format : un export complet par Spark, une génération à la fois — arbitré
+
+**Décision.** Une génération = **un export Incus optimisé** du Spark (l'instance, tous
+ses instantanés, son état au moment de l'export) **plus un manifeste** compagnon. Le
+responsable a proposé cette variante contre « une archive par instantané » ; elle
+l'emporte sur trois points :
+
+| | une archive par instantané | export complet + manifeste |
+|---|---|---|
+| octets conservés sur S3 | N images pleines par Spark | une génération par Spark (deux le temps d'un remplacement) |
+| restauration | un état, l'instantané à re-poser | la chaîne entière, instantanés vrais |
+| coche par instantané | native | **déduite du manifeste** |
+
+Sur ZFS, l'export *optimisé* est un flux `zfs send` : les instantanés y partagent leurs
+blocs. Un Spark de 10 Gio à 5 instantanés devrait donc peser ses données plus les
+écarts, non cinq fois ses données. **C'est la documentation d'Incus qui l'affirme, pas
+une mesure** — d'où SPK-160, première unité du lot.
+
+**Le seuil d'infirmation (mesure).** La décision tient si, sur la VM de `make
+forge-vm` : (a) l'export optimisé d'un Spark à 5 instantanés pèse au plus ses données
+utiles plus la somme des écarts plus 10 % ; (b) son import sous un autre nom restitue
+les 5 instantanés, restaurables ; (c) le coût en CPU et en E/S pour les Sparks voisins
+est jugé acceptable par le responsable, sur les chiffres. **Sinon, repli** sur une
+archive autonome par instantané (image publiée depuis l'instantané) : le reste du
+contrat — destination, chiffrement, coches, fenêtre, récupération — tient, et seuls
+§67.2 et §67.3 sont réécrits.
+
+**Le manifeste est écrit en dernier, et c'est lui qui valide.** Une génération sans
+manifeste n'existe pas : c'est un envoi interrompu, un **orphelin**. Cela remplace tout
+pointeur « génération courante » mutable. La dernière génération d'un Spark est celle
+dont le manifeste existe et dont l'identifiant est le plus grand.
+
+**Le contenu du manifeste** (chiffré, §67.4) : version du format ; identifiant de la
+génération ; identifiant et nom d'hôte de la Forge ; versions d'Incus et de ZFS ;
+options de l'export ; taille claire, taille chiffrée, **SHA-256 de l'export en clair** ;
+l'**état** du Spark au moment de l'export ; la liste des **instantanés** (identifiant du
+registre, nom, date de création, taille, `stateful`) ; et la **fiche**.
+
+**La fiche — ce que le registre sait du Spark.** Tout ce qui est rattaché à un `spark_id`
+et qu'on ne peut pas déduire de l'instance : la ligne `spark` (ressources, mode CPU,
+image, quota disque, `docker_enabled`, protection, adresse), les autorisations de clés
+SSH (clés publiques, étiquettes, empreintes), les routes d'ingress, les ports publiés
+et leur portée, l'appartenance aux réseaux privés (par nom), les entrées
+d'environnement **propres au Spark** — ordinaires en clair dans le manifeste chiffré,
+secrètes **rechiffrées** (§67.4) —, les sélections dans le catalogue de la Forge (par
+nom), les trois notes (§54), le projet (par nom). **Hors fiche, et dit** : les entrées
+du catalogue de la Forge (une Forge neuve ne les a pas ; une sélection qui n'a plus de
+cible est *rapportée* à la récupération, pas inventée), l'historique de métriques, le
+journal d'audit, l'observation d'amorçage (relevée de nouveau).
+
+**Une preuve garde la fiche complète** : elle échoue quand une table portant
+`spark_id` n'est ni dans la fiche ni dans une liste d'exclusions nommée et motivée. Une
+table ajoutée plus tard ne sera pas oubliée en silence — même esprit que la preuve des
+variables d'environnement (CLAUDE.md §3).
+
+#### La règle de remplacement — arbitrée
+
+Quand une nouvelle génération est **validée**, l'ancienne n'est pas supprimée
+d'office. Elle l'est **si et seulement si chaque instantané qu'elle contient figure
+aussi dans la nouvelle** (comparaison sur l'identifiant du registre). Sinon elle est
+**conservée**, montrée comme *ancienne génération* avec les instantanés qu'elle est
+seule à porter, et seule la purge manuelle (§67.10) l'efface.
+
+- instantanés `a, b`, on prend `c` → la nouvelle porte `a, b, c` ⊇ `a, b` : l'ancienne
+  est supprimée, **après** validation de la nouvelle ;
+- on restaure `a` localement (ce qui détruit `b`, §19.1) → la nouvelle porte `a` seul :
+  l'ancienne, qui portait `b`, **est conservée** — c'est exactement le moment où le
+  filet de sécurité servirait ;
+- on supprime `b` à la main : même résultat. Supprimer un instantané en local ne libère
+  donc **pas** d'espace sur S3, et la fenêtre dit combien d'octets sont retenus par des
+  instantanés qui n'existent plus ici.
+
+À la suppression d'une génération, le **manifeste part d'abord**, l'export ensuite : une
+suppression interrompue laisse un orphelin signalé, jamais une génération qui ment.
+
+**Cohérence.** Un export de Spark en marche est aussi cohérent qu'un instantané (§19.2) :
+l'état d'un arrêt brutal, pas un point de cohérence applicatif. Les sauvegardes
+applicatives restent nécessaires (§8.3).
+
+**Limite acceptée.** Un export optimisé ne se restaure que sur un pool du **même
+pilote** — ZFS, seul supporté (§8.5). Le manifeste porte les versions d'Incus et de ZFS
+pour avertir avant d'essayer.
+
+### 67.3 La disposition sur le S3
+
+Aucun objet n'est réécrit : on crée, on supprime. Un préfixe de base facultatif précède
+tout (réglage de la destination).
+
+    <préfixe>/spark-sauvegarde/v1/
+      cles/<id_de_clé>.verif                              (§67.4)
+      forges/<uid_forge>/
+        forge.json                                        identité, en clair
+        .sonde/<id>                                       objets de vérification
+        sparks/<nom>--<spark_id>/
+          <id_génération>/export.enc                      l'export, chiffré
+          <id_génération>/manifeste.enc                   le manifeste, chiffré, EN DERNIER
+
+- `<uid_forge>` est l'identifiant stable de la Forge (colonne `forge.uid`, créée par
+  SPK-161 : `forge.id` vaut toujours 1 et ne distingue rien). Plusieurs Forges peuvent
+  partager un bucket ; chacune écrit sous son préfixe et **lit** les autres (§67.11).
+- `<id_génération>` est triable par le temps : `g` + horodatage UTC compact + 6
+  caractères hexadécimaux. Le plus grand identifiant ayant un manifeste est le plus
+  récent.
+- `forge.json` ne porte que `format`, `uid`, `hostname`, `created_at` : de quoi
+  reconnaître une Forge dans un sélecteur **avant** d'avoir la clé.
+- Les **noms de Spark apparaissent en clair dans les clés d'objets**, comme les dates et
+  les tailles. Seul le contenu est chiffré. Le manuel le dit.
+- **Envoi par parts** : `max(64 Mio, ⌈taille chiffrée / 9 000⌉)`, arrondi au Mio, dans la
+  limite de 5 Gio par part. Un envoi abandonné est annulé (`AbortMultipartUpload`) :
+  ne jamais laisser de parts facturées sans objet.
+
+### 67.4 Le chiffrement et la clé de sauvegarde — arbitré
+
+**Tout ce qui part sur le S3 est chiffré par la Forge, avant l'envoi.** Le fournisseur
+est un tiers : il ne lit ni disque, ni secret, ni fiche.
+
+**La clé de sauvegarde** : 32 octets aléatoires, générés à la première configuration.
+Elle est **montrée une seule fois** à l'écran, en texte à copier (base32 par groupes,
+quatre caractères de contrôle), et la destination reste *à finaliser* — aucun export —
+tant que le propriétaire ne l'a pas **retapée ou recollée** pour prouver qu'il l'a
+gardée **ailleurs que sur la Forge**. L'écran dit pourquoi : *perdre la Forge ET la clé,
+c'est perdre toutes les archives*. Elle est conservée au coffre de la Forge (§43.9.2),
+et se réaffiche sur demande avec le mot de passe de garde (journalisé, notifié :
+`backup.key_reveal`).
+
+**Où elle vit, et pourquoi pas au catalogue d'environnement.** Les identifiants S3 et la
+clé de sauvegarde sont chiffrés par **les mêmes primitives** que les secrets
+(`environnement.chiffrer`, AES-256-GCM, clé `secret.key`, nom en donnée associée) mais
+dans des **colonnes propres** de `backup_target`, **pas** comme entrées `env_entry` de la
+Forge. Une entrée du catalogue est à un coche près dans l'environnement d'un Spark
+(§43.6) : un identifiant d'accès à toutes les archives ne doit jamais être à une coche
+d'une cellule locataire. *C'est un écart au précédent du canal SMTP (SCHEMA §11), qui
+range son mot de passe au catalogue ; il est assumé ici pour cette raison.*
+
+**La construction.** AES-256-GCM, comme le §43.9.2, en **flux** par segments de 1 Mio.
+Chaque objet (export, manifeste, bloc de vérification) reçoit une sous-clé
+`HKDF-SHA256(clé de sauvegarde, sel aléatoire de 16 octets, info = format ‖ rôle ‖ id de
+génération)` ; le nonce de 12 octets est le **numéro de segment sur 11 octets suivi
+d'un octet « dernier segment »**, et la donnée associée est l'en-tête (format, rôle,
+génération). C'est la construction STREAM, que `age` et Tink emploient déjà ; elle
+n'emploie que des primitives de `cryptography`. Elle rend refusables : un segment
+altéré, deux segments permutés, un flux **tronqué** (le dernier segment manque), une
+mauvaise clé, un objet déplacé d'un rôle ou d'une génération à une autre.
+
+**C'est la seule pièce de cryptographie que le produit assemble lui-même**, et elle
+exige une relecture par une personne qui n'est pas son auteur avant le passage à `[x]`
+de SPK-162, plus des preuves de refus pour chacune des cinq altérations ci-dessus.
+Écartés : `openssl enc` (pas d'étiquette GCM, §43.9.2), `gpg` ou `age` en binaire (un
+exécutable de plus à installer sur chaque Forge), le chiffrement du fournisseur seul (il
+lit tout). *À rouvrir si la relecture préfère `age`.*
+
+**Les secrets d'environnement** d'un Spark sont déchiffrés avec le coffre de la Forge au
+moment de la fiche, et **rechiffrés par le flux ci-dessus** ; à la récupération, ils
+sont déchiffrés avec la clé de sauvegarde et rechiffrés avec le coffre de la Forge qui
+récupère. Aucune valeur en clair sur disque, dans une réponse, dans le journal (§21.2),
+ni dans un message d'alerte.
+
+**Un bloc de vérification** `cles/<id_de_clé>.verif` — un texte connu, chiffré — permet à
+une Forge neuve de vérifier une clé tapée **avant** de télécharger quoi que ce soit.
+`<id_de_clé>` est une empreinte HMAC tronquée (§43.9.3), qui ne permet pas de retrouver
+la clé.
+
+**Ce que cela ne protège pas.** `root` sur la Forge (il lit le coffre) ; une clé volée
+(tout se lit) ; les métadonnées en clair du §67.3. **Ransomware** : la Forge détient un
+droit de suppression (il faut remplacer les générations) ; qui l'a compromise peut
+effacer les archives. Le remède est chez le fournisseur — versionnage ou verrou d'objet —
+et la vérification V10 le signale (§67.6). **Pas de rotation de clé en v1** : changer de
+clé, c'est repartir de nouvelles générations ; les anciennes restent lisibles avec leur
+clé (une *clé de lecture*, §67.11).
+
+### 67.5 Le modèle de données
+
+Le détail des colonnes est à `docs/SCHEMA.md` §8 bis — une seule source. Les décisions :
+
+- **`backup_target`** : une ligne, `CHECK (id = 1)`, posée par la migration, comme
+  `notify_channels` (SCHEMA §11) : « aucune destination » est un **fait** (`state =
+  'non_configuree'`), pas une absence de ligne. Elle porte aussi le mot de passe de
+  garde (même mécanisme `scrypt` que §47.3.3, **mot de passe propre — proposé**).
+- **`backup_generation` et `backup_generation_snapshot`** : **aucune clé étrangère vers
+  `spark`**. L'ancienne table `backup` avait `ON DELETE CASCADE` : une génération
+  disparaissait avec son Spark, c'est-à-dire au moment précis où on en a besoin. Elle
+  n'a jamais été écrite ni lue par le code : la migration la supprime.
+- **`backup_job`** : la file persistante (§67.7). Un redémarrage de `sparkd` reprend.
+- **`forge.uid`** : identifiant stable de la Forge, hexadécimal opaque (`randomblob`).
+- **La coche est dérivée, jamais stockée sur l'instantané** : un instantané est ✓ si
+  son identifiant figure dans la dernière génération *validée* de son Spark.
+- Les numéros de migration sont ceux **libres à la livraison** : d'autres travaux
+  avancent sur la même branche.
+
+### 67.6 La destination : configurer, vérifier, rester vérifiée
+
+**Les réglages** : URL du point d'accès, région, bucket, préfixe de base (facultatif),
+adressage (`auto`, `path`, `virtual`), identifiant d'accès, clé secrète. Le **plafond de
+débit** (Mbit/s, 0 = illimité) se règle dans la fenêtre (§67.10), pas à la
+configuration. L'URL est en `https`. **Proposé** : `http` n'est accepté que vers une
+adresse de boucle locale ou privée, avec un avertissement permanent « transport non
+chiffré » ; la pile de développement en a besoin (§67.13) et c'est un fait visible, pas
+un interrupteur caché.
+
+**Cinq états**, jamais confondus (§14.6) : `non configurée` · `à finaliser` (vérifiée,
+clé non confirmée) · `saine` · `dégradée` (cause, depuis quand, prochaine tentative) ·
+`désactivée` (réglages gardés, aucune sauvegarde, aucune sonde).
+
+**La batterie de vérifications.** Chaque ligne rend un verdict, une **cause typée** et un
+**remède lisible**, plus le message du S3 tel quel, replié (SPK-DS-17).
+
+| # | Contrôle | Bloquant | Ce qu'il établit | Cause typée |
+|---|---|---|---|---|
+| V1 | Adresse | oui | schéma admis, hôte résoluble | `adresse` |
+| V2 | Joignabilité | oui | TCP + TLS en 10 s, chaîne valide, nom conforme ; échéance < 14 j = avertissement | `dns` · `connexion` · `tls` · `delai` |
+| V3 | Horloge | au-delà de 14 min | écart Forge / en-tête `Date` ; avertit dès 5 min (SigV4 refuse à 15) | `horloge` |
+| V4 | Identité | oui | la requête signée est acceptée (`HeadBucket`) | `authentification` · `signature` · `bucket_introuvable` · `region` |
+| V5 | Liste | oui | `ListObjectsV2` sous le préfixe | `permission_liste` |
+| V6 | Écriture | oui | `PutObject` d'une sonde sous `.sonde/` | `permission_ecriture` |
+| V7 | Relecture | oui | `GetObject`, empreinte identique | `permission_lecture` · `integrite` |
+| V8 | Envoi par parts | oui | `CreateMultipartUpload`, **une part de 5 Mio (à la configuration seulement)**, `AbortMultipartUpload` | `permission_multipart` |
+| V9 | Suppression | oui | `DeleteObject` de la sonde — sans lui, aucune génération ne se remplace | `permission_suppression` |
+| V10 | Versionnage et verrou | non | versionnage ou verrou actifs → « supprimer ne libère pas l'espace » ; refus de lecture → « non vérifiable » | — |
+| V11 | Exposition publique | non | bucket public → avertissement fort ; refus de lecture → « non vérifiable » | — |
+| V12 | Ce qui ne se vérifie pas | — | espace libre et quota du fournisseur : l'API S3 ne les donne pas ; **l'écran le dit** | — |
+
+**Quand.** À la configuration (V1–V12 entières) ; à la demande (« Vérifier maintenant ») ;
+puis **toutes les heures** par une sonde légère (V1–V9 sans la part de 5 Mio) —
+*constante documentée, proposée*. Aucune écriture hors de `.sonde/` ; la sonde est
+supprimée, et une sonde qui ne part pas est signalée comme orpheline.
+
+**Toute modification** — configurer, changer la destination, désactiver, réactiver —
+exige le **mot de passe de garde** (§47.3.3, même refus `403`), à chaque écriture. Le
+motif est le §47.3.3 retourné : une destination est un **canal de sortie** de tous les
+disques de la Forge. Qui la redirige vers un bucket qu'il contrôle exfiltre tout. Changer
+de destination **ne déplace pas** les archives : elles restent à l'ancienne, l'inventaire
+ne les verra plus, et chaque Spark repart d'une première génération. L'écran le dit avant
+le geste.
+
+**Remonter au propriétaire** — trois voies, aucune ne suffit seule :
+
+1. **l'écran** : un avertissement de coquille (SPK-DS-10), accent et jamais rouge,
+   `role="status"`, qui persiste tant que la cause persiste et s'efface avec elle ; la
+   ligne de l'instantané concerné ; la fenêtre de gestion ;
+2. **les canaux hors bande du §47** (webhook, SMTP), sur **transition** — §67.9 ;
+3. **le journal d'audit**.
+
+Si aucun canal n'est actif, la fenêtre le **dit** : le propriétaire ne sera pas prévenu
+hors de cette console (SPK-DS-26 : un texte que le produit ne vérifie pas le dit).
+
+### 67.7 Sauvegarder d'office, et ressayer
+
+**Ce qui déclenche.** (a) Un instantané créé : une génération est *planifiée* après **10
+minutes de calme** depuis le dernier instantané du Spark — plusieurs instantanés
+voisins partagent un export (*constante, proposée*). (b) La finalisation de la
+destination : tout Spark portant un instantané qu'aucune génération ne couvre. (c) Le
+geste « Sauvegarder maintenant » (§67.8), qui passe outre le calme. **Proposé** : un
+Spark sans aucun instantané n'est pas sauvegardé d'office — rien à retenir au sens de la
+demande.
+
+**Une génération à la fois sur toute la Forge.** Une file série, la plus ancienne
+demande d'abord. Un export lit un disque mécanique et tient le lien de la Forge, qui est
+partagé avec les Sparks : deux en parallèle n'ajoutent rien. Le plafond de débit se
+tient dans l'envoi.
+
+**Les étapes**, chacune visible : `planifiée` → `préparation` (espace de travail
+vérifié, fiche relevée) → `export` → `envoi` (parts chiffrées) → `validation` (taille et
+empreinte relues, **puis** manifeste) → `validée` → *nettoyage* (règle du §67.2).
+
+**L'espace de travail (mesure).** Incus écrit l'archive avant de la servir. Où, et
+combien il en faut, est mesuré par SPK-160 ; `/` ne mesure que 200 Gio sur la Forge
+cible. Avant tout export, la Forge compare l'espace requis à l'espace libre : **sinon la
+génération attend** (état `en attente d'espace`, avec les deux chiffres) — ce n'est pas
+un échec et cela ne réveille personne.
+
+**La reprise.** Un échec ne perd rien : la génération passe à `échouée` avec sa cause
+typée (celles du §67.6, plus `export`, `espace`, `instance_absente`, `integrite`) ;
+nouvelle tentative après **5 min, 15 min, 1 h, puis toutes les 6 h** (*proposé*),
+remise à zéro au succès ; un bouton « Réessayer maintenant ». Les parts déjà envoyées
+sont reprises (`ListParts`) tant que l'export local existe ; sinon on repart de zéro. La
+file est au registre : **un redémarrage de `sparkd` reprend**. Le fil est un fil de fond
+à connexion propre, comme l'historien (§52.2) et le veilleur : une panne ne l'arrête pas
+et ne bloque pas l'arrêt du service.
+
+**Les gestes de la Forge ne l'attendent pas.** L'export **lit** : il ne modifie ni l'état
+ni la configuration d'un Spark, protégé ou non (§35). Un Spark détruit pendant sa
+génération l'annule proprement (`AbortMultipartUpload`, cause `instance_absente`).
+
+### 67.8 Les coches : ce que dit un instantané
+
+À côté de **chaque instantané** de l'onglet *Instantanés* d'un Spark, un bouton
+« Sauvegarde externe ». **Quatre états**, jamais de vert par anticipation (SPK-DS-29), et
+chacun lisible sans la couleur (DESIGN_SYSTEM §1.5) :
+
+| État | Marque | Dit |
+|---|---|---|
+| sauvegardé | coche verte + texte | « Sauvegardé le … » |
+| non sauvegardé | croix rouge + texte | « Planifié vers … », ou « Échec : <cause> — prochaine tentative à … » |
+| en cours | indicateur neutre + texte | l'étape, et la progression de l'envoi |
+| destination en panne | croix rouge + texte | « Destination dégradée : <cause> » |
+
+- **Cliquer sur ✗** engage « Sauvegarder maintenant » : une génération couvre *tous* les
+  instantanés en attente du Spark. L'écran le dit — le geste n'est pas par instantané.
+- **Cliquer sur ✓** montre la génération, la date, la taille, l'identifiant de la clé, et
+  « Vérifier ».
+- **Une coche globale par Spark** : à jour · en retard (N instantanés) · jamais
+  sauvegardé.
+- **Visible** dès que la destination est finalisée, **y compris dégradée ou désactivée**
+  (*proposé* : la demande dit « quand tout est bon » ; masquer le bouton en cas de panne
+  cacherait justement la croix qui prévient).
+- Le libellé garde la distinction du §19.5 : l'instantané reste un instantané.
+
+**Détruire un Spark** (arbitré : *avertir et proposer de sauvegarder d'abord*). La
+confirmation de suppression, déjà dans le flux (§6.23), liste chaque instantané avec sa
+marque. S'il en manque, elle offre « Prendre un dernier instantané et le sauvegarder » :
+**un geste séparé**, avec sa progression dans le flux, qui n'engage pas la destruction
+(*proposé* : jamais de destruction différée, déclenchée plus tard par une file — un geste
+destructif asynchrone se perd). Quand toutes les marques sont ✓, le bouton destructif
+reste celui du §6.23 ; **détruire quand même** reste possible, en connaissance de cause.
+Après la destruction, le message de sortie nomme la **dernière sauvegarde** du Spark et
+mène à sa récupération (§67.11).
+
+### 67.9 Le propriétaire est prévenu : journal et canaux
+
+Le §47.2 tient une liste **fermée**, et la sauvegarde externe y ajoute les gestes qui
+ouvrent ou détruisent, plus un petit ensemble d'**états**.
+
+| Action | Classe | Notifie | Pourquoi |
+|---|---|---|---|
+| `backup.configure` | humain | oui | change vers où partent tous les disques |
+| `backup.disable` | humain | oui | coupe le filet |
+| `backup.key_reveal` | humain | oui | montre la clé qui ouvre toutes les archives |
+| `backup.purge` | humain | oui | détruit des points de reprise |
+| `backup.recover` | humain | oui | crée un Spark et lui rend des accès (comme `sshkey.grant`) |
+| `backup.enable`, `backup.run`, `backup.verify` | humain | non | construction ou lecture |
+| `backup.generation`, `backup.superseded` | runtime | non | §47.2 : le runtime ne notifie pas |
+| `backup.degraded`, `backup.healed` | runtime | **oui** | **exception nommée**, comme `forge.shell_refused` pour les refus |
+
+**Les deux dernières ne sont pas des gestes : ce sont des états.** Elles sont émises sur
+**transition** (`saine → dégradée`, `dégradée → saine`) et jamais à chaque tentative —
+« un canal qui crie tout le temps n'est plus lu » (§47.2). Pendant la dégradation, un
+**rappel toutes les 24 h** (*proposé*, constante). Une génération `échouée` d'un seul
+Spark ne fait pas basculer la destination : seule la sonde, ou trois échecs consécutifs
+tous Sparks confondus, le fait (*proposé*). Le message porte le nom de la Forge, le Spark
+ou la destination, la cause typée et l'hôte du S3 ; jamais d'URL complète, jamais de clé.
+
+La différence avec le reste du §47 est dite : ici la notification ne **détecte** pas un
+geste, elle **informe** d'une panne qui peut durer des jours. Ajouter ces actions à
+`notification.ACTIONS`, au vocabulaire du journal (`translate.py`, §21.5 bis) et à
+la preuve de fermeture de la liste fait partie de SPK-163.
+
+### 67.10 La fenêtre de gestion complète
+
+**Où.** Forge → onglet **Sauvegarde externe** (second degré, comme DNS et Alertes, §34.1).
+*Non configurée*, il porte un état vide qui nomme ce qui manque et une commande
+« Configurer la destination » — une **modale limitée à une section** (DESIGN_SYSTEM
+§6.27) : saisie, rapport de vérification, puis clé de sauvegarde, dans le même flux. Une
+fois configurée, l'onglet devient la **fenêtre de gestion** (§6.27 : une surface de
+lecture, des sections titrées, une modale par commande de section). Sa composition
+exacte est fixée par SPK-165 **après lecture intégrale du design system** ; le
+**contenu** ci-dessous est le contrat.
+
+| Section | Contenu | Gestes |
+|---|---|---|
+| **État** | l'un des cinq états, la dernière vérification, la prochaine, la batterie V1–V12 avec causes et remèdes, les canaux d'alerte actifs ou leur absence | Vérifier maintenant |
+| **Sparks sauvegardés** | par Forge puis par Spark : présent ou absent ici, dernière génération (date, taille, instantanés), couverture, anciennes générations conservées et ce qu'elles portent seules, octets retenus | Récupérer · Vérifier · Purger |
+| **Travaux** | génération en cours (étape, progression), file, échecs récents avec causes et prochaine tentative | Réessayer maintenant |
+| **Réglages** | destination (sans le secret), plafond de débit | Modifier · Désactiver · Réactiver |
+| **Clé** | identifiant de la clé, état de la confirmation, clés de lecture ajoutées | Afficher · Ajouter une clé de lecture |
+
+- **Bandeau de récupération.** En tête de la section *Sparks sauvegardés*, tant qu'il
+  existe des Sparks (ou des instantanés) sur S3 que la Forge n'a pas : « N Sparks
+  sauvegardés ne sont pas sur cette Forge ». C'est la deuxième des trois portes de la
+  récupération (§67.11), celle de la connexion.
+- **Vérifier** relit le manifeste et la taille de l'objet. **Vérifier en profondeur**
+  (*proposé*) télécharge, déchiffre et recalcule le SHA-256 : coûteux, à la demande, il
+  ne restaure rien.
+- **Purger** (une génération, ou toutes celles d'un Spark) : seule voie d'effacement, par
+  décision (« Jamais seule », arbitré). Confirmation **dans le flux** qui nomme ce qui
+  disparaît — les instantanés *propres* à la génération, en clair — et **frappe du nom du
+  Spark** (§6.23 : irréversible, objet confondable, nom court), plus le mot de passe de
+  garde. Journal et notification.
+- **L'inventaire se lit sur S3.** Il se met en cache au registre (`backup_generation`),
+  se rafraîchit à chaque ouverture, et dit la date de sa dernière lecture.
+- Les états **chargement, vide, erreur** sont traités par section (§6.13). Une section
+  qui ne peut pas lire le S3 le dit et garde la dernière lecture datée.
+
+### 67.11 La récupération
+
+**Trois portes, un seul écran** : la fenêtre ; le message de sortie d'une destruction
+(le Spark détruit s'y récupère d'un clic) ; le bandeau de la connexion (§67.10).
+
+**Identité.** Un Spark sauvegardé est *absent* si aucun Spark du registre n'a son
+`spark_id`. Un Spark de même **nom** mais d'identifiant différent n'est pas lui : le nom
+est *pris*.
+
+**Le choix.** Le propriétaire récupère **« l'état au moment de la sauvegarde »** ou **un
+instantané nommé**. Dans ce second cas la copie est ramenée à cet instantané ; les plus
+récents, **absents de la copie**, **restent sur S3** — l'écran le dit avant le geste.
+(Ramener une copie sur `a` pendant que `b` existe dans la génération source est exactement
+le cas du §67.2 : la génération suivante ne portera pas `b`, l'ancienne est conservée.)
+
+**Déroulé.** Chaque étape défait ce qu'elle a fait si elle échoue, dit où, et **laisse le
+S3 intact** : récupérer ne l'écrit jamais.
+
+1. **Contrôles, rien d'écrit.** Destination utilisable ; clé disponible (sinon on la
+   demande, voir « Une autre Forge » plus bas) ; manifeste lisible ; versions compatibles (avertissement) ;
+   **nom** libre — l'original, sinon `<nom>-recupere`, modifiable, validé comme à la
+   création ; **admission control** sur les ressources de la fiche, par la même fonction
+   que la création, avec le même refus motivé ; espace de travail ; **adresse** d'origine
+   reprise si libre, sinon une nouvelle, dite.
+2. **Le registre d'abord** (§14.2) : le Spark naît `creating`. Il **reprend son
+   `spark_id` d'origine quand il est libre** — le cas d'une destruction —, et les
+   générations existantes redeviennent son historique, donc ses coches. Sinon (c'est une
+   *copie*) il reçoit un identifiant neuf et repart sans coche.
+3. **Téléchargement, déchiffrement, import** dans Incus sous le nouveau nom d'instance,
+   en flux ; l'empreinte SHA-256 est comparée au manifeste **avant** de déclarer
+   quoi que ce soit : une différence défait l'instance importée et laisse le Spark en
+   `error` avec sa cause.
+4. **Les instantanés** de l'import sont rattachés au registre depuis le manifeste ; si un
+   instantané a été choisi, la copie y est ramenée.
+5. **La fiche, ligne par ligne, chacune rapportée** : autorisations de clés (les clés
+   publiques absentes sont réinscrites par empreinte), environnement (secrets rechiffrés
+   avec le coffre de **cette** Forge), sélections (**rapportées** si l'entrée du
+   catalogue manque), notes, projet (rattaché s'il existe, sinon créé et dit), réseaux
+   privés (rattachés si le réseau de ce nom existe, sinon rapportés), **routes et ports
+   appliqués seulement sans conflit** — chaque conflit est nommé (« domaine déjà routé
+   par <Spark> », « port déjà publié par <Spark> ») —, protection **restituée telle
+   quelle** (*proposé*).
+6. **Le Spark est rendu arrêté.** Le démarrer est un geste ordinaire : une cellule qui
+   revient seule avec ses routes et ses clés avant qu'on ait lu le rapport est une
+   surprise.
+7. Un **rapport de récupération** : ce qui est rétabli, ce qui ne l'a pas été et pourquoi.
+   Journal et notification `backup.recover`.
+
+**Une autre Forge, ou une clé perdue de vue.** Le sélecteur de la fenêtre liste les Forges
+trouvées sous le préfixe (`forge.json`). Récupérer l'une d'elles demande **sa clé de
+sauvegarde**, vérifiée contre `cles/<id>.verif` avant tout téléchargement. Elle peut être
+gardée comme **clé de lecture** au coffre, sur coche explicite, avec le mot de passe de
+garde ; sinon elle ne vit que le temps du geste. C'est le scénario du sinistre : une Forge
+neuve, un S3, une clé gardée ailleurs.
+
+**Limites dites.** L'état applicatif est celui d'un arrêt brutal (§19.2). Les routes et
+ports en conflit ne sont pas appliqués. Un Spark dont le quota dépasse la capacité
+restante est refusé, pas écourté.
+
+### 67.12 Ce qui est proposé et pas encore arbitré
+
+Tout ce qui est marqué *proposé* ci-dessus, en une liste que le responsable peut
+trancher d'un mot : (1) calme de 10 min avant l'export automatique ; (2) sonde horaire ;
+(3) reprises 5 min / 15 min / 1 h / 6 h ; (4) rappel toutes les 24 h ; (5) bascule en
+`dégradée` sur la sonde ou trois échecs consécutifs ; (6) mot de passe de garde propre à
+la destination ; (7) `http` admis vers une adresse locale ou privée ; (8) pas de
+sauvegarde d'office d'un Spark sans instantané ; (9) bouton visible aussi quand la
+destination est dégradée ; (10) « sauvegarder d'abord » en deux gestes, jamais de
+destruction différée ; (11) vérification en profondeur à la demande ; (12) protection
+restituée à la récupération ; (13) reprise de l'identité d'un Spark détruit ; (14)
+construction STREAM relue par un tiers, `age` en repli ; (15) identifiants S3 en colonnes
+propres plutôt qu'au catalogue d'environnement ; (16) un seul export à la fois.
+
+### 67.13 Dépendances, environnement, développement
+
+**Aucune variable d'environnement.** Tout réglage vit au registre et se lit à l'écran
+(§47.3, §53) ; les constantes de ce chapitre (calme, sonde, reprises, rappel) sont écrites
+ici — « fixées par la décision, pas par un réglage » — et la fenêtre affiche les
+échéances qui en découlent (prochaine vérification, prochaine tentative). Le test qui
+échoue sur une variable non documentée (CLAUDE.md §3) tient donc sans changement.
+
+**Le client S3** est une dépendance structurante à décider et justifier dans SPK-161
+(CLAUDE.md §19). Deux candidats : **`boto3`** (maintenu par AWS, Apache-2.0, gère les
+styles d'adressage, les reprises, les parts ; lourd, et à régler pour les S3 qui
+refusent ses sommes de contrôle par défaut) ou une **signature SigV4 maison sur `httpx`**,
+déjà présent (léger, mais la compatibilité entre fournisseurs devient celle du produit).
+*Par défaut, faute d'objection : `boto3`.* Le choix s'établit sur une mesure — poids
+installé, démarrage, comportement contre MinIO — consignée au journal.
+
+**Le S3 de développement est un vrai S3 local** (CLAUDE.md §3, §15) : MinIO, image
+épinglée, démarrée par la pile (`make runDev`) avec des identifiants locaux qui ne
+valent que sur la boucle locale. Cela **fait tomber l'écart du §28.1** : un service réel
+entre dans la pile, et Docker devient un prérequis du développement. Les preuves
+d'autorisation s'écrivent contre des utilisateurs MinIO aux politiques restreintes
+(lecture seule, sans suppression). Le seed configure la destination par **la même API
+que l'écran** et couvre : un instantané ✓, un ✗ planifié, un en échec, un en cours, un
+Spark détruit et récupérable, une ancienne génération conservée.
+
+**`FakeIncus`** gagne `export_instance` et `import_instance` (§28), de sorte que la pile
+de développement joue le parcours entier sans Incus ; la preuve sur un **Incus réel** est
+celle de `make forge-vm`.
+
+**Épreuves lourdes** : MinIO, `sparkd`, la console et un Chromium forment un harnais
+lourd — un seul à la fois, sous le verrou `e2e/verrou.mjs` (CLAUDE.md §15 bis).
+
+**Preuve sur le S3 réel du propriétaire : nécessite une action humaine.** Aucune session
+n'a ni son bucket ni ses identifiants. MinIO prouve le protocole, pas un fournisseur.
+
+### 67.14 Ce que la sauvegarde externe ne fait pas
+
+- **Elle ne rend pas l'état cohérent** pour une application : arrêt brutal (§19.2).
+- **Elle ne restaure que sur ZFS compatible** (§67.2).
+- **Elle ne tourne pas les clés** (§67.4) et ne protège pas d'un compte de la Forge
+  compromis qui efface (§67.4).
+- **Elle ne dit pas ce que ça coûte** : le produit ne connaît pas les tarifs du
+  fournisseur ; il affiche des octets, par Spark et au total.
+- **Elle ne lit pas l'espace libre du S3** (V12).
+- **Elle n'a qu'une destination** par Forge, et aucune réplication entre S3.
+- **Elle ne sauvegarde pas la Forge elle-même** : le registre et `secret.key` restent au
+  §40.7 et à `CONTINGENCE.md`. Chaque fiche de Spark est, elle, dans ses générations.
+
+### 67.15 La preuve
+
+Le détail est dans chaque unité du backlog (lot 9). Le **parcours canonique** qui clôt le
+lot, joué comme un utilisateur — la souris et le clavier, depuis l'accueil, avec les
+utilisateurs seedés, sans URL directe ni appel d'API :
+
+1. configurer la destination MinIO dans *Forge → Sauvegarde externe* ; lire la batterie ;
+   copier la clé ; la retaper ; voir l'état passer à `saine` ;
+2. prendre un instantané ; voir ✗ → en cours → ✓ ;
+3. arrêter MinIO : voir la coquille, l'alerte hors bande, la croix et sa cause ; le
+   remettre : voir la reprise automatique, le retour à ✓, l'alerte de rétablissement ;
+4. détruire le Spark depuis sa confirmation ; ouvrir la récupération depuis le message ;
+5. récupérer l'instantané choisi ; lire le rapport ; constater que le témoin écrit avant
+   l'instantané est là et que celui écrit après n'y est plus ;
+6. refuser, par requête directe, chaque geste gardé sans mot de passe (configurer, purger,
+   afficher la clé) : la preuve de CLAUDE.md §10.

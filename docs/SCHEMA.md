@@ -281,6 +281,88 @@ Un snapshot vit dans le pool de stockage et ne protège pas de sa perte. Un back
 est une archive exportée, éventuellement hors machine. Les deux notions restent
 distinctes dans le modèle comme dans l'interface.
 
+**La table `backup` ci-dessus n'a jamais été écrite ni lue par le code, et sa clé
+étrangère `ON DELETE CASCADE` la rend inutilisable pour ce qu'elle devait porter** : une
+archive disparaîtrait avec son Spark, au moment précis où on en a besoin. Le contrat
+de la sauvegarde externe la remplace (§8 bis, `docs/DAT.md` §67.5) ; la migration qui
+le livre la supprime.
+
+## 8 bis. La sauvegarde externe : `backup_target`, `backup_generation`, `backup_generation_snapshot`, `backup_job` (contrat, SPK-161 à SPK-163 — non livré)
+
+Contrat écrit le 2026-11-10 avant le code. Les décisions et leurs motifs sont à
+`docs/DAT.md` §67 ; cette section est la **seule source des colonnes**. Les numéros de
+migration sont ceux libres à la livraison de chaque unité.
+
+**`forge.uid`** (SPK-161) : `TEXT NOT NULL UNIQUE`, hexadécimal opaque posé par la
+migration (`lower(hex(randomblob(16)))`) et jamais modifié. `forge.id` vaut toujours 1
+et ne distingue pas deux Forges qui partagent un bucket (§67.3).
+
+### `backup_target` (SPK-161) — une seule ligne
+
+`CHECK (id = 1)`, ligne posée par la migration : « aucune destination » est un fait
+(`state = 'non_configuree'`), pas une absence de ligne, comme `notify_channels` (§11).
+
+| Colonne | Rôle |
+|---|---|
+| `state` | `non_configuree` · `a_finaliser` · `saine` · `degradee` · `desactivee` (`CHECK`) |
+| `state_since`, `state_cause` | depuis quand ; la **cause typée** du `docs/DAT.md` §67.6 (`NULL` si saine) |
+| `endpoint_url`, `region`, `bucket`, `prefix` | la destination ; `prefix` peut être vide |
+| `addressing` | `auto` · `path` · `virtual` (`CHECK`) |
+| `access_key_id` | l'identifiant d'accès, rendu masqué par l'API |
+| `secret_key_enc` | la clé secrète, **chiffrée** (`environnement.chiffrer`, nom `backup:secret_access_key` en donnée associée). Jamais rendue, jamais journalisée |
+| `backup_key_enc`, `backup_key_id` | la clé de sauvegarde, chiffrée de même (nom `backup:key`) ; l'identifiant est une empreinte HMAC tronquée (§43.9.3) |
+| `backup_key_shown_at`, `backup_key_confirmed_at` | l'affichage unique et la preuve de garde (§67.4). Tant que `confirmed_at` est `NULL`, l'état est au plus `a_finaliser` |
+| `bandwidth_limit_mbit` | plafond de débit de l'envoi, `0` = illimité |
+| `last_check_at`, `next_check_at`, `last_ok_at` | la sonde (§67.6) |
+| `last_check_report` | les verdicts V1 à V12, JSON **borné** (§21.4), messages du S3 caviardés |
+| `last_reminder_at` | le dernier rappel d'état dégradé (§67.9) |
+| `guard_hash`, `guard_salt`, `guard_params`, `guard_set_at` | le mot de passe de garde — **même mécanisme que `notify_channels`** (§35.3), mot de passe propre. `NULL` tant que le premier usage ne l'a pas posé |
+| `updated_at` | |
+
+**Pas d'entrée dans `env_entry`** : une entrée de la Forge est à une coche de
+l'environnement d'un Spark (`docs/DAT.md` §43.6).
+
+### `backup_generation` (SPK-162) — aucune clé étrangère vers `spark`
+
+| Colonne | Rôle |
+|---|---|
+| `id` | `TEXT` PK, triable par le temps : `g` + horodatage UTC compact + 6 hexadécimaux |
+| `forge_uid`, `spark_id`, `spark_name` | à qui elle appartient. **Pas de `REFERENCES spark`** : elle survit à la destruction du Spark |
+| `origin` | `locale` (écrite par cette Forge) · `distante` (lue sur le S3 : une autre Forge, ou la nôtre avant un sinistre) |
+| `state` | `planifiee` · `en_cours` · `validee` · `echouee` · `supprimee` (`CHECK`) |
+| `step` | `preparation` · `export` · `envoi` · `validation` ; `NULL` hors `en_cours` |
+| `requested_at`, `started_at`, `committed_at` | `committed_at` = écriture du manifeste |
+| `export_key`, `manifest_key` | les clés d'objets (§67.3) |
+| `size_plain`, `size_encrypted`, `sha256` | taille de l'export en clair, chiffrée, empreinte de l'export **en clair** |
+| `key_id` | la clé qui l'a chiffrée |
+| `incus_version`, `zfs_version`, `spark_state` | relevés à l'export |
+| `error_cause`, `error_message` | cause typée ; message borné et caviardé |
+| `attempts`, `next_attempt_at` | la reprise (§67.7) |
+
+Index : `(spark_id, state, id)` pour « la dernière génération validée d'un Spark ».
+Une preuve garde l'invariant : **au plus une génération `en_cours` à la fois** sur la
+Forge.
+
+### `backup_generation_snapshot` (SPK-162)
+
+`generation_id` (`REFERENCES backup_generation ON DELETE CASCADE`), `snapshot_id` (l'`id`
+de `snapshot` au moment de l'export), `name`, `created_at`, `size_bytes`, `stateful` ;
+clé primaire `(generation_id, snapshot_id)`. **C'est elle qui donne la coche** : un
+instantané est ✓ si son `id` figure ici pour la dernière génération `validee` de son
+Spark. Aucune colonne `saved` n'est ajoutée à `snapshot`.
+
+### `backup_job` (SPK-163) — la file persistante
+
+`id` (`INTEGER` autoincrément), `kind` (`generation` · `verification_profonde` ·
+`purge`), `spark_id`, `generation_id` (nullable), `state` (`en_attente` · `en_cours` ·
+`termine` · `echoue`), `not_before`, `requested_by`, `requested_at`, `last_error`.
+Un redémarrage de `sparkd` reprend les travaux `en_attente` et `en_cours`.
+
+**Retour arrière** (à écrire avec chaque migration) : la destination, les générations et
+la file sont des tables de registre ; les supprimer **ne touche pas au S3**. Les secrets
+qu'elles portent partent avec elles : sans la clé de sauvegarde gardée par le
+propriétaire, les archives du S3 deviennent illisibles (`docs/DAT.md` §67.4).
+
 ## 9. `audit_log`
 
 `id`, `ts`, `actor`, `actor_class`, `action`, `target_type`, `target_id`,
