@@ -16108,6 +16108,13 @@ et à la lecture du dépôt :
 5. **Deux réglages dépendent de la machine** — `ARC_GIB=16` (calé sur 94 Gio de
    RAM) et `NET_MBIT` (une carte `virtio`) — et se changent en éditant le texte
    de l'amorce, serveur par serveur. Le banc en remplaçait le texte par chaînes.
+6. **`creer-pool.sh` passe à Incus une `source` dans une forme que sa
+   documentation ne décrit pas.** Il écrit `source=mirror /dev/a /dev/b` ;
+   `reference/storage_zfs` (Incus, relu le 2026-11-10) donne
+   `source=mirror=/dev/a,/dev/b` — « To specify a vdev type, use an `=` sign
+   between the vdev type and the block devices », les périphériques séparés par
+   des virgules. Ses preuves assertaient la forme fautive contre un `incus`
+   doublé. Jamais joué sur un Incus réel : §66.5.
 
 ### 66.2 La décision
 

@@ -14288,6 +14288,21 @@ preuves qui relisaient le JSON du README (`test_creer_pool.py`) relisent la sort
 de la commande ; DAT §8.2 et §8.6, README, runbook et manuel sont corrigés dans
 les mêmes changements que le code.
 
-**Vérifications à ce stade.** Documentation seule, committée avant le code :
-aucun code n'a été écrit, aucune preuve rejouée. La sortie de la commande n'a pas
-encore été soumise à l'hébergeur.
+**Trouvé en chemin, avant d'écrire le code d'SPK-159.** L'amorce créera le pool
+par `creer-pool.sh`, donc j'ai relu ce que ce script demande à Incus :
+`incus storage create spark zfs source="mirror /dev/a /dev/b"`. La page
+`reference/storage_zfs` d'Incus (relue le jour même) décrit autre chose : « Multiple
+block devices should be separated by `,` » et « To specify a vdev type, use an `=`
+sign between the vdev type and the block devices » — soit
+`source=mirror=/dev/a,/dev/b`. Les preuves de `test_creer_pool.py` assertent la
+forme du script contre un `incus` doublé : même piège qu'au 2026-08-28, une
+preuve dont la référence est l'objet qu'elle garde. **Établi par la documentation,
+pas par un Incus réel** — `make forge-vm` est le premier banc où ce geste joue
+pour de vrai. Le pilote reste configurable (`SPARK_POOL_DRIVER`) ; la forme
+corrigée ne vaut que pour `zfs`, seul pilote que le produit supporte en miroir
+(§8.5) ; les autres pilotes ne sont pas touchés. Le DAT §66.1 point 6 et SPK-159
+point 4 le portent.
+
+**Vérifications à ce stade.** Documentation seule, à relire contre le code qui
+suit : aucun code n'est encore écrit pour ce point, aucune preuve rejouée. La
+sortie de la commande n'a pas encore été soumise à l'hébergeur.

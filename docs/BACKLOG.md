@@ -9684,12 +9684,20 @@ en éditant le fichier, serveur par serveur.
      manuel `sudo /opt/spark-amorce.sh` reste sans danger pour les Sparks (le
      contrat de SPK-73, reformulé) ;
   3. le banc `make forge-vm` ne crée plus le pool avant l'amorce et ne modifie
-     plus le texte de l'amorce : il lui passe ses arguments.
+     plus le texte de l'amorce : il lui passe ses arguments ;
+  4. **`creer-pool.sh` est corrigé** : il écrit `source=mirror /dev/a /dev/b` ;
+     la documentation d'Incus (reference/storage_zfs, relue le 2026-11-10) donne
+     `source=mirror=/dev/a,/dev/b` — le type de vdev, `=`, puis les
+     périphériques séparés par des virgules. Ses preuves assertaient la forme
+     fautive contre un `incus` doublé : elles ne pouvaient pas la contredire.
+     Établi par la documentation, **pas encore par un Incus réel** : c'est le
+     banc de redémarrage qui en fait la preuve.
 - Aucune migration. Aucune variable d'environnement nouvelle (`creer-pool.sh`
   lit toujours les trois du README, inchangées).
 - DoD : preuves unitaires (arguments, refus, création gardée, rejeu sans
-  création, `sh -n`) ; banc de redémarrage vert, **le pool créé par l'amorce
-  elle-même** ; README et DAT à jour ; `@spec` / `@verifies`.
+  création, `sh -n`, et la forme `source=mirror=…` de `creer-pool.sh`, rouge
+  avant correction) ; banc de redémarrage vert, **le pool créé par l'amorce
+  elle-même sur un Incus réel** ; README et DAT à jour ; `@spec` / `@verifies`.
 
 ---
 
