@@ -303,7 +303,9 @@ def rendre_cloud_init_leger(sha: str, empreintes: dict[str, str], supports: list
         options += ["--arc-gib", str(arc_gib)]
     if net_mbit is not None:
         options += ["--net-mbit", str(net_mbit)]
-    deposes = "".join(f"    deposer {relatif} {dest} {empreintes[relatif]}\n"
+    # L'URL COMPLETE de chaque fichier, et non un prefixe : un prefixe de repertoire
+    # repond 404 quand on l'ouvre, et se lit comme un lien mort (2026-11-17).
+    deposes = "".join(f"    deposer {DEPOT_RAW}/{sha}/{relatif} {dest} {empreintes[relatif]}\n"
                       for relatif, dest in SCRIPTS_DEPOSES)
     return ("#cloud-config\n"
             "# Produit par scripts/preparer-forge.py : ne pas l'editer, relancer la commande.\n"
@@ -314,9 +316,8 @@ def rendre_cloud_init_leger(sha: str, empreintes: dict[str, str], supports: list
             "runcmd:\n"
             "  - |\n"
             "    set -eu\n"
-            f"    base={DEPOT_RAW}/{sha}\n"
             "    deposer() {\n"
-            '      curl -fsSL --retry 5 --retry-delay 5 "$base/$1" -o "$2.part"\n'
+            '      curl -fsSL --retry 5 --retry-delay 5 "$1" -o "$2.part"\n'
             '      echo "$3  $2.part" | sha256sum -c - >/dev/null \\\n'
             '        || { rm -f "$2.part"; echo "empreinte invalide : $1" >&2; exit 1; }\n'
             '      chmod 0755 "$2.part"\n'

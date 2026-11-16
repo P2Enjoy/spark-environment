@@ -925,10 +925,11 @@ def test_le_cloud_init_leger_n_embarque_AUCUN_script_et_reste_tres_petit():
 
 def test_le_cloud_init_leger_epingle_le_commit_et_porte_chaque_empreinte():
     script = yaml.safe_load(_leger())["runcmd"][0]
-    assert f"base={pf.DEPOT_RAW}/{SHA}" in script, "le commit est epingle par son sha complet"
-    assert "main" not in script.split("base=")[1].split("\n")[0], "jamais une branche mouvante"
+    assert "base=" not in script, "pas de prefixe : il repond 404 et se lit comme un lien mort"
     for relatif, dest in pf.SCRIPTS_DEPOSES:
-        assert f"deposer {relatif} {dest} {EMPREINTES[relatif]}" in script
+        # L'URL complete du fichier au commit epingle par son sha complet — jamais `main`.
+        assert f"deposer {pf.DEPOT_RAW}/{SHA}/{relatif} {dest} {EMPREINTES[relatif]}" in script
+    assert "/main/" not in script, "jamais une branche mouvante"
     assert script.rstrip().splitlines()[-1] == "/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5"
 
 
@@ -1005,7 +1006,7 @@ class TestTelechargementDuCloudInitLeger:
         vu = self._jouer(tmp_path, fausses, self._curl_depot(tmp_path))
         assert vu.returncode != 0
         assert "LANCE" not in vu.stdout, "l'amorce ne se lance pas sur une empreinte invalide"
-        assert "empreinte invalide : scripts/creer-pool.sh" in vu.stderr
+        assert f"empreinte invalide : {pf.DEPOT_RAW}/{SHA}/scripts/creer-pool.sh" in vu.stderr
         assert not (tmp_path / "opt" / "creer-pool.sh").exists(), "le fichier non verifie n'est jamais pose"
         assert not list((tmp_path / "opt").glob("*.part"))
 

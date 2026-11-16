@@ -15149,3 +15149,11 @@ cloud-init léger. `cloud-init schema` 26.2 le déclare **valide** ; son seul oc
 22.1. Corrigé : l'en-tête est en ASCII, une preuve exige que la sortie légère soit
 entièrement ASCII et qu'elle passe `cloud-init schema` quand l'outil est présent. **Non
 vérifié** : que c'était bien la cause — le texte exact du refus n'a pas été relevé.
+
+**Même jour — « le lien au raw pointe à rien ».** Le cloud-init léger écrivait un préfixe,
+`base=https://raw.githubusercontent.com/…/<sha>`, puis `$base/<chemin>`. Ouvert tel quel, ce
+préfixe de répertoire répond 404 et se lit comme un lien mort ; les URL réelles des deux
+fichiers répondaient HTTP 200 (vérifié aux commits 458f793 et 1824519). Corrigé : chaque
+ligne `deposer` porte l'URL **complète** du fichier, cliquable et vérifiable. Le fichier
+`user-data.yaml` du responsable était **vide** : la commande avait refusé et la redirection
+`>` a créé un fichier vide — le message de refus était dans le terminal.
