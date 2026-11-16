@@ -15097,3 +15097,48 @@ sans commentaires fait les mêmes appels `incus` que l'original.
 très en dessous de ce qui a été refusé, mais sa limite est inconnue) ; le téléchargement
 depuis une machine **livrée** ; le mode `--compresser` sur une VM. Le banc de redémarrage
 éprouve le mode embarqué — il n'a pas été rejoué depuis ce changement.
+
+## 2026-11-17 · SPK-158 et SPK-159 : première machine réelle, l'installateur de l'hébergeur ne finit pas
+
+**Contexte.** Le responsable réinstalle une machine neuve de l'hébergeur avec le JSON de
+partition produit par la commande (pool ZFS déclaré), puis avec le cloud-init, puis avec
+les réglages par défaut : « elle démarre en erreur dans la console de l'hébergeur, et je ne
+peux pas me connecter en SSH, même avec la clé choisie à l'installation ». Il précise : le
+JSON de disques **seul** (sans cloud-init) a fonctionné **une fois** ; ensuite, **même avec
+tous les réglages par défaut**, l'installation échoue. Aucune connexion SSH n'a jamais abouti.
+
+**Observations** (par l'iDRAC de la machine, en lecture seule — ni session SSH, ni
+écriture) :
+
+- PowerEdge R730, 238 Gio de RAM, deux Toshiba MG07ACA12TE de 12 To en SATA direct (pas de
+  RAID matériel), santé « OK », aucune panne annoncée. Le matériel n'est pas en cause.
+- Le journal matériel montre des cycles d'alimentation demandés à 7-10 minutes d'intervalle :
+  ce sont les réinstallations du responsable, pas un redémarrage en boucle de la machine.
+- La console (capture de l'iDRAC, trois fois sur 4 minutes, **texte identique**) est celle de
+  l'environnement d'installation de l'hébergeur : lien réseau monté à 1 Gbit/s, partitions
+  `sda1` à `sda5` créées — **cinq partitions, donc le schéma à pool déclaré** —, RAID 1 `md0`
+  puis `md1` (environ 200 Gio, exactement notre `root`) créés, `md0` synchronisé, puis
+  « resync of RAID array md1 » à 117 s après le démarrage du noyau. Rien ensuite : le même
+  écran 17 minutes plus tard.
+
+**Ce que cela établit.** L'installateur de l'hébergeur **a accepté et appliqué** le schéma de
+partitionnement (cinq partitions, RAID créés). C'est la première preuve réelle, au-delà de
+la validation de la console, pour SPK-158.
+
+**Ce que cela ne permet PAS de conclure.** Le silence de la console ne dit pas si
+l'installateur est bloqué ou s'il travaille sans rien afficher (téléchargement de l'image,
+synchronisation de `md1` : 200 Gio sur un disque à 7 200 tr/min prennent de 20 à 35 minutes) ;
+l'erreur que voit le responsable est dans la console de l'hébergeur, pas à l'écran de la
+machine. Que les réglages par défaut échouent aussi **écarte le JSON et le cloud-init comme
+cause unique** ; l'hypothèse la plus plausible est l'état des disques après les
+réinstallations (signatures RAID ou ZFS restantes), mais **elle n'est pas vérifiée**. Le
+cloud-init n'a pas pu être éprouvé : l'installation ne va pas jusqu'au premier démarrage du
+système installé.
+
+**Conséquence.** SPK-158 et SPK-159 restent `[~]` : aucun test sur une Forge réellement
+installée. Rien n'a été modifié sur la machine.
+
+**Hygiène.** Les identifiants de l'iDRAC ont été collés dans la conversation ; à changer
+après l'intervention. Les sessions web ouvertes par la capture n'ont pas pu être fermées
+explicitement (le point d'accès de déconnexion répond 404 sur ce microgiciel) : elles
+expirent d'elles-mêmes.
