@@ -15157,3 +15157,14 @@ fichiers répondaient HTTP 200 (vérifié aux commits 458f793 et 1824519). Corri
 ligne `deposer` porte l'URL **complète** du fichier, cliquable et vérifiable. Le fichier
 `user-data.yaml` du responsable était **vide** : la commande avait refusé et la redirection
 `>` a créé un fichier vide — le message de refus était dans le terminal.
+
+**Même nuit — l'installation suivante, observée de bout en bout tant que l'iDRAC a répondu.**
+Cycle d'alimentation à 00:34:39 (réinstallation par le responsable), sept écrans distincts
+capturés de 00:35 à 00:39 : démarrage Dell ; l'installateur de l'hébergeur est un
+environnement **LinuxKit** ; à 27 s il charge **ZFS 2.1.5** (le module se charge parce que le
+schéma déclare un pool) ; puis réseau, partitions `sda1` à `sda5`, `md0` synchronisé, et
+« resync of RAID array md1 » à 116 s — **exactement le point où la tentative précédente
+restait figée**. À partir de 00:41 l'iDRAC ne répond plus du tout (délais dépassés à chaque
+essai jusqu'à l'arrêt de la surveillance à 00:55) : plus rien n'est observable. SSH n'a
+jamais répondu en 55 minutes d'attente. Cause toujours inconnue ; aucune écriture faite
+sur la machine.
