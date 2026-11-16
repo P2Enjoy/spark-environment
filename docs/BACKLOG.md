@@ -9711,6 +9711,19 @@ lien et en place des textes bruts ».
     l'en-tête de l'amorce sont corrigés : la raison de l'ancienne règle était périmée.
     **Non éprouvé** : l'acceptation de la section `zfs` par la console et
     l'installateur, et l'adoption par Incus d'un pool créé par l'hébergeur.
+  - **Cloud-init léger, le 2026-11-16** (point 8) : Scaleway a refusé le `user-data` de
+    19 431 octets (« UserData: greater than max »). `cloud-init` télécharge désormais les
+    scripts au **commit épinglé** et vérifie leur sha256 (**1 058 octets** mesurés) ;
+    `--embarquer` garde l'ancien mode **sans commentaires** (11 116 o, 6 639 o compressé,
+    mesurés) ; `epingler` refuse un script local différent du commit ou un commit non
+    poussé. La suite de la commande compte **136 cas** : épinglage sur un dépôt Git jetable,
+    téléchargement et vérification d'empreinte **joués** avec un `curl` doublé (une
+    empreinte fausse ne pose rien et ne lance rien), scripts sans commentaires passés au
+    même analyseur et rendant la même aide, `creer-pool.sh` sans commentaires rejoué avec
+    les mêmes doubles. **Relevé réel** : les deux scripts sont servis anonymement par
+    `raw.githubusercontent.com` au `HEAD`, sha256 identique au local. **Non vérifié** :
+    l'acceptation du `user-data` léger par Scaleway, et le téléchargement depuis une
+    machine livrée ; le banc éprouve le mode `--embarquer`.
   - **Offres versionnées le 2026-11-16** (point 6) : `EM-L101X-SATA.json` (le
     premier schéma relevé, déplacé par `git mv` depuis la fixture de test) et
     `EM-B311X-SATA.json`, sous `deploy/cloud-init/offres/` avec leur README ; la

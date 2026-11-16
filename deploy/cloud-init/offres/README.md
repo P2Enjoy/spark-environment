@@ -15,11 +15,14 @@ console (*Custom configuration*) :
 | EM-L101X-SATA | 2026-11-10 | [`forge/EM-L101X-SATA.partitionnement.json`](forge/EM-L101X-SATA.partitionnement.json) |
 | EM-B311X-SATA | 2026-11-16 | [`forge/EM-B311X-SATA.partitionnement.json`](forge/EM-B311X-SATA.partitionnement.json) |
 
-**Le cloud-init n'est PAS versionné**, et c'est voulu : il *embarque* l'amorce
-(`spark-amorce.sh`) et `creer-pool.sh`, qui évoluent. Une copie versionnée serait en
+**Le cloud-init n'est PAS versionné**, et c'est voulu : il dépend de l'amorce
+(`spark-amorce.sh`) et de `creer-pool.sh`, qui évoluent. Une copie versionnée serait en
 retard sur eux et poserait une vieille amorce sur une machine neuve. Il se produit **à la
 demande, depuis l'amorce courante, par le nom de l'offre**, à coller dans *Cloud-init
-configuration* :
+configuration* — **léger** (≈ 1 Ko) : il télécharge les scripts au commit épinglé et vérifie
+leur sha256, parce que Scaleway a refusé un `user-data` de 19 Ko. La commande refuse tant que
+les scripts locaux ne sont pas committés **et poussés** ; `--embarquer` donne un cloud-init
+autonome (≈ 11 Ko) :
 
 ```bash
 python3 scripts/preparer-forge.py cloud-init --offre EM-B311X-SATA

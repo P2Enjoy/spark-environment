@@ -231,11 +231,22 @@ collages dans la console de l'hébergeur :
    python3 scripts/preparer-forge.py cloud-init --offre EM-B311X-SATA
    ```
 
-**Le cloud-init n'est pas versionné, et c'est voulu** : il *embarque* l'amorce et
+**Le cloud-init n'est pas versionné, et c'est voulu** : il dépend de l'amorce et de
 `creer-pool.sh`, qui évoluent. Une copie versionnée serait en retard sur eux et poserait une
 vieille amorce sur une machine neuve ; la commande l'écrit toujours depuis l'amorce
 **courante**. Le JSON de partition, lui, ne dépend que de la règle : il est versionné, et
 une preuve échoue s'il n'est plus ce que la commande produit.
+
+**Le cloud-init est léger par défaut** (environ **1 Ko**) : il ne contient **pas** les
+scripts. Au premier démarrage il les **télécharge** depuis GitHub **au commit épinglé**
+(sha complet, celui de `HEAD` à la génération), **vérifie leur sha256** et ne lance l'amorce
+que si l'empreinte est bonne. C'est la réponse au refus de l'hébergeur : un `user-data` qui
+embarquait les scripts (19 431 octets) a été refusé, « HTTP error 400: Invalid argument:
+UserData: greater than max ». La commande **refuse** de produire un cloud-init qui ne
+marcherait pas : si un script local diffère de celui du commit (*committez d'abord*), ou si
+le commit n'est pas poussé (*poussez d'abord*). Pour un cloud-init **autonome**, sans
+téléchargement : `--embarquer` (environ 11 Ko, les lignes de commentaire des scripts en
+moins) ou `--embarquer --compresser` (environ 6,6 Ko).
 
 Le schéma **original** de chaque offre est versionné à côté
 ([`deploy/cloud-init/offres/`](deploy/cloud-init/offres/)) : c'est l'entrée de
@@ -267,7 +278,9 @@ et **rien** à coller. `--defaut -` lit l'entrée standard.
 | `--pool-source A,B` | `cloud-init` | les deux supports du miroir, à la place de `--offre` et de `--defaut` | déduits du schéma |
 | `--arc-gib N` | `cloud-init` | plafond de l'ARC ZFS, en Gio, retiré de la mémoire allouable | l'amorce garde `16`, **réglé pour 94 Gio de RAM : à adapter** sur une machine qui en a moins |
 | `--net-mbit N` | `cloud-init` | débit du lien, **seulement** si la carte n'en annonce aucun (`virtio`) | absent : le débit est mesuré |
-| `--compresser` | `cloud-init` | embarque les scripts en `gz+b64` : 11,5 Ko au lieu de 19 Ko | absent : texte lisible |
+| `--embarquer` | `cloud-init` | mode **autonome** : embarque les scripts, **sans leurs lignes de commentaire** (≈ 11 Ko) | absent : cloud-init léger (≈ 1 Ko), les scripts sont téléchargés |
+| `--ref REF` | `cloud-init` | mode léger : la branche, l'étiquette ou le commit des scripts à télécharger, épinglé par son sha complet | `HEAD` ; doit être poussé, et les scripts locaux doivent être ceux de ce commit |
+| `--compresser` | `cloud-init` | avec `--embarquer` : scripts en `gz+b64` (≈ 6,6 Ko), illisible à l'œil | absent : texte lisible |
 | `--verifier` | `offres` | n'écrit rien : échoue si un JSON versionné est absent, périmé ou sans offre | absent : (ré)écrit les JSON |
 
 **La règle**, appliquée à chaque disque du schéma par défaut (`docs/DAT.md` §66.3, §66.8) :
@@ -307,19 +320,18 @@ curl -i -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" \
 
 Un `204` vaut acceptation (`{…}` est le JSON de partition de l'offre).
 
-**Limite connue :** la limite de taille du champ cloud-init chez l'hébergeur n'est pas
-documentée. Mesuré le 2026-11-10, le `user-data` fait **environ 19 Ko** (les deux scripts
-embarqués pèsent 16,6 Ko) — au-dessus des 16 Ko que fixent d'autres hébergeurs. La
-commande écrit la taille produite sur la sortie d'erreur ; si l'hébergeur refuse la
-taille, `--compresser` embarque les scripts en `gz+b64` (**11,5 Ko**, décodés par
-cloud-init, illisibles à l'œil). Ce mode n'a pas été joué sur une VM.
+**Limite de taille du `user-data` :** Scaleway a **refusé 19 431 octets** (2026-11-16) et
+ne documente pas sa limite. Le mode léger (≈ 1 Ko) n'a pas été vu accepté ; le mode
+embarqué sans commentaires (≈ 11 Ko, ≈ 6,6 Ko compressé) non plus. La commande écrit la taille
+produite sur la sortie d'erreur. **Non vérifié** : le téléchargement depuis une machine
+livrée par l'hébergeur (réseau sortant au premier démarrage), et `--compresser` sur une VM.
 
 ### Amorcer la Forge au premier démarrage, et rejouer l'amorce
 
 Le script d'amorce est [`deploy/cloud-init/spark-amorce.sh`](deploy/cloud-init/spark-amorce.sh).
-Il n'est pas à copier : le cloud-init que produit la commande ci-dessus
-l'**embarque**, avec [`scripts/creer-pool.sh`](scripts/creer-pool.sh), octet pour octet,
-et le lance. Il installe Incus depuis le dépôt amont Zabbly, **adopte** le pool — celui
+Il n'est pas à copier : le cloud-init que produit la commande ci-dessus le dépose, avec
+[`scripts/creer-pool.sh`](scripts/creer-pool.sh) — par téléchargement vérifié au commit
+épinglé, ou embarqué avec `--embarquer` — et le lance. Il installe Incus depuis le dépôt amont Zabbly, **adopte** le pool — celui
 que l'hébergeur a créé d'après le schéma (`zfs`) — et, si aucun pool n'est importable, ne
 le **crée** que quand on lui donne `--pool-source`, ce que fait le cloud-init (le repli) :
 il appelle alors `creer-pool.sh`, qui refuse tout support déjà écrit —, pose le paquet `sparkd`, puis laisse l'exécuteur

@@ -254,7 +254,9 @@ function remplacer(texte, avant, apres, ecart) {
 }
 // Le pool est créé PAR L'AMORCE sur les deux disques vierges du banc (`vdb`, `vdc`) :
 // `--pool-source` donné, comme le donne la commande depuis le schéma de l'hébergeur.
-const argsCommande = ['cloud-init', '--pool-source', '/dev/vdb,/dev/vdc', '--arc-gib', '1',
+// --embarquer : le banc remplace sparkd par une roue locale DANS le texte de l'amorce, ce que le
+// mode leger (qui la telecharge de GitHub) ne permet pas (DAT §66.9).
+const argsCommande = ['cloud-init', '--embarquer', '--pool-source', '/dev/vdb,/dev/vdc', '--arc-gib', '1',
                       ...(carte === 'virtio' ? ['--net-mbit', '1000'] : [])];
 const produit = spawnSync('python3', [join(RACINE, 'scripts', 'preparer-forge.py'), ...argsCommande],
                           { encoding: 'utf8' });

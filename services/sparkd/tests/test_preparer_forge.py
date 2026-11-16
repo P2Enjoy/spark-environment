@@ -4,7 +4,9 @@
           de derivation, le cloud-init produit, la preuve), §66.7 (les schemas par
           defaut des offres sont versionnes), §66.8 (le pool est declare a
           l'hebergeur ; le JSON de partition de chaque offre est versionne, le
-          cloud-init ne l'est PAS), §8.5, §8.6 · README.md (« Commander
+          cloud-init ne l'est PAS), §66.9 (le cloud-init leger : il telecharge les
+          scripts a un commit epingle ; le mode embarque est sans commentaires),
+          §8.5, §8.6 · README.md (« Commander
           une Forge ») · scripts/README.md · deploy/cloud-init/offres/README.md
 
 Ce que ces preuves gardent, et ce qu'elles ne gardent PAS :
@@ -28,8 +30,10 @@ l'offre. Que l'hebergeur ACCEPTE la sortie reste a constater par un humain
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -354,15 +358,16 @@ def _fichiers(sortie: str) -> dict:
     return {f["path"]: f for f in yaml.safe_load(sortie)["write_files"]}
 
 
-def test_le_contenu_embarque_est_IDENTIQUE_aux_sources_octet_pour_octet():
+def test_le_contenu_embarque_est_celui_des_sources_SANS_leurs_lignes_de_commentaire():
     """Le defaut du gabarit : un marqueur collé tel quel posait une amorce VIDE.
-    Ici le contenu relu par PyYAML est celui du depot, et rien d'autre."""
+    Ici le contenu relu par PyYAML est celui du depot, retire de ses seules lignes de
+    commentaire (DAT §66.9), et rien d'autre."""
     sortie = _cloud_init()
     assert sortie.startswith("#cloud-config\n")
     fichiers = _fichiers(sortie)
     assert set(fichiers) == {"/opt/spark-amorce.sh", "/opt/creer-pool.sh"}
-    assert fichiers["/opt/spark-amorce.sh"]["content"] == AMORCE.read_text(encoding="utf-8")
-    assert fichiers["/opt/creer-pool.sh"]["content"] == CREER_POOL.read_text(encoding="utf-8")
+    assert fichiers["/opt/spark-amorce.sh"]["content"] == pf.sans_commentaires(AMORCE.read_text(encoding="utf-8"))
+    assert fichiers["/opt/creer-pool.sh"]["content"] == pf.sans_commentaires(CREER_POOL.read_text(encoding="utf-8"))
     for f in fichiers.values():
         assert (f["permissions"], f["owner"], f["encoding"]) == ("0755", "root:root", "text/plain")
 
@@ -403,7 +408,7 @@ def test_compresse_le_contenu_decode_est_IDENTIQUE_aux_sources_et_la_sortie_est_
     for chemin, f in fichiers.items():
         assert f["encoding"] == "gz+b64", chemin
         decode = gzip.decompress(base64.b64decode(f["content"])).decode("utf-8")
-        assert decode == sources[chemin].read_text(encoding="utf-8"), chemin
+        assert decode == pf.sans_commentaires(sources[chemin].read_text(encoding="utf-8")), chemin
     assert len(compresse.encode()) < 0.7 * len(brut.encode()), "au moins 30 % plus petit"
     assert yaml.safe_load(compresse)["runcmd"] == yaml.safe_load(brut)["runcmd"]
     assert compresse == pf.rendre_cloud_init(AMORCE.read_text(encoding="utf-8"),
@@ -497,7 +502,7 @@ def test_E2E_chaque_offre_versionnee_donne_un_partitionnement_et_un_cloud_init(o
     part = _commande("partitionnement", "--defaut", str(offre))
     assert part.returncode == 0, part.stderr
     assert json.loads(part.stdout) == pf.deriver(brut, 200)[0]
-    cloud = _commande("cloud-init", "--defaut", str(offre), "--arc-gib", "8")
+    cloud = _commande("cloud-init", "--defaut", str(offre), "--arc-gib", "8", "--embarquer")
     assert cloud.returncode == 0, cloud.stderr
     assert yaml.safe_load(cloud.stdout)["runcmd"] == [
         "/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5 --arc-gib 8"]
@@ -510,17 +515,18 @@ def test_E2E_racine_gio_change_la_sortie():
 
 
 def test_E2E_cloud_init_par_defaut_donne_un_user_data_complet_et_dit_sa_taille():
-    vu = _commande("cloud-init", "--defaut", str(DEFAUT), "--arc-gib", "8")
+    vu = _commande("cloud-init", "--defaut", str(DEFAUT), "--arc-gib", "8", "--embarquer")
     assert vu.returncode == 0, vu.stderr
     doc = yaml.safe_load(vu.stdout)
     assert doc["runcmd"] == ["/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5 --arc-gib 8"]
     assert f"{len(vu.stdout.encode('utf-8'))} octets" in vu.stderr, "la taille dite est la taille produite"
-    assert "pas documentee" in vu.stderr, "la limite de l'hebergeur est dite inconnue, pas supposee"
+    assert "19 431" in vu.stderr and "pas documentee" in vu.stderr, \
+        "le refus de l'hebergeur est dit, et sa limite est dite inconnue, pas supposee"
 
 
 def test_E2E_compresser_donne_un_user_data_plus_petit_et_le_dit():
-    brut = _commande("cloud-init", "--defaut", str(DEFAUT))
-    compresse = _commande("cloud-init", "--defaut", str(DEFAUT), "--compresser")
+    brut = _commande("cloud-init", "--defaut", str(DEFAUT), "--embarquer")
+    compresse = _commande("cloud-init", "--defaut", str(DEFAUT), "--embarquer", "--compresser")
     assert compresse.returncode == 0, compresse.stderr
     assert len(compresse.stdout.encode()) < len(brut.stdout.encode())
     assert f"{len(compresse.stdout.encode('utf-8'))} octets" in compresse.stderr
@@ -529,7 +535,7 @@ def test_E2E_compresser_donne_un_user_data_plus_petit_et_le_dit():
 
 def test_E2E_cloud_init_par_pool_source_explicite():
     vu = _commande("cloud-init", "--pool-source", "/dev/vdb,/dev/vdc", "--arc-gib", "1",
-                   "--net-mbit", "1000")
+                   "--net-mbit", "1000", "--embarquer")
     assert vu.returncode == 0, vu.stderr
     assert yaml.safe_load(vu.stdout)["runcmd"] == [
         "/opt/spark-amorce.sh --pool-source /dev/vdb,/dev/vdc --arc-gib 1 --net-mbit 1000"]
@@ -539,7 +545,7 @@ def test_E2E_cloud_init_par_pool_source_explicite():
                     reason="sh et bash sont necessaires")
 def test_E2E_les_scripts_deposes_par_le_cloud_init_passent_le_VRAI_parseur(tmp_path):
     """Ce que cloud-init ecrira dans /opt, extrait de la SORTIE de la commande."""
-    vu = _commande("cloud-init", "--defaut", str(DEFAUT))
+    vu = _commande("cloud-init", "--defaut", str(DEFAUT), "--embarquer")
     fichiers = _fichiers(vu.stdout)
     amorce = tmp_path / "spark-amorce.sh"
     amorce.write_text(fichiers["/opt/spark-amorce.sh"]["content"], encoding="utf-8")
@@ -596,7 +602,7 @@ def test_E2E_un_mauvais_usage_est_refuse_en_code_2_sans_rien_ecrire(argv, attend
     ("partitionnement", ["--offre", "--defaut", "--racine-gio", "--sans-zfs"]),
     ("offres", ["--racine-gio", "--verifier"]),
     ("cloud-init", ["--offre", "--defaut", "--racine-gio", "--pool-source", "--arc-gib",
-                    "--net-mbit", "--compresser"]),
+                    "--net-mbit", "--embarquer", "--ref", "--compresser"]),
 ])
 def test_E2E_chaque_sous_commande_a_son_help_qui_nomme_ses_reglages(sous_commande, noms):
     """CLAUDE.md §3 : un reglage se lit dans la commande et dans son --help."""
@@ -708,8 +714,9 @@ def test_une_offre_hors_regle_est_refusee_avec_son_nom_de_fichier(tmp_path):
 @pytest.mark.parametrize("offre", OFFRES, ids=lambda f: f.stem)
 def test_E2E_offre_par_son_nom_donne_la_meme_sortie_que_par_son_fichier(offre):
     for sous_commande in ("partitionnement", "cloud-init"):
-        par_nom = _commande(sous_commande, "--offre", offre.stem)
-        par_fichier = _commande(sous_commande, "--defaut", str(offre))
+        en_plus = ["--embarquer"] if sous_commande == "cloud-init" else []
+        par_nom = _commande(sous_commande, "--offre", offre.stem, *en_plus)
+        par_fichier = _commande(sous_commande, "--defaut", str(offre), *en_plus)
         assert par_nom.returncode == 0, par_nom.stderr
         assert par_nom.stdout == par_fichier.stdout, sous_commande
 
@@ -717,11 +724,11 @@ def test_E2E_offre_par_son_nom_donne_la_meme_sortie_que_par_son_fichier(offre):
 def test_E2E_le_cloud_init_par_nom_d_offre_embarque_l_amorce_COURANTE():
     """C'est tout l'interet de ne pas le versionner : demain, la meme commande
     produit le cloud-init de l'amorce de demain."""
-    vu = _commande("cloud-init", "--offre", "EM-B311X-SATA")
+    vu = _commande("cloud-init", "--offre", "EM-B311X-SATA", "--embarquer")
     assert vu.returncode == 0, vu.stderr
     contenus = {f["path"]: f["content"] for f in yaml.safe_load(vu.stdout)["write_files"]}
-    assert contenus["/opt/spark-amorce.sh"] == AMORCE.read_text(encoding="utf-8")
-    assert contenus["/opt/creer-pool.sh"] == CREER_POOL.read_text(encoding="utf-8")
+    assert contenus["/opt/spark-amorce.sh"] == pf.sans_commentaires(AMORCE.read_text(encoding="utf-8"))
+    assert contenus["/opt/creer-pool.sh"] == pf.sans_commentaires(CREER_POOL.read_text(encoding="utf-8"))
     assert yaml.safe_load(vu.stdout)["runcmd"] == ["/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5"]
 
 
@@ -744,3 +751,293 @@ def test_E2E_offres_verifier_est_vert_sur_les_fichiers_versionnes_et_n_ecrit_rie
     assert vu.returncode == 0, vu.stderr
     assert vu.stdout == "" and "a jour" in vu.stderr
     assert {f.name: f.read_bytes() for f in FORGE_DIR.iterdir()} == avant, "--verifier n'ecrit RIEN"
+
+
+# --- Les lignes de commentaire retirees du mode embarque (DAT §66.9) -----------------------------
+
+SCRIPTS = {"amorce": AMORCE, "creer-pool": CREER_POOL}
+
+
+@pytest.mark.parametrize("nom", SCRIPTS)
+def test_sans_commentaires_ne_retire_que_des_lignes_de_commentaire(nom):
+    """Chaque ligne retiree est une ligne ENTIEREMENT en commentaire ; toutes les autres
+    restent, dans l'ordre — lignes vides comprises (en fusionner changerait un heredoc) —
+    et le `#!` de la premiere ligne est garde."""
+    source = SCRIPTS[nom].read_text(encoding="utf-8")
+    net = pf.sans_commentaires(source)
+    originales, gardees = source.split("\n"), net.rstrip("\n").split("\n")
+    assert gardees[0] == originales[0] and gardees[0].startswith("#!")
+    retirees = [l for l in originales[1:] if l not in gardees]
+    assert all(l.lstrip().startswith("#") for l in retirees)
+    attendu = [originales[0]] + [l for l in originales[1:] if not l.lstrip().startswith("#")]
+    assert gardees == [l for l in attendu if True][:len(gardees)]
+    assert len(net) < 0.7 * len(source), "le gain est reel : au moins 30 %"
+    assert net.endswith("\n") and not net.endswith("\n\n")
+
+
+def test_sans_commentaires_garde_les_commentaires_en_fin_de_ligne_et_les_lignes_vides():
+    texte = "#!/bin/sh\n# retire\n  # retire aussi\nA=1  # reste\n\n\nB=${#X}\n"
+    assert pf.sans_commentaires(texte) == "#!/bin/sh\nA=1  # reste\n\n\nB=${#X}\n"
+
+
+@pytest.mark.skipif(shutil.which("sh") is None or shutil.which("bash") is None,
+                    reason="sh et bash sont necessaires")
+def test_les_scripts_sans_commentaires_passent_le_meme_analyseur_et_rendent_la_meme_aide(tmp_path):
+    amorce = tmp_path / "amorce.sh"
+    amorce.write_text(pf.sans_commentaires(AMORCE.read_text(encoding="utf-8")), encoding="utf-8")
+    creer = tmp_path / "creer-pool.sh"
+    creer.write_text(pf.sans_commentaires(CREER_POOL.read_text(encoding="utf-8")), encoding="utf-8")
+    assert subprocess.run(["sh", "-n", str(amorce)], capture_output=True).returncode == 0
+    assert subprocess.run(["bash", "-n", str(creer)], capture_output=True).returncode == 0
+    # L'aide vit dans un heredoc : si le retrait avait touche son contenu, elle changerait.
+    avant = subprocess.run(["sh", str(AMORCE), "--help"], capture_output=True, text=True)
+    apres = subprocess.run(["sh", str(amorce), "--help"], capture_output=True, text=True)
+    assert avant.returncode == apres.returncode == 0
+    assert apres.stdout == avant.stdout
+
+
+def test_le_python_embarque_dans_l_amorce_se_compile_sans_ses_commentaires():
+    """L'amorce porte un heredoc Python : retirer ses lignes de commentaire ne doit pas
+    le casser."""
+    net = pf.sans_commentaires(AMORCE.read_text(encoding="utf-8"))
+    bloc = re.search(r"<<'PY'\n(.*?)\nPY\n", net, re.S)
+    assert bloc, "le heredoc Python doit rester dans l'amorce"
+    compile(bloc.group(1), "<amorce:PY>", "exec")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None or len([b for b in ("/dev/loop0", "/dev/loop1")
+                                                         if Path(b).exists()]) < 2,
+                    reason="deux peripheriques bloc et bash sont necessaires")
+def test_creer_pool_sans_commentaires_fait_la_meme_chose_que_l_original(tmp_path):
+    """Meme scenario, memes doubles (`id`, `incus`, `wipefs`) : memes appels, meme sortie."""
+    def jouer(script: Path, dossier: Path):
+        binaire = dossier / "bin"
+        binaire.mkdir(parents=True)
+        journal = dossier / "appels.txt"
+        (binaire / "id").write_text("#!/bin/sh\necho 0\n")
+        (binaire / "incus").write_text(
+            f'#!/bin/sh\necho "incus $*" >> "{journal}"\n'
+            '[ "$1 $2" = "storage show" ] && exit 1\nexit 0\n')
+        (binaire / "wipefs").write_text("#!/bin/sh\nexit 0\n")
+        for f in binaire.iterdir():
+            f.chmod(0o755)
+        env = {**os.environ, "PATH": f"{binaire}:{os.environ['PATH']}",
+               "SPARK_POOL_SOURCE": "/dev/loop0,/dev/loop1"}
+        vu = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env)
+        return vu.returncode, vu.stdout, journal.read_text() if journal.exists() else ""
+    net = tmp_path / "creer-pool-net.sh"
+    net.write_text(pf.sans_commentaires(CREER_POOL.read_text(encoding="utf-8")), encoding="utf-8")
+    avant = jouer(CREER_POOL, tmp_path / "a")
+    apres = jouer(net, tmp_path / "b")
+    assert avant[0] == 0 and "source=mirror=/dev/loop0,/dev/loop1" in avant[2]
+    assert apres == avant
+
+
+# --- Le cloud-init LEGER (DAT §66.9) ----------------------------------------------------------
+
+
+def _depot_jetable(tmp_path: Path) -> Path:
+    """Un depot Git jetable avec les deux scripts, au meme chemin relatif que le vrai."""
+    depot = tmp_path / "depot"
+    for relatif, _ in pf.SCRIPTS_DEPOSES:
+        cible = depot / relatif
+        cible.parent.mkdir(parents=True, exist_ok=True)
+        cible.write_text((RACINE / relatif).read_text(encoding="utf-8"), encoding="utf-8")
+    git = ["git", "-C", str(depot), "-c", "user.name=essai", "-c", "user.email=essai@exemple.test"]
+    subprocess.run([*git[:3], "init", "-q"], check=True)
+    subprocess.run([*git, "add", "."], check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "essai"], check=True)
+    return depot
+
+
+def _pousser(depot: Path) -> None:
+    """Simule « poussé » : une branche de suivi distante qui contient HEAD."""
+    sha = subprocess.run(["git", "-C", str(depot), "rev-parse", "HEAD"], capture_output=True,
+                         text=True, check=True).stdout.strip()
+    subprocess.run(["git", "-C", str(depot), "update-ref", "refs/remotes/origin/main", sha], check=True)
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git est necessaire")
+def test_epingler_donne_le_sha_complet_et_les_empreintes_d_un_commit_pousse(tmp_path):
+    import hashlib
+    depot = _depot_jetable(tmp_path)
+    _pousser(depot)
+    sha, empreintes = pf.epingler(None, depot)
+    assert re.fullmatch(r"[0-9a-f]{40}", sha)
+    for relatif, _ in pf.SCRIPTS_DEPOSES:
+        assert empreintes[relatif] == hashlib.sha256((depot / relatif).read_bytes()).hexdigest()
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git est necessaire")
+def test_epingler_resout_une_etiquette_en_sha_complet(tmp_path):
+    depot = _depot_jetable(tmp_path)
+    _pousser(depot)
+    subprocess.run(["git", "-C", str(depot), "tag", "v1"], check=True)
+    sha_tete, _ = pf.epingler(None, depot)
+    sha_etiquette, _ = pf.epingler("v1", depot)
+    assert sha_etiquette == sha_tete and len(sha_etiquette) == 40
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git est necessaire")
+def test_epingler_refuse_un_commit_qui_n_est_pas_pousse(tmp_path):
+    depot = _depot_jetable(tmp_path)
+    with pytest.raises(pf.Refus, match="aucune branche distante.*Poussez"):
+        pf.epingler(None, depot)
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git est necessaire")
+def test_epingler_refuse_un_script_local_different_du_commit(tmp_path):
+    """La machine telechargerait celui du commit : la commande le dit au lieu de
+    produire un cloud-init qui echouerait au premier demarrage."""
+    depot = _depot_jetable(tmp_path)
+    _pousser(depot)
+    (depot / pf.SCRIPTS_DEPOSES[0][0]).write_text("#!/bin/sh\necho modifie\n", encoding="utf-8")
+    with pytest.raises(pf.Refus, match=r"spark-amorce\.sh diff.re de celui du commit.*Committez"):
+        pf.epingler(None, depot)
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git est necessaire")
+def test_epingler_refuse_une_reference_inconnue(tmp_path):
+    depot = _depot_jetable(tmp_path)
+    _pousser(depot)
+    with pytest.raises(pf.Refus, match="git rev-parse"):
+        pf.epingler("branche-qui-n-existe-pas", depot)
+
+
+SHA = "a" * 40
+EMPREINTES = {relatif: hashlib.sha256((RACINE / relatif).read_bytes()).hexdigest()
+              for relatif, _ in pf.SCRIPTS_DEPOSES}
+
+
+def _leger(arc=None, net=None, supports=("/dev/sda5", "/dev/sdb5")) -> str:
+    return pf.rendre_cloud_init_leger(SHA, EMPREINTES, list(supports), arc, net)
+
+
+def test_le_cloud_init_leger_n_embarque_AUCUN_script_et_reste_tres_petit():
+    sortie = _leger()
+    doc = yaml.safe_load(sortie)
+    assert sortie.startswith("#cloud-config\n")
+    assert set(doc) == {"runcmd"}, "ni write_files ni autre cle : aucun script embarque"
+    assert "zpool import" not in sortie and "nft" not in sortie
+    assert len(sortie.encode("utf-8")) < 2000, "environ 1 Ko : tres en dessous de ce qui a ete refuse"
+    assert len(sortie.encode("utf-8")) < 19431 / 8
+
+
+def test_le_cloud_init_leger_epingle_le_commit_et_porte_chaque_empreinte():
+    script = yaml.safe_load(_leger())["runcmd"][0]
+    assert f"base={pf.DEPOT_RAW}/{SHA}" in script, "le commit est epingle par son sha complet"
+    assert "main" not in script.split("base=")[1].split("\n")[0], "jamais une branche mouvante"
+    for relatif, dest in pf.SCRIPTS_DEPOSES:
+        assert f"deposer {relatif} {dest} {EMPREINTES[relatif]}" in script
+    assert script.rstrip().splitlines()[-1] == "/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5"
+
+
+def test_le_cloud_init_leger_transmet_les_reglages_demandes_et_seulement_eux():
+    derniere = lambda s: yaml.safe_load(s)["runcmd"][0].rstrip().splitlines()[-1]
+    assert derniere(_leger(arc=4)) == "/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5 --arc-gib 4"
+    assert derniere(_leger(arc=1, net=1000)).endswith("--arc-gib 1 --net-mbit 1000")
+
+
+@pytest.mark.parametrize("sha, empreintes", [
+    ("a" * 39, EMPREINTES), ("A" * 40, EMPREINTES), ("a;rm" + "a" * 36, EMPREINTES),
+    (SHA, {**EMPREINTES, "scripts/creer-pool.sh": "xyz"}),
+    (SHA, {**EMPREINTES, "scripts/creer-pool.sh": "$(id)" + "a" * 59})])
+def test_un_sha_ou_une_empreinte_qui_n_est_pas_de_l_hexadecimal_est_REFUSE(sha, empreintes):
+    """Ils finissent dans un script lance en root : hexadecimal strict, rien d'autre."""
+    with pytest.raises(pf.Refus, match="invalide"):
+        pf.rendre_cloud_init_leger(sha, empreintes, ["/dev/sda5", "/dev/sdb5"], None, None)
+
+
+def test_l_URL_du_depot_est_celle_que_l_amorce_interroge_deja():
+    amorce = AMORCE.read_text(encoding="utf-8")
+    assert "github.com/P2Enjoy/spark-environment" in amorce
+    assert pf.DEPOT_RAW == "https://raw.githubusercontent.com/P2Enjoy/spark-environment"
+
+
+@pytest.mark.skipif(shutil.which("sh") is None or shutil.which("sha256sum") is None,
+                    reason="sh et sha256sum sont necessaires")
+class TestTelechargementDuCloudInitLeger:
+    """Le script `runcmd` du cloud-init leger, JOUE pour de vrai avec un `curl` double.
+
+    Deux substitutions, dites : `/opt/` devient un dossier jetable, et la derniere ligne
+    — le lancement de l'amorce, qui poserait un pare-feu — devient `echo LANCE`. Tout le
+    reste, le telechargement, la verification d'empreinte, le `mv`, est le texte produit.
+    """
+
+    def _jouer(self, tmp_path: Path, empreintes: dict[str, str], curl: str):
+        script = yaml.safe_load(pf.rendre_cloud_init_leger(
+            SHA, empreintes, ["/dev/sda5", "/dev/sdb5"], None, None))["runcmd"][0]
+        lignes = script.rstrip().splitlines()
+        assert lignes[-1].startswith("/opt/spark-amorce.sh ")
+        lignes[-1] = "echo LANCE"
+        programme = "\n".join(lignes).replace("/opt/", f"{tmp_path}/opt/")
+        (tmp_path / "opt").mkdir()
+        binaire = tmp_path / "bin"
+        binaire.mkdir()
+        (binaire / "curl").write_text(curl)
+        (binaire / "curl").chmod(0o755)
+        env = {**os.environ, "PATH": f"{binaire}:{os.environ['PATH']}"}
+        return subprocess.run(["sh", "-c", programme], capture_output=True, text=True, env=env)
+
+    def _curl_depot(self, tmp_path: Path) -> str:
+        """Un curl qui « telecharge » en copiant le fichier du depot, et journalise l'URL."""
+        return ("#!/bin/sh\n"
+                f'echo "$*" >> "{tmp_path}/curl.log"\n'
+                'for a in "$@"; do case "$a" in http*) u=$a ;; esac; done; sortie=""\n'
+                'while [ $# -gt 0 ]; do [ "$1" = "-o" ] && sortie=$2; shift; done\n'
+                f'cp "{RACINE}/${{u#*{SHA}/}}" "$sortie"\n')
+
+    def test_les_deux_scripts_sont_poses_verifies_puis_l_amorce_est_lancee(self, tmp_path):
+        vu = self._jouer(tmp_path, EMPREINTES, self._curl_depot(tmp_path))
+        assert vu.returncode == 0, vu.stderr
+        assert "LANCE" in vu.stdout
+        for relatif, dest in pf.SCRIPTS_DEPOSES:
+            pose = Path(str(tmp_path) + dest)
+            assert pose.read_bytes() == (RACINE / relatif).read_bytes()
+            assert pose.stat().st_mode & 0o777 == 0o755
+        assert not list((tmp_path / "opt").glob("*.part")), "aucun fichier temporaire ne reste"
+        urls = (tmp_path / "curl.log").read_text()
+        assert f"{pf.DEPOT_RAW}/{SHA}/deploy/cloud-init/spark-amorce.sh" in urls
+        assert f"{pf.DEPOT_RAW}/{SHA}/scripts/creer-pool.sh" in urls
+
+    def test_une_empreinte_fausse_ne_pose_RIEN_et_n_execute_RIEN(self, tmp_path):
+        fausses = {**EMPREINTES, "scripts/creer-pool.sh": "0" * 64}
+        vu = self._jouer(tmp_path, fausses, self._curl_depot(tmp_path))
+        assert vu.returncode != 0
+        assert "LANCE" not in vu.stdout, "l'amorce ne se lance pas sur une empreinte invalide"
+        assert "empreinte invalide : scripts/creer-pool.sh" in vu.stderr
+        assert not (tmp_path / "opt" / "creer-pool.sh").exists(), "le fichier non verifie n'est jamais pose"
+        assert not list((tmp_path / "opt").glob("*.part"))
+
+    def test_un_telechargement_en_echec_arrete_tout(self, tmp_path):
+        vu = self._jouer(tmp_path, EMPREINTES, "#!/bin/sh\nexit 22\n")
+        assert vu.returncode != 0 and "LANCE" not in vu.stdout
+        assert list((tmp_path / "opt").iterdir()) == [], "rien n'est pose"
+
+
+# --- Le cloud-init leger, par la commande (E2E) -------------------------------------------------
+
+
+def test_E2E_le_cloud_init_leger_est_le_defaut_et_reste_petit():
+    """Sur le vrai depot : n'a de sens que si les scripts locaux sont ceux d'un commit
+    pousse — sinon la commande refuse, et c'est le comportement voulu (saute, en le disant)."""
+    try:
+        pf.epingler(None)
+    except pf.Refus as refus:
+        pytest.skip(f"le depot n'est pas dans un etat publiable : {refus}")
+    vu = _commande("cloud-init", "--offre", "EM-B311X-SATA")
+    assert vu.returncode == 0, vu.stderr
+    assert set(yaml.safe_load(vu.stdout)) == {"runcmd"}
+    assert len(vu.stdout.encode("utf-8")) < 2000
+    assert f"{len(vu.stdout.encode('utf-8'))} octets" in vu.stderr and "leger" in vu.stderr
+
+
+@pytest.mark.parametrize("argv, attendu", [
+    (["--compresser"], "--compresser ne vaut qu'avec --embarquer"),
+    (["--embarquer", "--ref", "HEAD"], "--ref ne vaut qu'en mode leger"),
+    (["--ref", "0" * 40], "git rev-parse"),
+])
+def test_E2E_les_options_incompatibles_du_cloud_init_sont_refusees_sans_rien_ecrire(argv, attendu):
+    vu = _commande("cloud-init", "--offre", "EM-B311X-SATA", *argv)
+    assert vu.returncode == 2, (vu.returncode, vu.stderr)
+    assert vu.stdout == "" and attendu in vu.stderr

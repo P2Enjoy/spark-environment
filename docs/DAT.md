@@ -16249,8 +16249,10 @@ et à la lecture du dépôt :
 3. **Une règle, pas un fichier** : le JSON n'est jamais universel (noms de
    disques, BIOS ou UEFI, taille des disques), la règle qui le produit l'est
    (§66.3).
-4. **Le cloud-init est produit, jamais assemblé à la main.** Il embarque
-   `spark-amorce.sh` et `creer-pool.sh` octet pour octet. Le gabarit à marqueur
+4. **Le cloud-init est produit, jamais assemblé à la main.** Il dépose
+   `spark-amorce.sh` et `creer-pool.sh` — par défaut il les **télécharge** au commit
+   épinglé, sha256 vérifié, et en mode `--embarquer` il les embarque sans leurs lignes de
+   commentaire (§66.9) ; à l'origine il les embarquait octet pour octet. Le gabarit à marqueur
    est supprimé : une seule source.
 5. **L'amorce prend ses réglages en arguments nommés** — `--pool-source`,
    `--arc-gib`, `--net-mbit`, `--help` — conformément au CLAUDE.md §3. Restent en
@@ -16301,10 +16303,13 @@ Entrée : l'objet JSON du schéma par défaut — `disks`, `filesystems`, `raids
 
 ### 66.4 Le cloud-init produit
 
+*Ce paragraphe décrit le mode `--embarquer`. Le mode par défaut, depuis le
+2026-11-16, est le cloud-init **léger** du §66.9.*
+
 `#cloud-config`, deux fichiers dans `write_files` (`/opt/spark-amorce.sh` et
 `/opt/creer-pool.sh`, `0755`, `root:root`, `encoding: text/plain`, contenu
-indenté de 6 espaces — une fois le YAML lu, le contenu est identique à la source),
-puis un `runcmd` d'**une ligne** :
+indenté de 6 espaces — une fois le YAML lu, le contenu est la source **sans ses lignes
+de commentaire**, §66.9), puis un `runcmd` d'**une ligne** :
 `/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5` suivi de `--arc-gib N`
 et `--net-mbit N` s'ils sont demandés.
 
@@ -16316,9 +16321,10 @@ produite : la limite du champ chez l'hébergeur n'est pas documentée (recherche
 chez un autre hébergeur, est de 16 Ko. **Mesuré le 2026-11-10** : les deux scripts
 pèsent 16,6 Ko, le `user-data` environ **19 Ko** en clair — au-dessus de cette
 limite-là. `--compresser` embarque les scripts en `gz+b64` (que cloud-init décode
-lui-même ; le contenu décodé reste celui du dépôt, octet pour octet) : **11,5 Ko**.
-Ce n'est pas le défaut — le texte lisible se relit avant de coller —, c'est
-l'échappatoire si l'hébergeur refuse la taille ; il n'a pas été joué sur une VM.
+lui-même) : **11,5 Ko** avec les commentaires, environ **6,6 Ko** sans (§66.9). *Écrit
+le 2026-11-10 : « le texte lisible se relit avant de coller, ce n'est pas le défaut ».
+Le 2026-11-16 l'hébergeur a **refusé 19 431 octets** : le texte lisible complet n'est plus
+le défaut, le mode léger du §66.9 l'est.*
 *Une première version de ce paragraphe annonçait 13 Ko : l'estimation oubliait la
 croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
 
@@ -16327,7 +16333,7 @@ croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
 - **Unitaire** : la dérivation sur le schéma par défaut relevé le 2026-11-10 (le
   résultat est celui validé par la console), sur un NVMe, sur un UEFI, dans le
   dialecte snake_case ; chacun des refus du §66.3 ; le YAML relu par un
-  analyseur, contenu embarqué identique aux sources ; l'amorce — arguments,
+  analyseur, contenu embarqué identique aux sources sans leurs lignes de commentaire ; l'amorce — arguments,
   refus avant écriture, `sh -n`, création gardée par `--pool-source`, aucun
   `zpool create` direct, rejeu sans création.
 - **E2E de la commande** : lancée comme un utilisateur (fichier, entrée standard,
@@ -16457,11 +16463,11 @@ veux le JSON de partition à utiliser et le cloud-init. » Pour chaque
   **versionné**, et **une preuve échoue s'il diffère de ce que la commande produit
   aujourd'hui** (`offres --verifier` la rejoue en ligne de commande) ;
 - `preparer-forge.py cloud-init --offre <offre>` écrit le user-data complet **à la
-  demande**. Il n'est **jamais versionné** : il *embarque* `spark-amorce.sh` et
+  demande**. Il n'est **jamais versionné** : il dépend de `spark-amorce.sh` et de
   `creer-pool.sh`, qui évoluent, et une copie serait en retard sur eux — une vieille
   amorce posée sur une machine neuve. Une preuve vérifie qu'aucun cloud-init
   pré-compilé n'est versionné, et que celui que la commande écrit contient l'amorce
-  **courante**, octet pour octet.
+  **courante** (sans ses lignes de commentaire en mode `--embarquer`, §66.9).
 
 *Une première version de cette décision versionnait aussi le cloud-init, tenu à jour par
 une preuve. C'était une erreur : chaque changement de l'amorce aurait imposé de

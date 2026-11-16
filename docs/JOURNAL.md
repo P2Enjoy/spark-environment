@@ -15074,3 +15074,26 @@ pari sur la limite, c'est un gain réel qui rend le mode autonome plausible ; le
 (~1,5 Ko) reste le défaut parce que c'est le seul que la limite, quelle qu'elle soit, ne
 peut pas refuser. Contrepartie assumée : le script posé n'est plus octet pour octet celui du
 dépôt, mais sa copie sans commentaires ; les preuves le tiennent (DAT §66.9).
+
+**Réalisé.** `cloud-init` est léger par défaut : `epingler` résout la référence en sha
+complet, exige que les deux scripts locaux soient ceux du commit et que le commit soit
+sur une branche distante, puis `rendre_cloud_init_leger` écrit un `runcmd` de 1 058 octets
+qui télécharge chaque script dans un `.part`, vérifie son sha256, ne le pose (`mv`) que
+s'il passe, et lance l'amorce. `--embarquer` embarque les scripts sans leurs lignes
+entièrement en commentaire (11 116 octets ; 6 639 compressé) ; `--compresser` exige
+`--embarquer`, `--ref` exige le mode léger. Le banc passe `--embarquer`.
+
+**Ce que les preuves tiennent.** Un dépôt Git jetable pour l'épinglage (commit non poussé,
+script modifié, référence inconnue, étiquette) ; le script `runcmd` **joué** avec un `curl`
+doublé : empreinte fausse → rien de posé, l'amorce n'est pas lancée ; téléchargement en
+échec → rien de posé. Les scripts sans commentaires passent `sh -n` / `bash -n`, rendent la
+même `--help` (qui vit dans un heredoc), le Python embarqué se compile, et `creer-pool.sh`
+sans commentaires fait les mêmes appels `incus` que l'original.
+
+**Une erreur de test, corrigée.** Mon `curl` doublé prenait le dernier argument pour l'URL
+(c'était le chemin de sortie) : deux preuves rouges, le code était bon.
+
+**Ce qui n'a PAS été vérifié.** Que Scaleway accepte le `user-data` léger (1 058 octets :
+très en dessous de ce qui a été refusé, mais sa limite est inconnue) ; le téléchargement
+depuis une machine **livrée** ; le mode `--compresser` sur une VM. Le banc de redémarrage
+éprouve le mode embarqué — il n'a pas été rejoué depuis ce changement.

@@ -17,7 +17,7 @@
   tels qu'affiches par sa console : l'entree de `preparer-forge.py` (`--defaut`).
   `cloud-init/offres/forge/` — pour chacune, le JSON de partition pret a coller (pool
   ZFS declare), PRODUIT par `preparer-forge.py offres` et tenu a jour par une preuve.
-  Le cloud-init, lui, n'est PAS versionne : il embarque l'amorce, qui evolue ; il se
+  Le cloud-init, lui, n'est PAS versionne : il depend de l'amorce, qui evolue (LEGER par defaut : il telecharge les scripts au commit epingle, sha256 verifie) ; il se
   produit a la demande (`preparer-forge.py cloud-init --offre <NOM>`). Provenance dans
   le README du dossier. Unite **SPK-158**, DAT §66.7 et §66.8.
 

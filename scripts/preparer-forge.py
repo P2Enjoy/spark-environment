@@ -4,7 +4,9 @@
 @spec docs/BACKLOG.md#SPK-158 · docs/DAT.md §66.2 a §66.4 (la decision, la regle
       de derivation, le cloud-init produit), §66.7 (les schemas par defaut des
       offres), §66.8 (le pool declare a l'hebergeur ; le JSON de partition versionne
-      de chaque offre connue, le cloud-init produit a la demande), §8.5, §8.6 · README.md (« Commander une Forge ») ·
+      de chaque offre connue, le cloud-init produit a la demande), §66.9 (le
+      cloud-init leger : il telecharge les scripts a un commit epingle), §8.5,
+      §8.6 · README.md (« Commander une Forge ») ·
       scripts/README.md · deploy/cloud-init/offres/README.md ·
       docs/BACKLOG.md#SPK-159 (l'amorce dont le cloud-init porte le texte)
 
@@ -16,8 +18,11 @@ default »), ou une offre CONNUE par son nom (deploy/cloud-init/offres/<offre>.j
     preparer-forge.py cloud-init      --offre EM-B311X-SATA  > user-data.yaml
     preparer-forge.py partitionnement --defaut defaut.json   # une offre nouvelle
 
-Le cloud-init EMBARQUE l'amorce : il se produit TOUJOURS a la demande, depuis l'amorce
-courante, et n'est JAMAIS versionne — une copie evoluerait en retard sur le script.
+Le cloud-init se produit TOUJOURS a la demande, depuis l'amorce courante, et n'est JAMAIS
+versionne — une copie evoluerait en retard sur le script. Par defaut il est LEGER (environ
+1,5 Ko) : il telecharge les deux scripts au commit epingle et verifie leur sha256, parce
+que l'hebergeur refuse un user-data trop gros (HTTP 400 « UserData: greater than max » sur
+19 431 octets). `--embarquer` les embarque a la place, sans leurs lignes de commentaire.
 La troisieme sous-commande ecrit, pour chaque offre connue, le seul JSON de partition,
 versionne dans deploy/cloud-init/offres/forge/ (il ne depend que de la regle) :
 
@@ -38,8 +43,10 @@ import argparse
 import base64
 import copy
 import gzip
+import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -48,6 +55,13 @@ AMORCE = RACINE / "deploy" / "cloud-init" / "spark-amorce.sh"
 CREER_POOL = RACINE / "scripts" / "creer-pool.sh"
 #: Les schemas par defaut des offres, tels que l'hebergeur les affiche (DAT §66.7).
 OFFRES = RACINE / "deploy" / "cloud-init" / "offres"
+
+#: Le depot que la machine interroge au premier demarrage : celui que l'amorce
+#: interroge deja pour `sparkd` (`pip install git+https://github.com/P2Enjoy/...`).
+DEPOT_RAW = "https://raw.githubusercontent.com/P2Enjoy/spark-environment"
+#: Les deux scripts que le cloud-init depose : (chemin dans le depot, chemin sur la Forge).
+SCRIPTS_DEPOSES = (("deploy/cloud-init/spark-amorce.sh", "/opt/spark-amorce.sh"),
+                   ("scripts/creer-pool.sh", "/opt/creer-pool.sh"))
 
 GIB = 1024 ** 3
 #: Le systeme d'une Forge ; la Forge de validation en consomme 2,7 Gio (DAT §66.3).
@@ -183,8 +197,19 @@ def _verifier_support(liste: str) -> list[str]:
     return supports
 
 
+def sans_commentaires(script: str) -> str:
+    """Le script SANS ses lignes entierement en commentaire — le `#!` de la premiere
+    ligne est garde. Les commentaires servent aux lecteurs du depot, pas a la machine
+    (DAT §66.9). Rien d'autre n'est touche : ni les commentaires en fin de ligne, ni les
+    lignes vides (les fusionner changerait le contenu d'un heredoc).
+    """
+    lignes = script.split("\n")
+    gardees = [lignes[0]] + [l for l in lignes[1:] if not l.lstrip().startswith("#")]
+    return "\n".join(gardees).rstrip("\n") + "\n"
+
+
 def _entree(chemin: str, script: str, compresser: bool = False) -> str:
-    """Une entree de `write_files` : le script embarque, octet pour octet.
+    """Une entree de `write_files` : le script embarque, SANS ses lignes de commentaire.
 
     Compresse (`gz+b64`, que cloud-init decode lui-meme), le contenu rendu est
     celui du script apres decompression : la taille change, pas le fichier pose.
@@ -194,6 +219,7 @@ def _entree(chemin: str, script: str, compresser: bool = False) -> str:
         raise Refus(f"{chemin} : caracteres de controle — il ne peut pas etre embarque tel quel")
     if not script.endswith("\n") or script.endswith("\n\n"):
         raise Refus(f"{chemin} : une seule fin de ligne en bout de fichier est attendue")
+    script = sans_commentaires(script)
     if compresser:
         b64 = base64.b64encode(gzip.compress(script.encode("utf-8"), mtime=0)).decode("ascii")
         corps = "".join(f"      {b64[i:i + 76]}\n" for i in range(0, len(b64), 76))
@@ -217,7 +243,7 @@ def rendre_cloud_init(amorce: str, creer_pool: str, supports: list[str],
     ligne = "/opt/spark-amorce.sh " + " ".join(options)
     return ("#cloud-config\n"
             "# Produit par scripts/preparer-forge.py : ne pas l'editer, relancer la commande.\n"
-            "# L'amorce et creer-pool.sh sont embarques tels quels"
+            "# L'amorce et creer-pool.sh sont embarques, sans leurs lignes de commentaire"
             + (" (compresses : gz+b64)" if compresser else "") + " ; `runcmd` ne joue qu'une fois\n"
             "# par instance, le rejeu passe par `sudo /opt/spark-amorce.sh` (README).\n"
             "\n"
@@ -226,6 +252,78 @@ def rendre_cloud_init(amorce: str, creer_pool: str, supports: list[str],
             + _entree("/opt/creer-pool.sh", creer_pool, compresser)
             + "\nruncmd:\n"
             f"  - '{ligne}'\n")
+
+
+# --- Le cloud-init LEGER (DAT §66.9) --------------------------------------------
+
+
+def _git(racine: Path, *args: str) -> bytes:
+    try:
+        vu = subprocess.run(["git", "-C", str(racine), *args], capture_output=True)
+    except OSError as erreur:
+        raise Refus("git est necessaire pour epingler le commit des scripts (ou --embarquer) : "
+                    f"{erreur}") from erreur
+    if vu.returncode != 0:
+        raise Refus(f"git {' '.join(args)} a echoue : {vu.stderr.decode('utf-8', 'replace').strip()}")
+    return vu.stdout
+
+
+def epingler(ref: str | None, racine: Path = RACINE) -> tuple[str, dict[str, str]]:
+    """(sha complet du commit, sha256 de chaque script) — ou un refus qui dit quoi faire.
+
+    La machine telecharge les scripts AU COMMIT et verifie leur empreinte : il faut donc
+    que les scripts locaux soient ceux du commit, et que le commit soit sur GitHub.
+    """
+    cible = (ref or "HEAD") + "^{commit}"
+    sha = _git(racine, "rev-parse", "--verify", cible).decode().strip()
+    empreintes: dict[str, str] = {}
+    for relatif, _ in SCRIPTS_DEPOSES:
+        local = (racine / relatif).read_bytes()
+        du_commit = _git(racine, "show", f"{sha}:{relatif}")
+        if local != du_commit:
+            raise Refus(f"{relatif} diffère de celui du commit {sha[:9]} : la machine téléchargerait "
+                        "celui du commit. Committez (et poussez) d'abord, ou donnez --embarquer")
+        empreintes[relatif] = hashlib.sha256(du_commit).hexdigest()
+    if not _git(racine, "branch", "-r", "--contains", sha).strip():
+        raise Refus(f"le commit {sha[:9]} n'est sur aucune branche distante : la machine ne pourrait "
+                    "pas le télécharger. Poussez d'abord (git push), ou donnez --embarquer")
+    return sha, empreintes
+
+
+def rendre_cloud_init_leger(sha: str, empreintes: dict[str, str], supports: list[str],
+                            arc_gib: int | None, net_mbit: int | None) -> str:
+    """Le YAML leger : AUCUN script embarque. Au premier demarrage il telecharge les deux
+    scripts au commit `sha`, verifie leur sha256 — un fichier qui ne le passe pas n'est
+    jamais pose — puis lance l'amorce avec ses arguments (DAT §66.9)."""
+    if not re.fullmatch(r"[0-9a-f]{40}", sha) or not all(re.fullmatch(r"[0-9a-f]{64}", e)
+                                                         for e in empreintes.values()):
+        raise Refus("sha de commit ou empreinte invalide")
+    options = ["--pool-source", ",".join(supports)]
+    if arc_gib is not None:
+        options += ["--arc-gib", str(arc_gib)]
+    if net_mbit is not None:
+        options += ["--net-mbit", str(net_mbit)]
+    deposes = "".join(f"    deposer {relatif} {dest} {empreintes[relatif]}\n"
+                      for relatif, dest in SCRIPTS_DEPOSES)
+    return ("#cloud-config\n"
+            "# Produit par scripts/preparer-forge.py : ne pas l'editer, relancer la commande.\n"
+            f"# Les scripts ne sont PAS embarques : ils sont telecharges au commit {sha[:9]} et\n"
+            "# leur sha256 est verifie avant tout lancement (DAT §66.9). `runcmd` ne joue qu'une\n"
+            "# fois par instance ; le rejeu passe par `sudo /opt/spark-amorce.sh` (README).\n"
+            "\n"
+            "runcmd:\n"
+            "  - |\n"
+            "    set -eu\n"
+            f"    base={DEPOT_RAW}/{sha}\n"
+            "    deposer() {\n"
+            '      curl -fsSL --retry 5 --retry-delay 5 "$base/$1" -o "$2.part"\n'
+            '      echo "$3  $2.part" | sha256sum -c - >/dev/null \\\n'
+            '        || { rm -f "$2.part"; echo "empreinte invalide : $1" >&2; exit 1; }\n'
+            '      chmod 0755 "$2.part"\n'
+            '      mv "$2.part" "$2"\n'
+            "    }\n"
+            + deposes
+            + "    /opt/spark-amorce.sh " + " ".join(options) + "\n")
 
 
 # --- Le JSON de partition versionne de chaque offre connue (DAT §66.8) ----------
@@ -367,11 +465,20 @@ def _parseur() -> argparse.ArgumentParser:
              "absent : l'amorce garde son defaut de 16, regle pour 94 Gio de RAM — "
              "A ADAPTER sur une machine qui en a moins")
     cloud.add_argument(
+        "--embarquer", action="store_true",
+        help="mode AUTONOME : embarque les deux scripts dans le user-data, sans leurs lignes de "
+             "commentaire (environ 11 Ko). Par defaut le user-data est LEGER (environ 1,5 Ko) : il "
+             "telecharge les scripts au commit epingle et verifie leur sha256 — l'hebergeur refuse "
+             "un user-data trop gros (limite non documentee ; 19 Ko refuses le 2026-11-16)")
+    cloud.add_argument(
+        "--ref", metavar="REF",
+        help="mode leger : la branche, l'etiquette ou le commit des scripts a telecharger, epingle "
+             "par son sha complet (defaut HEAD). Doit etre pousse, et les scripts locaux doivent "
+             "etre ceux de ce commit")
+    cloud.add_argument(
         "--compresser", action="store_true",
-        help="embarque les deux scripts compresses (gz+b64, decodes par cloud-init) : environ 40 %% "
-             "plus petit (mesure le 2026-11-10 : 11,5 Ko au lieu de 19 Ko), mais illisible a "
-             "l'oeil. A employer si l'hebergeur refuse la taille du user-data (la limite n'est "
-             "pas documentee)")
+        help="avec --embarquer : embarque les scripts compresses (gz+b64, decodes par cloud-init), "
+             "environ 7 Ko, mais illisible a l'oeil")
     cloud.add_argument(
         "--net-mbit", metavar="N", type=_entier_positif,
         help="debit du lien en Mbit/s, SEULEMENT si la carte n'en annonce aucun (virtio) ; "
@@ -416,12 +523,25 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 _, supports = deriver(_lire_defaut(source), args.racine_gio)
                 _verifier_support(",".join(supports))
-            sortie = rendre_cloud_init(AMORCE.read_text(encoding="utf-8"),
-                                       CREER_POOL.read_text(encoding="utf-8"),
-                                       supports, args.arc_gib, args.net_mbit, args.compresser)
+            if (args.compresser or args.embarquer) and args.ref:
+                raise Refus("--ref ne vaut qu'en mode leger : avec --embarquer les scripts sont ceux "
+                            "du depot local, pas ceux d'un commit")
+            if args.compresser and not args.embarquer:
+                raise Refus("--compresser ne vaut qu'avec --embarquer : le user-data leger ne porte "
+                            "aucun script")
+            if args.embarquer:
+                sortie = rendre_cloud_init(AMORCE.read_text(encoding="utf-8"),
+                                           CREER_POOL.read_text(encoding="utf-8"),
+                                           supports, args.arc_gib, args.net_mbit, args.compresser)
+                mode = "embarque, sans commentaires" + (" et compresse" if args.compresser else "")
+            else:
+                sha, empreintes = epingler(args.ref)
+                sortie = rendre_cloud_init_leger(sha, empreintes, supports, args.arc_gib, args.net_mbit)
+                mode = f"leger : scripts telecharges au commit {sha[:9]}, sha256 verifie"
             print(f"supports du pool : {','.join(supports)}", file=sys.stderr)
-            print(f"user-data : {len(sortie.encode('utf-8'))} octets — la limite du champ "
-                  "cloud-init chez l'hebergeur n'est pas documentee (DAT §66.4)", file=sys.stderr)
+            print(f"user-data ({mode}) : {len(sortie.encode('utf-8'))} octets — l'hebergeur a refuse "
+                  "19 431 octets le 2026-11-16 ; sa limite n'est pas documentee (DAT §66.9)",
+                  file=sys.stderr)
         else:
             source = _source_defaut(args)
             declarer = not args.sans_zfs

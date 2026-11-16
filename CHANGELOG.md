@@ -44,7 +44,19 @@
   elle ; `preparer-forge.py cloud-init --offre EM-B311X-SATA` l'écrit à la demande,
   depuis l'amorce courante. Le JSON déclare le pool ZFS à l'hébergeur ; son acceptation
   par la console et l'installateur n'est pas vérifiée, `--sans-zfs` donne le repli.
-  L'amorce garde son défaut d'ARC (16 Gio) : la RAM de chaque offre n'est pas relevée. Les deux ne diffèrent que par la clé `"zfs": null`, que la
+  L'amorce garde son défaut d'ARC (16 Gio) : la RAM de chaque offre n'est pas relevée.
+- **Le cloud-init est léger par défaut : Scaleway a refusé le `user-data` de 19 431 octets**
+  (« HTTP error 400: Invalid argument: UserData: greater than max », 2026-11-16 ; sa limite
+  n'est pas documentée). `preparer-forge.py cloud-init` n'embarque plus les scripts : le
+  `user-data` (**≈ 1 Ko**) les **télécharge** depuis GitHub **au commit épinglé** (sha complet),
+  **vérifie leur sha256** — un fichier dont l'empreinte est mauvaise n'est jamais posé ni
+  exécuté — puis lance l'amorce. La commande **refuse** quand le cloud-init ne marcherait
+  pas : un script local qui diffère du commit, un commit non poussé. `--embarquer` garde le
+  mode autonome, désormais **sans les lignes de commentaire des scripts** (suggestion du
+  responsable : 19,7 Ko → ≈ 11 Ko, ≈ 6,6 Ko avec `--compresser`) ; `--ref` choisit le
+  commit. Le banc de redémarrage utilise `--embarquer` (il remplace `sparkd` par une roue
+  locale dans le texte de l'amorce). Non vérifié : l'acceptation par l'hébergeur, et le
+  téléchargement depuis une machine livrée. DAT §66.9. Les deux ne diffèrent que par la clé `"zfs": null`, que la
   commande conserve. Ils servent de référence aux preuves de la règle, et une
   preuve dérive chaque fichier du dossier : une offre ajoutée dont le défaut sort
   de la règle est refusée avant qu'on commande la machine. Aucune capacité de
