@@ -49,3 +49,8 @@ e2e/captures/*.png
 
 # Diagnostics d'echec E2E : produits a la demande, jamais committes.
 e2e/captures/echecs/
+
+# Cloud-init genere PAR SERVEUR par scripts/preparer-forge.py (SPK-158, DAT §66.8-66.9) :
+# il epingle un commit et ne se versionne jamais.
+user-data.yaml
+*.user-data.yaml
