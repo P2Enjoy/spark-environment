@@ -14918,3 +14918,37 @@ responsable.
 **Décision.** SPK-167 passe à `[x]` : la preuve sur Forge réelle, seule qui manquait (DAT §28.7), est faite.
 OP-42 est marqué appliqué. Le changelog déplace cette seule entrée vers `[Publié]` : c'est la seule que j'ai
 pu confirmer en production, les autres entrées de `[Non publié]` n'ont pas été vérifiées ici.
+
+## 2026-11-16 · SPK-158 : les schémas par défaut des offres, versionnés
+
+**Demande du responsable.** Après avoir utilisé la commande sur le schéma par défaut
+d'un second serveur : « tu vas enregistrer et suivre dans le git cette configuration
+comme `EM-B311X-SATA.json` et la précédente comme `EM-L101X-SATA.json`, qui
+correspondent aux configs disponibles chez Scaleway. »
+
+**Observations.**
+
+- Les deux schémas ne diffèrent que par la clé `"zfs": null`, présente dans le
+  second et absente du premier. La commande les dérive tous deux (la clé est
+  conservée telle quelle dans la sortie) : essayé le jour même sur le second.
+- Le premier était déjà dans le dépôt, sous un nom que j'avais choisi
+  (`services/sparkd/tests/fixtures/schema-defaut-2x12To-sata-bios.json`) : un nom
+  qui disait « 2 × 12 To », c'est-à-dire ce que j'avais lu sur la capture de la
+  console de la commande du 2026-11-10. **Cette capacité n'a jamais été rattachée à
+  une offre par aucune source** : le nom de l'offre n'avait pas été relevé. Le
+  responsable nomme maintenant ce premier schéma `EM-L101X-SATA` ; je ne lui prête
+  aucune capacité.
+- Le second a été reçu en collage ; je l'avais d'abord écrit hors du dépôt avec
+  les partitions sur une ligne, pour la commande. Sa copie versionnée reprend la
+  mise en forme de la console (le premier collage : une propriété par ligne).
+
+**Décision.** DAT §66.7 : un dossier `deploy/cloud-init/offres/`, un fichier par
+offre nommé comme l'offre, sa traçabilité dans le README du dossier (un JSON n'a pas
+de commentaire), et une preuve qui dérive chaque fichier. SPK-158 gagne un sixième
+point de portée ; son statut reste `[~]`.
+
+**Conséquences.** La fixture de test devient la donnée réelle, avec `git mv` pour
+garder l'historique ; le README donne la commande sur un fichier versionné et ne
+demande la copie depuis la console que pour une offre nouvelle.
+
+**Vérifications à ce stade.** Documentation seule, committée avant le code.

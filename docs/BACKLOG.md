@@ -9649,7 +9649,10 @@ lien et en place des textes bruts ».
   4. le README, le runbook et le manuel nomment la commande et ne portent plus
      ni JSON ni YAML ; `deploy/cloud-init/user-data.yaml` est supprimé ;
   5. le banc `make forge-vm` monte sa Forge avec le cloud-init **que la commande
-     produit**.
+     produit** ;
+  6. *(ajouté le 2026-11-16, sur demande du responsable)* les schémas par défaut
+     des offres relevées — `EM-L101X-SATA`, `EM-B311X-SATA` — sont versionnés sous
+     `deploy/cloud-init/offres/`, et les preuves dérivent chacun d'eux (DAT §66.7).
 - Aucune migration, aucune variable d'environnement, aucune opération de
   production.
 - DoD : preuves unitaires (dérivation, refus, NVMe, UEFI, YAML relu, contenu

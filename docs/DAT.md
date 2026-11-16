@@ -16350,6 +16350,49 @@ croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
   (`SPARK_POOL_*`, documentées au README) : non modifié ici.
 - L'ARC par défaut n'est pas dérivé de la RAM (§66.2 point 7).
 
+### 66.7 Les schémas par défaut des offres relevées sont versionnés
+
+*Ajouté le 2026-11-16, sur demande du responsable, avant le code.*
+
+**Décision.** Chaque schéma de partitionnement **par défaut** relevé dans la console
+de l'hébergeur est conservé dans le dépôt, **tel qu'il a été affiché**, sous
+`deploy/cloud-init/offres/<offre>.json`, nommé comme l'offre chez l'hébergeur :
+
+| Fichier | Relevé | Particularité |
+|---|---|---|
+| `EM-L101X-SATA.json` | 2026-11-10 | pas de clé `zfs` |
+| `EM-B311X-SATA.json` | 2026-11-16 | `"zfs": null` explicite |
+
+Les noms sont ceux que le responsable a donnés aux deux relevés ; aucun n'a été
+déduit du contenu. Les deux ont la même structure — `sda` et `sdb`, démarrage BIOS
+(`legacy`), RAID 1 `md0` et `md1` — et ne diffèrent que par cette clé.
+
+**Pourquoi.**
+
+1. Pour une offre connue, il n'y a plus rien à copier depuis la console :
+   `--defaut deploy/cloud-init/offres/EM-B311X-SATA.json`.
+2. Ils sont la **référence réelle** des preuves du §66.5, au lieu d'un schéma que
+   le test aurait écrit lui-même — le piège du journal du 2026-08-28.
+3. Un défaut qui change chez l'hébergeur se voit au diff, pas à la commande d'une
+   machine.
+
+**Ce que ces fichiers ne portent pas :** la capacité des disques. Le schéma ne la
+contient pas et elle ne se déduit pas du nom de l'offre. La console de la commande du
+2026-11-10 affichait « 2 disk(s) of 12 TB » ; le nom de l'offre n'y avait pas été
+relevé, et ce chiffre n'est donc rattaché à aucun des deux fichiers.
+
+**Un fichier de données ne porte pas de commentaire** : la traçabilité (provenance,
+date, `@spec`) est dans `deploy/cloud-init/offres/README.md`. Le fichier lui-même ne
+se reformate pas à la main : c'est la copie du JSON affiché.
+
+**La garde.** Une preuve dérive **chaque** fichier du dossier : une offre ajoutée
+dont le défaut sort de la règle du §66.3 est refusée avec ses mots, avant qu'on
+commande la machine. Une autre vérifie que les deux offres relevées sont présentes.
+
+**Ajouter une offre :** console de l'hébergeur, *Custom configuration*, *Reset to
+default*, copier le JSON tel quel dans `<offre>.json`, ajouter une ligne au README du
+dossier, lancer les preuves.
+
 ## 67. La sauvegarde externe : les instantanés d'un Spark sur un S3 : contrat (SPK-160 à SPK-166)
 
 *Contrat écrit le 2026-11-10 sur arbitrage du responsable, **avant le code** : rien
