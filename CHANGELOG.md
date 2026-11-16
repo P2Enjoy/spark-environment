@@ -32,6 +32,16 @@
   sur le schéma par défaut réel relevé le 2026-11-10, relu avec PyYAML
   (dépendance de test). Aucune migration, aucune variable d'environnement. DAT
   §66 ; README ; `scripts/README.md`.
+- **Les schémas par défaut des offres Scaleway relevées sont versionnés**
+  (SPK-158). `deploy/cloud-init/offres/EM-L101X-SATA.json` (relevé le 2026-11-10)
+  et `EM-B311X-SATA.json` (2026-11-16), copiés tels qu'affichés par la console :
+  pour une offre connue, `--defaut deploy/cloud-init/offres/<offre>.json` suffit,
+  sans rien copier. Les deux ne diffèrent que par la clé `"zfs": null`, que la
+  commande conserve. Ils servent de référence aux preuves de la règle, et une
+  preuve dérive chaque fichier du dossier : une offre ajoutée dont le défaut sort
+  de la règle est refusée avant qu'on commande la machine. Aucune capacité de
+  disque n'y est notée : le schéma ne la contient pas. DAT §66.7 ;
+  `deploy/cloud-init/offres/README.md`.
 - **SPK-156 — une route dit pourquoi son certificat ne vient pas.** La
   configuration posée sur Caddy déclare un journal d'émission
   (`/var/log/caddy/emission-tls.log`, enregistreurs `tls.obtain`, `tls.renew`,

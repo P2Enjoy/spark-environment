@@ -221,19 +221,24 @@ accepte un schéma de partitionnement à la création du serveur — Scaleway le
 c'est ce qui évite tout repartitionnement ultérieur (il ne se change plus après la
 livraison : seule une réinstallation le refait).
 
-1. Dans la console de l'hébergeur, à la commande du serveur, section *Configure disk
-   partitions* : choisir *Custom configuration*, puis *Reset to default*, et copier le
-   JSON affiché dans un fichier, par exemple `defaut.json`.
+1. Le schéma par défaut d'une offre déjà relevée est **versionné** sous
+   [`deploy/cloud-init/offres/`](deploy/cloud-init/offres/) —
+   `EM-L101X-SATA.json`, `EM-B311X-SATA.json`, nommés comme l'offre chez Scaleway :
+   il n'y a rien à copier. Pour une offre **nouvelle**, dans la console de l'hébergeur,
+   à la commande, section *Configure disk partitions* : *Custom configuration*, puis
+   *Reset to default*, copier le JSON affiché **tel quel** dans
+   `deploy/cloud-init/offres/<offre>.json` et le versionner (le README du dossier dit
+   comment).
 2. Produire le partitionnement, à coller dans l'éditeur JSON de la console :
 
    ```bash
-   python3 scripts/preparer-forge.py partitionnement --defaut defaut.json
+   python3 scripts/preparer-forge.py partitionnement --defaut deploy/cloud-init/offres/EM-B311X-SATA.json
    ```
 
 3. Produire le cloud-init complet, à coller dans *Cloud-init configuration* :
 
    ```bash
-   python3 scripts/preparer-forge.py cloud-init --defaut defaut.json --arc-gib 16
+   python3 scripts/preparer-forge.py cloud-init --defaut deploy/cloud-init/offres/EM-B311X-SATA.json --arc-gib 16
    ```
 
 4. La console contrôle en direct (« Your JSON file is correct and can be applied ») que
@@ -245,7 +250,7 @@ et **rien** à coller. `--defaut -` lit l'entrée standard.
 
 | Argument | Sous-commande | Rôle | Défaut |
 |---|---|---|---|
-| `--defaut FICHIER` | les deux | le schéma par défaut de l'offre | obligatoire (ou `--pool-source` pour `cloud-init`) |
+| `--defaut FICHIER` | les deux | le schéma par défaut de l'offre : un fichier de `deploy/cloud-init/offres/`, ou le JSON relevé à la console | obligatoire (ou `--pool-source` pour `cloud-init`) |
 | `--racine-gio N` | les deux | taille de la partition système `root`, en Gio | `200` — la Forge de validation en consomme 2,7 |
 | `--pool-source A,B` | `cloud-init` | les deux supports du miroir, à la place de `--defaut` | déduits du schéma |
 | `--arc-gib N` | `cloud-init` | plafond de l'ARC ZFS, en Gio, retiré de la mémoire allouable | l'amorce garde `16`, **réglé pour 94 Gio de RAM : à adapter** sur une machine qui en a moins |

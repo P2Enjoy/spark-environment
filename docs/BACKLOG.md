@@ -9687,6 +9687,12 @@ lien et en place des textes bruts ».
   - **Mesuré** : le `user-data` fait environ **19 Ko** en clair (l'estimation
     écrite d'abord, 13 Ko, était fausse) ; `--compresser` le ramène à 11,5 Ko. La
     limite du champ chez l'hébergeur reste inconnue.
+  - **Offres versionnées le 2026-11-16** (point 6) : `EM-L101X-SATA.json` (le
+    premier schéma relevé, déplacé par `git mv` depuis la fixture de test) et
+    `EM-B311X-SATA.json`, sous `deploy/cloud-init/offres/` avec leur README ; la
+    commande les dérive tous deux, et la suite de la commande compte **82 cas** (8 de
+    plus) dont un par fichier du dossier. Rien n'a été noté sur la capacité des
+    disques : aucune source ne la rattache à une offre.
   - **Banc `make forge-vm` rejoué le 2026-11-10, sur le cloud-init que produit la
     commande** (`--pool-source /dev/vdb,/dev/vdc --arc-gib 1`) : **VERT en 409 s**,
     puis **VERT en 284 s** avec le verdict de topologie ajouté. Le cloud-init monte

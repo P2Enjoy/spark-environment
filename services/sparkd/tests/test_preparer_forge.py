@@ -1,14 +1,16 @@
 """Preuves de la commande qui produit le schema de partitionnement et le cloud-init.
 
 @verifies docs/BACKLOG.md#SPK-158 · docs/DAT.md §66.2 a §66.5 (la decision, la regle
-          de derivation, le cloud-init produit, la preuve), §8.5, §8.6 · README.md
-          (« Obtenir d'emblee une machine partitionnee ») · scripts/README.md
+          de derivation, le cloud-init produit, la preuve), §66.7 (les schemas par
+          defaut des offres sont versionnes), §8.5, §8.6 · README.md (« Commander
+          une Forge ») · scripts/README.md · deploy/cloud-init/offres/README.md
 
 Ce que ces preuves gardent, et ce qu'elles ne gardent PAS :
 
-- la regle de derivation, sur le VRAI schema par defaut releve le 2026-11-10 chez
-  l'hebergeur (offre a 2 disques de 12 To, SATA, BIOS) — pas sur un schema que ce
-  fichier aurait lui-meme invente ;
+- la regle de derivation, sur les VRAIS schemas par defaut releves chez l'hebergeur
+  et versionnes sous deploy/cloud-init/offres/ (EM-L101X-SATA le 2026-11-10,
+  EM-B311X-SATA le 2026-11-16) — pas sur un schema que ce fichier aurait lui-meme
+  invente — et CHAQUE fichier de ce dossier est derive ;
 - le cloud-init, relu avec PyYAML, la bibliotheque que cloud-init emploie : le
   contenu embarque est IDENTIQUE aux sources, et la ligne `runcmd` est acceptee
   par le VRAI analyseur d'arguments de l'amorce embarquee ;
@@ -37,7 +39,10 @@ import yaml
 
 RACINE = Path(__file__).resolve().parents[3]
 COMMANDE = RACINE / "scripts" / "preparer-forge.py"
-DEFAUT = Path(__file__).parent / "fixtures" / "schema-defaut-2x12To-sata-bios.json"
+OFFRES_DIR = RACINE / "deploy" / "cloud-init" / "offres"
+OFFRES = sorted(OFFRES_DIR.glob("*.json"))
+#: La reference des preuves a structure exacte : le premier schema releve.
+DEFAUT = OFFRES_DIR / "EM-L101X-SATA.json"
 AMORCE = RACINE / "deploy" / "cloud-init" / "spark-amorce.sh"
 CREER_POOL = RACINE / "scripts" / "creer-pool.sh"
 
@@ -100,6 +105,48 @@ def test_le_defaut_REEL_donne_le_schema_que_la_console_a_valide():
     assert schema["filesystems"] == defaut()["filesystems"], "recopie telle quelle"
     assert schema["raids"] == defaut()["raids"], "recopie telle quelle"
     assert supports == ["/dev/sda5", "/dev/sdb5"]
+
+
+def test_les_deux_offres_relevees_sont_versionnees_et_decrites_au_README_du_dossier():
+    noms = {f.name for f in OFFRES}
+    assert {"EM-L101X-SATA.json", "EM-B311X-SATA.json"} <= noms, noms
+    readme = (OFFRES_DIR / "README.md").read_text(encoding="utf-8")
+    for f in OFFRES:
+        assert f.name in readme, f"{f.name} doit figurer au tableau du README du dossier"
+
+
+def test_les_deux_offres_relevees_ne_different_que_par_la_cle_zfs():
+    """C'est ce que le responsable a releve, et ce que le README du dossier dit."""
+    a = json.loads((OFFRES_DIR / "EM-L101X-SATA.json").read_text(encoding="utf-8"))
+    b = json.loads((OFFRES_DIR / "EM-B311X-SATA.json").read_text(encoding="utf-8"))
+    assert "zfs" not in a and b["zfs"] is None
+    assert {**a, "zfs": None} == b
+
+
+@pytest.mark.parametrize("nom", ["EM-L101X-SATA.json", "EM-B311X-SATA.json"])
+def test_chaque_offre_RELEVEE_donne_les_partitions_attendues_et_garde_sa_cle_zfs(nom):
+    brut = json.loads((OFFRES_DIR / nom).read_text(encoding="utf-8"))
+    schema, supports = pf.deriver(brut, 200)
+    for disque in schema["disks"]:
+        assert disque["partitions"] == PARTITIONS_ATTENDUES, disque["device"]
+    assert supports == ["/dev/sda5", "/dev/sdb5"]
+    assert schema.get("zfs", "absente") == brut.get("zfs", "absente"), "la cle zfs est recopiee telle quelle"
+
+
+@pytest.mark.parametrize("offre", OFFRES, ids=lambda f: f.stem)
+def test_CHAQUE_offre_versionnee_se_derive_selon_la_regle(offre):
+    """Une offre ajoutee dont le defaut sort de la regle du §66.3 est refusee ICI,
+    avec ses mots, avant qu'on commande la machine (DAT §66.7)."""
+    brut = json.loads(offre.read_text(encoding="utf-8"))
+    schema, supports = pf.deriver(brut, 200)
+    assert len(supports) == 2 and all(pf.SUPPORT_SUR.fullmatch(s) for s in supports)
+    assert set(schema) == set(brut), "aucune cle ajoutee ni perdue"
+    for cle in brut:
+        if cle != "disks":
+            assert schema[cle] == brut[cle], f"« {cle} » est recopie tel quel"
+    for disque, avant in zip(schema["disks"], brut["disks"]):
+        assert disque["partitions"][-1]["label"] == "data"
+        assert disque["partitions"][:len(avant["partitions"]) - 1] == avant["partitions"][:-1]
 
 
 def test_le_schema_par_defaut_n_est_JAMAIS_modifie():
@@ -385,6 +432,19 @@ def test_E2E_l_entree_standard_donne_la_meme_sortie_que_le_fichier():
     par_entree = _commande("partitionnement", "--defaut", "-", entree=DEFAUT.read_text(encoding="utf-8"))
     assert par_entree.returncode == 0, par_entree.stderr
     assert par_entree.stdout == par_fichier.stdout
+
+
+@pytest.mark.parametrize("offre", OFFRES, ids=lambda f: f.stem)
+def test_E2E_chaque_offre_versionnee_donne_un_partitionnement_et_un_cloud_init(offre):
+    """Les commandes du README, jouees sur les fichiers que le README nomme."""
+    brut = json.loads(offre.read_text(encoding="utf-8"))
+    part = _commande("partitionnement", "--defaut", str(offre))
+    assert part.returncode == 0, part.stderr
+    assert json.loads(part.stdout) == pf.deriver(brut, 200)[0]
+    cloud = _commande("cloud-init", "--defaut", str(offre), "--arc-gib", "8")
+    assert cloud.returncode == 0, cloud.stderr
+    assert yaml.safe_load(cloud.stdout)["runcmd"] == [
+        "/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5 --arc-gib 8"]
 
 
 def test_E2E_racine_gio_change_la_sortie():
