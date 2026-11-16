@@ -15065,3 +15065,12 @@ poussé. SPK-158 point 8.
 
 **Vérifications à ce stade.** Documentation seule, committée avant le code. Non vérifié :
 que Scaleway accepte le user-data léger, et le téléchargement depuis une machine livrée.
+
+**Ajout, même jour, sur proposition du responsable : retirer les commentaires du cloud-init.**
+J'avais écarté « retirer des commentaires » comme un pari sur une limite inconnue ; je ne
+l'avais pas mesuré. Mesuré : 16,8 Ko de scripts → 9,2 Ko sans les lignes entièrement en
+commentaire ; `user-data` embarqué 19,7 Ko → ~11,4 Ko, ~6,8 Ko compressé. Ce n'est pas un
+pari sur la limite, c'est un gain réel qui rend le mode autonome plausible ; le mode léger
+(~1,5 Ko) reste le défaut parce que c'est le seul que la limite, quelle qu'elle soit, ne
+peut pas refuser. Contrepartie assumée : le script posé n'est plus octet pour octet celui du
+dépôt, mais sa copie sans commentaires ; les preuves le tiennent (DAT §66.9).

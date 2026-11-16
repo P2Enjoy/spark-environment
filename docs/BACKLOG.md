@@ -9662,7 +9662,8 @@ lien et en place des textes bruts ».
   8. *(2026-11-16, après le refus « UserData: greater than max » de l'hébergeur sur
      19 431 octets)* le cloud-init est **léger par défaut** : il télécharge les deux
      scripts à un commit épinglé et vérifie leur sha256, environ 1,5 Ko ; `--embarquer`
-     garde l'ancien mode (DAT §66.9).
+     garde l'ancien mode, **sans les lignes de commentaire des scripts** (suggestion du
+     responsable : 19,7 Ko → 11,4 Ko, 6,8 Ko avec `--compresser`) (DAT §66.9).
 - Aucune migration, aucune variable d'environnement, aucune opération de
   production.
 - DoD : preuves unitaires (dérivation, refus, NVMe, UEFI, YAML relu, contenu

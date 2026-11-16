@@ -16496,6 +16496,19 @@ ne dit qu'elle passerait : le §66.4 comptait la limite « inconnue », elle est
 et ne lance l'amorce que si l'empreinte est bonne. Il fait environ 1,5 Ko. L'ancien mode,
 autonome, reste disponible : `--embarquer` (avec `--compresser`).
 
+**Le mode embarqué ne porte plus les commentaires** (suggestion du responsable, même
+jour) : les lignes **entièrement en commentaire** sont retirées des deux scripts avant
+qu'ils soient embarqués, à l'exception du `#!` de la première ligne. Les commentaires
+servent aux lecteurs du dépôt, pas à la machine. Mesuré le 2026-11-16 : les deux scripts
+passent de 16,8 Ko à **9,2 Ko**, le `user-data` embarqué de **19,7 Ko à environ 11,4 Ko**,
+et à environ **6,8 Ko** avec `--compresser`. Le script posé n'est plus **octet pour octet**
+celui du dépôt : il en est la copie **sans ses lignes de commentaire**, et rien d'autre
+(les lignes vides ne sont pas fusionnées, pour ne pas toucher au contenu d'un
+heredoc). Une preuve tient que le script retiré de ses commentaires passe le même
+analyseur (`sh -n`, `bash -n`) et rend la même aide que l'original ; une autre, que chaque
+ligne retirée est bien un commentaire. Le mode léger, lui, télécharge le fichier du dépôt
+**tel quel** : c'est son empreinte qui est vérifiée.
+
 **Pourquoi c'est acceptable.**
 
 1. L'amorce dépend déjà de GitHub au premier démarrage : elle installe `sparkd` par
