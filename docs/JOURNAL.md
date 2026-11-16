@@ -14995,3 +14995,42 @@ courante. SPK-158 point 7 ; son statut reste `[~]`.
 **Vérifications à ce stade.** Documentation seule, committée avant le code. Rien de ce
 qui suit n'est encore éprouvé : ni la console, ni l'installateur, ni Incus sur un pool
 créé par l'hébergeur (DAT §66.8, « Ce qui n'est pas vérifié »).
+
+**Réalisé le même jour.** `preparer-forge.py` déclare le pool par défaut : la partition 5
+est `zfs`, le schéma gagne `zfs.pools[]` avec le miroir `spark` (`name`, `type`,
+`devices` seulement) ; `--sans-zfs` donne l'ancien schéma. Une sous-commande `offres`
+écrit, pour chaque offre de `deploy/cloud-init/offres/`, `forge/<offre>.partitionnement.json`
+et `forge/<offre>.cloud-init.yaml` — les quatre fichiers sont versionnés — et
+`offres --verifier` échoue si l'un est absent, périmé ou sans offre ; une preuve exige
+qu'ils soient exactement ce que la commande produit. **(Les cloud-init sont retirés : voir
+l'erratum ci-dessous.)** Le DAT §8.6 et §66.3, le README,
+l'en-tête de l'amorce et le changelog sont corrigés : la phrase « un pool créé à
+l'installation ferait refuser `creer-pool.sh` » est retirée, pas doublée.
+
+**Ce qui n'a PAS été vérifié.** Ni la console ni l'installateur de Scaleway n'ont été
+vus accepter la section `zfs` telle que la commande l'écrit ; la clé de
+`filesystem_options` dans le dialecte de la console n'a pas été relevée (elle n'est pas
+écrite). L'adoption par Incus d'un pool **créé par l'hébergeur** n'a pas été jouée : le
+banc éprouve l'adoption d'un pool créé par `zpool create`, et la création par l'amorce.
+Le cloud-init versionné laisse l'ARC à 16 Gio : la RAM de chaque offre n'est pas relevée.
+
+**Erratum, le même jour : je versionnais des cloud-init pré-compilés.** Le responsable :
+« tu écris des cloud-init pré-compilés alors que le script d'amorce évolue ». Il a
+raison. Le cloud-init *embarque* `spark-amorce.sh` et `creer-pool.sh` ; en versionner une
+copie, c'est versionner du code dupliqué qui prend du retard sur son original — et la
+preuve « échoue s'il est périmé » que j'avais ajoutée n'y changeait rien : elle transformait
+chaque modification de l'amorce en 38 Ko de régénération obligatoire, et un fichier périmé
+posait une vieille amorce sur une machine neuve. Je l'avais écrit au DAT §66.8 avant de le
+coder, sans me demander ce que « suivre dans git » d'un artefact dérivé d'un script vivant
+voulait dire. Rien n'avait été committé du code.
+
+**Corrigé.** Les deux `forge/*.cloud-init.yaml` sont supprimés. Le cloud-init se produit
+à la demande, depuis l'amorce courante, **par le nom de l'offre** :
+`preparer-forge.py cloud-init --offre EM-B311X-SATA` (nouvelle option `--offre`, qui
+résout `deploy/cloud-init/offres/<NOM>.json` ; une offre inconnue est refusée en listant
+les connues). Seul le JSON de partition reste versionné : il ne dépend que de la règle.
+Deux preuves tiennent la décision : aucun cloud-init pré-compilé n'est versionné (et
+`offres --verifier` en signale un comme « sans offre »), et le cloud-init de
+`--offre` contient l'amorce courante octet pour octet. DAT §66.8, README, backlog et
+changelog disent la nouvelle décision ; la première n'y figure plus que dans cet
+erratum.

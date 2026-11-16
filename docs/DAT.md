@@ -1126,17 +1126,21 @@ sda1 / sdb1   537 Mo   bios_grub
 sda2 / sdb2   4,3 Go   swap            — présent, actuellement inutilisé
 sda3 / sdb3   537 Mo   md0  → /boot
 sda4 / sdb4   ~200 Go  md1  → /  ext4
-sda5 / sdb5   ~5,2 To  zpool miroir    — À CRÉER
+sda5 / sdb5   ~5,2 To  zpool miroir    — déclaré à l'hébergeur (§66.8)
 ```
 
 Le schéma de partitionnement remis à l'hébergeur — que produit
-`scripts/preparer-forge.py` (§66) — **ne déclare pas** le
-pool, alors que l'API de Scaleway saurait le créer. Ce n'est pas un oubli : un
-pool créé à l'installation laisserait une signature `zfs_member` sur `sda5` et
-`sdb5`, et `scripts/creer-pool.sh` refuserait alors d'écrire dessus (§8.5 bis).
-La frontière tient : l'hébergeur livre des partitions, la Forge crée son pool — au
-premier démarrage, par l'amorce qui appelle `creer-pool.sh` sur `--pool-source`
-(§66.2 point 6).
+`scripts/preparer-forge.py` (§66) — **déclare le pool** : la partition 5 de chaque
+disque porte le libellé `zfs`, et la section `zfs` du schéma décrit un miroir `spark`
+sur les deux partitions (§66.8). L'amorce **adopte** ce pool au premier démarrage
+(`zpool import`, puis `incus storage create … source=spark`) ; elle ne le crée par
+`creer-pool.sh` que si aucun pool n'est importable et que `--pool-source` est donné
+(§66.2 point 6) — le repli, aussi celui d'un schéma produit avec `--sans-zfs`.
+
+*Jusqu'au 2026-11-16 ce paragraphe disait l'inverse : le schéma ne déclarait pas le
+pool, « un pool créé à l'installation ferait refuser `creer-pool.sh` ». Cette raison
+datait d'avant que l'amorce adopte un pool existant (SPK-159) ; le responsable a
+tranché (§66.8).*
 
 Le passage de la disposition actuelle à celle-ci suppose de réduire `md1`, ce que
 `resize2fs` ne sait pas faire à chaud sur un système de fichiers racine monté. Deux
@@ -16274,20 +16278,21 @@ Entrée : l'objet JSON du schéma par défaut — `disks`, `filesystems`, `raids
 éventuellement `zfs`.
 
 - **Au moins deux disques** (§8.5), sinon refus.
-- **`zfs` déclaré** (non nul, non vide) : refus. Un pool créé par l'hébergeur
-  laisserait une signature `zfs_member` que `creer-pool.sh` refuse d'écraser
-  (§8.6).
+- **`zfs` déjà déclaré** (non nul, non vide) : refus. C'est la commande qui déclare
+  le pool (§66.8) : un schéma qui en porte un est un schéma déjà dérivé, ou une offre
+  que la commande ne sait pas traiter.
 - **Sur chaque disque, une et une seule partition porte « tout l'espace
   restant »** (`useAllAvailableSpace` ou `use_all_available_space` : le dialecte
   du schéma lu est conservé), elle est la dernière par numéro et son libellé est
   `root`. Sinon refus, avec le disque et la partition nommés.
 - **Cette partition est bornée** à `--racine-gio` Gio (200 par défaut : la Forge
-  de validation en consomme 2,7) et perd le drapeau ; **une partition `data`**
-  lui succède (numéro suivant, `size: 0`, drapeau levé).
-- **Les supports du pool** sont les `data` de chaque disque : `/dev/sda5`,
+  de validation en consomme 2,7) et perd le drapeau ; **une partition `zfs`**
+  lui succède (numéro suivant, `size: 0`, drapeau levé) — `data` avec `--sans-zfs`.
+- **Les supports du pool** sont les `zfs` de chaque disque : `/dev/sda5`,
   `/dev/sdb5` ; `/dev/nvme0n1p5` quand le nom du disque finit par un chiffre.
   Aucun ne figure dans `raids` ni dans `filesystems`, sinon refus : ils restent
-  nus, comme l'exige le miroir natif (§8.5).
+  nus, comme l'exige le miroir natif (§8.5). **Le schéma gagne une section `zfs`**
+  (§66.8) : le pool miroir `spark`, `devices` = ces deux supports ; sans `--sans-zfs`.
 - **Tout le reste est recopié tel quel**, ordre des clés compris : partitions
   `uefi`, `legacy`, `boot`, `swap`, RAID, systèmes de fichiers.
 - La commande **ne connaît pas la capacité des disques**. Ce contrôle est celui de
@@ -16327,6 +16332,12 @@ croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
   `zpool create` direct, rejeu sans création.
 - **E2E de la commande** : lancée comme un utilisateur (fichier, entrée standard,
   codes de sortie), sur ce même schéma ; chaque script embarqué passe `sh -n`.
+- **Le JSON de partition versionné (§66.8)** : une preuve exige que chaque fichier
+  versionné sous `offres/forge/` soit exactement ce que la commande produit
+  aujourd'hui, et détecte un fichier absent, périmé ou sans offre — un cloud-init
+  pré-compilé y est « sans offre » ; `preparer-forge.py offres --verifier` est la même
+  vérification en ligne de commande. **Aucun cloud-init n'est versionné**, et celui que
+  produit `--offre` embarque l'amorce courante.
 - **E2E de l'amorce, `make forge-vm`** — **joué le 2026-11-10, VERT** (409 s, puis
   284 s avec le verdict de topologie) : la Forge est montée par le cloud-init
   **produit par la commande**, sur une VM à deux disques vierges ; **le pool est
@@ -16395,10 +16406,10 @@ dossier, lancer les preuves.
 
 ### 66.8 Le schéma pour la Forge déclare le pool ZFS, et il est versionné pour chaque offre connue
 
-*Décisions du responsable du 2026-11-16, écrites avant le code. Elles remplacent la
-« frontière » du §8.6 (« l'hébergeur livre des partitions, la Forge crée son pool ») et
-les points correspondants des §66.2, §66.3 et §66.7 ; ces passages sont corrigés dans
-le changement qui livre le code.*
+*Décisions du responsable du 2026-11-16, écrites avant le code et livrées avec lui.
+Elles remplacent la « frontière » que disait le §8.6 (« l'hébergeur livre des
+partitions, la Forge crée son pool ») ; le §8.6 et le §66.3 sont corrigés dans le même
+changement.*
 
 **Décision 1 — le schéma déclare le pool.** « Tu dois générer le NOUVEAU schéma pour y
 installer une Forge » : pour une offre donnée, le schéma que la commande produit est
@@ -16436,21 +16447,29 @@ schéma de repli est déjà là, éprouvé sur le banc.
 `--pool-source`. Pool déclaré, l'amorce l'adopte ; l'argument ne sert alors que de repli
 si aucun pool n'est importable (et `creer-pool.sh` refuse un support déjà écrit).
 
-**Décision 2 — chaque offre connue a ses deux fichiers prêts à coller, dans git.** « Si
-demain je veux refaire un serveur de la config connue, je veux le JSON de partition à
-utiliser et le cloud-init. » Pour chaque `deploy/cloud-init/offres/<offre>.json` (le
-schéma **original** de l'hébergeur, entrée), la commande `preparer-forge.py offres`
-écrit dans `deploy/cloud-init/offres/forge/` :
+**Décision 2 — chaque offre connue a son JSON de partition versionné, et son cloud-init
+se produit par son nom.** « Si demain je veux refaire un serveur de la config connue, je
+veux le JSON de partition à utiliser et le cloud-init. » Pour chaque
+`deploy/cloud-init/offres/<offre>.json` (le schéma **original** de l'hébergeur, entrée) :
 
-- `<offre>.partitionnement.json` — le JSON à coller dans la console ;
-- `<offre>.cloud-init.yaml` — le user-data complet.
+- `preparer-forge.py offres` écrit `deploy/cloud-init/offres/forge/<offre>.partitionnement.json`,
+  le JSON à coller dans la console. Il ne dépend que de la règle (§66.3) : il est
+  **versionné**, et **une preuve échoue s'il diffère de ce que la commande produit
+  aujourd'hui** (`offres --verifier` la rejoue en ligne de commande) ;
+- `preparer-forge.py cloud-init --offre <offre>` écrit le user-data complet **à la
+  demande**. Il n'est **jamais versionné** : il *embarque* `spark-amorce.sh` et
+  `creer-pool.sh`, qui évoluent, et une copie serait en retard sur eux — une vieille
+  amorce posée sur une machine neuve. Une preuve vérifie qu'aucun cloud-init
+  pré-compilé n'est versionné, et que celui que la commande écrit contient l'amorce
+  **courante**, octet pour octet.
 
-Refaire un serveur d'une config connue, c'est copier ces deux fichiers. **Une preuve
-échoue si un fichier versionné diffère de ce que la commande produit aujourd'hui** : un
-changement de l'amorce, de `creer-pool.sh` ou de la règle oblige à les régénérer, et ils
-ne peuvent pas dériver en silence. Le cloud-init versionné ne donne pas `--arc-gib` : la
-RAM de chaque offre n'est pas relevée, l'amorce garde son défaut de 16 Gio — à adapter
-avec la commande directe sur une machine qui en a moins.
+*Une première version de cette décision versionnait aussi le cloud-init, tenu à jour par
+une preuve. C'était une erreur : chaque changement de l'amorce aurait imposé de
+régénérer 19 Ko de doublon par offre, et le fichier périmé était exactement le défaut
+que cette décision devait éviter. Le responsable l'a relevé le jour même, avant tout
+commit du code.* Le cloud-init produit par nom d'offre ne donne pas `--arc-gib` : la RAM
+de chaque offre n'est pas relevée, l'amorce garde son défaut de 16 Gio — à adapter avec
+`--arc-gib` sur une machine qui en a moins.
 
 **Ce qui n'est pas vérifié.** (1) Que la console accepte la section `zfs` telle que la
 commande l'écrit (`name`, `type`, `devices`) ; (2) que l'installateur de Scaleway crée ce

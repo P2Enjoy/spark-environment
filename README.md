@@ -167,9 +167,11 @@ se crée par un geste, et **toutes** ses valeurs viennent de l'environnement :
 sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
 ```
 
-Sur une machine commandée avec le cloud-init que produit `scripts/preparer-forge.py`
-(voir plus bas), l'amorce appelle ce geste elle-même au premier démarrage : le lancer à
-la main reste le geste de secours, ou celui d'une machine installée autrement.
+Sur une machine commandée avec les fichiers que produit `scripts/preparer-forge.py` (voir
+plus bas), le pool est **déclaré à l'hébergeur** par le schéma de partitionnement et
+l'amorce l'adopte au premier démarrage ; elle n'appelle ce geste elle-même qu'en repli, si
+aucun pool n'est importable. Le lancer à la main reste le geste de secours, ou celui d'une
+machine installée autrement.
 
 | Variable | Rôle | Défaut |
 |---|---|---|
@@ -209,40 +211,48 @@ une Forge réelle, et portait la plus grande part de la surface d'installation.
 Une Forge déjà installée ainsi continue de fonctionner ; le préflight la relève
 en avertissement et l'assistant n'en reproduira pas.
 
-### Commander une Forge : une commande produit le partitionnement et le cloud-init
+### Commander une Forge : le JSON de partition versionné, le cloud-init à la demande
 
-Ni JSON ni YAML à recopier ici. Un schéma de partitionnement n'est **jamais** valable
-pour deux machines — les noms de disques (`sda` ou `nvme0n1`), le mode de démarrage
-(BIOS ou UEFI) et la taille des disques s'y écrivent en dur —, alors que la **règle**
-qui le produit l'est. [`scripts/preparer-forge.py`](scripts/preparer-forge.py)
-l'applique au schéma **par défaut de l'offre**, celui que la console de l'hébergeur
-propose, et écrit sur la sortie standard ce qu'il y a à coller. Chez un hébergeur qui
-accepte un schéma de partitionnement à la création du serveur — Scaleway le fait —,
-c'est ce qui évite tout repartitionnement ultérieur (il ne se change plus après la
-livraison : seule une réinstallation le refait).
+Pour une offre déjà relevée, refaire un serveur de la même configuration tient en deux
+collages dans la console de l'hébergeur :
 
-1. Le schéma par défaut d'une offre déjà relevée est **versionné** sous
-   [`deploy/cloud-init/offres/`](deploy/cloud-init/offres/) —
-   `EM-L101X-SATA.json`, `EM-B311X-SATA.json`, nommés comme l'offre chez Scaleway :
-   il n'y a rien à copier. Pour une offre **nouvelle**, dans la console de l'hébergeur,
-   à la commande, section *Configure disk partitions* : *Custom configuration*, puis
-   *Reset to default*, copier le JSON affiché **tel quel** dans
-   `deploy/cloud-init/offres/<offre>.json` et le versionner (le README du dossier dit
-   comment).
-2. Produire le partitionnement, à coller dans l'éditeur JSON de la console :
+1. **Le JSON de partition**, versionné, dans l'éditeur de partitions (*Custom
+   configuration*) :
+
+   | Offre (Scaleway Elastic Metal) | JSON de partition à coller |
+   |---|---|
+   | `EM-L101X-SATA` | [`EM-L101X-SATA.partitionnement.json`](deploy/cloud-init/offres/forge/EM-L101X-SATA.partitionnement.json) |
+   | `EM-B311X-SATA` | [`EM-B311X-SATA.partitionnement.json`](deploy/cloud-init/offres/forge/EM-B311X-SATA.partitionnement.json) |
+
+2. **Le cloud-init**, produit **à la demande**, par le nom de l'offre, dans *Cloud-init
+   configuration* :
 
    ```bash
-   python3 scripts/preparer-forge.py partitionnement --defaut deploy/cloud-init/offres/EM-B311X-SATA.json
+   python3 scripts/preparer-forge.py cloud-init --offre EM-B311X-SATA
    ```
 
-3. Produire le cloud-init complet, à coller dans *Cloud-init configuration* :
+**Le cloud-init n'est pas versionné, et c'est voulu** : il *embarque* l'amorce et
+`creer-pool.sh`, qui évoluent. Une copie versionnée serait en retard sur eux et poserait une
+vieille amorce sur une machine neuve ; la commande l'écrit toujours depuis l'amorce
+**courante**. Le JSON de partition, lui, ne dépend que de la règle : il est versionné, et
+une preuve échoue s'il n'est plus ce que la commande produit.
 
-   ```bash
-   python3 scripts/preparer-forge.py cloud-init --defaut deploy/cloud-init/offres/EM-B311X-SATA.json --arc-gib 16
-   ```
+Le schéma **original** de chaque offre est versionné à côté
+([`deploy/cloud-init/offres/`](deploy/cloud-init/offres/)) : c'est l'entrée de
+[`scripts/preparer-forge.py`](scripts/preparer-forge.py). Chez un hébergeur qui accepte un
+schéma de partitionnement à la création du serveur — Scaleway le fait —, c'est ce qui évite
+tout repartitionnement ultérieur (il ne se change plus après la livraison : seule une
+réinstallation le refait).
 
-4. La console contrôle en direct (« Your JSON file is correct and can be applied ») que
-   les tailles tiennent dans les disques. Commander.
+**Pour une offre nouvelle** : dans la console, à la commande, section *Configure disk
+partitions*, *Custom configuration*, *Reset to default* ; copier le JSON affiché **tel
+quel** dans `deploy/cloud-init/offres/<offre>.json`, puis `python3 scripts/preparer-forge.py
+offres` écrit son JSON de partition (le README du dossier dit le reste). **Pour un cloud-init
+réglé sur la RAM du serveur** — l'amorce garde 16 Gio d'ARC, réglé pour 94 Gio de RAM :
+
+```bash
+python3 scripts/preparer-forge.py cloud-init --offre EM-B311X-SATA --arc-gib <N>
+```
 
 Chaque sous-commande a son `--help`. La sortie va sur la sortie standard, ce que la
 commande a décidé sur la sortie d'erreur ; un refus sort avec le code `2`, un message,
@@ -250,29 +260,39 @@ et **rien** à coller. `--defaut -` lit l'entrée standard.
 
 | Argument | Sous-commande | Rôle | Défaut |
 |---|---|---|---|
-| `--defaut FICHIER` | les deux | le schéma par défaut de l'offre : un fichier de `deploy/cloud-init/offres/`, ou le JSON relevé à la console | obligatoire (ou `--pool-source` pour `cloud-init`) |
-| `--racine-gio N` | les deux | taille de la partition système `root`, en Gio | `200` — la Forge de validation en consomme 2,7 |
-| `--pool-source A,B` | `cloud-init` | les deux supports du miroir, à la place de `--defaut` | déduits du schéma |
+| `--offre NOM` | `partitionnement`, `cloud-init` | une offre **connue**, par son nom : son schéma par défaut est `deploy/cloud-init/offres/<NOM>.json` | un seul parmi `--offre`, `--defaut` et (`cloud-init`) `--pool-source` |
+| `--defaut FICHIER` | `partitionnement`, `cloud-init` | le schéma par défaut d'une offre **nouvelle**, tel que la console l'affiche | idem |
+| `--racine-gio N` | les trois | taille de la partition système `root`, en Gio | `200` — la Forge de validation en consomme 2,7 |
+| `--sans-zfs` | `partitionnement` | **repli** : ne déclare pas le pool à l'hébergeur ; la partition reste `data` et l'amorce crée le pool | absent : le pool est déclaré |
+| `--pool-source A,B` | `cloud-init` | les deux supports du miroir, à la place de `--offre` et de `--defaut` | déduits du schéma |
 | `--arc-gib N` | `cloud-init` | plafond de l'ARC ZFS, en Gio, retiré de la mémoire allouable | l'amorce garde `16`, **réglé pour 94 Gio de RAM : à adapter** sur une machine qui en a moins |
 | `--net-mbit N` | `cloud-init` | débit du lien, **seulement** si la carte n'en annonce aucun (`virtio`) | absent : le débit est mesuré |
 | `--compresser` | `cloud-init` | embarque les scripts en `gz+b64` : 11,5 Ko au lieu de 19 Ko | absent : texte lisible |
+| `--verifier` | `offres` | n'écrit rien : échoue si un JSON versionné est absent, périmé ou sans offre | absent : (ré)écrit les JSON |
 
-**La règle**, appliquée à chaque disque du schéma par défaut (`docs/DAT.md` §66.3) :
+**La règle**, appliquée à chaque disque du schéma par défaut (`docs/DAT.md` §66.3, §66.8) :
 
 - tout est conservé tel quel — partitions `uefi`, `legacy`, `boot`, `swap`, RAID,
   systèmes de fichiers ;
 - la partition `root`, qui prend « tout l'espace restant » dans le défaut, est **bornée** ;
-- une partition **`data`** lui succède et prend ce qui reste : `sda5` et `sdb5` (ou
+- une partition **`zfs`** lui succède et prend ce qui reste : `sda5` et `sdb5` (ou
   `nvme0n1p5` et `nvme1n1p5`) sont les deux supports du pool ;
 - ces deux supports n'apparaissent **ni dans `raids` ni dans `filesystems`** : ils restent
   des périphériques bloc nus, ce qu'exige le miroir natif. Les confier à `md`
   reproduirait exactement le problème que le miroir ZFS résout ;
-- **aucun `zfs` n'est déclaré à l'hébergeur.** Il créerait le pool à l'installation ;
-  `creer-pool.sh` verrait alors une signature `zfs_member` sur les deux périphériques et
-  **refuserait** d'écrire dessus. La Forge crée son pool elle-même, au premier démarrage ;
+- **le schéma déclare le pool à l'hébergeur** : une section `zfs` décrit un miroir
+  `spark` sur ces deux partitions (`name`, `type`, `devices` — les options de pool ne
+  s'écrivent pas, leur format n'est pas documenté). L'amorce **adopte** ce pool au premier
+  démarrage ; elle ne le crée par `creer-pool.sh` que si aucun pool n'est importable ;
 - la commande **refuse**, en le disant, un schéma qui n'a pas deux disques, qui déclare
   déjà un pool, dont la partition « reste » n'est pas `root` et dernière, ou qui est déjà
   dérivé.
+
+**Pas encore vu accepté :** ni la console ni l'installateur de l'hébergeur n'ont été vus
+accepter la section `zfs`, et l'adoption par Incus d'un pool créé par l'hébergeur n'a pas
+été jouée (le banc éprouve celle d'un pool créé par `zpool create`). Si la console refuse
+le JSON, `partitionnement --sans-zfs` donne le schéma de repli, éprouvé sur le banc ; le
+cloud-init est le même.
 
 **Ce que la commande ne sait pas :** la capacité des disques. La console de l'hébergeur la
 contrôle, et l'hébergeur sait aussi vérifier un schéma avant toute installation par
@@ -285,7 +305,7 @@ curl -i -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" \
   https://api.scaleway.com/baremetal/v1/zones/fr-par-2/partitioning-schemas/validate
 ```
 
-Un `204` vaut acceptation (`{…}` est la sortie de `partitionnement`).
+Un `204` vaut acceptation (`{…}` est le JSON de partition de l'offre).
 
 **Limite connue :** la limite de taille du champ cloud-init chez l'hébergeur n'est pas
 documentée. Mesuré le 2026-11-10, le `user-data` fait **environ 19 Ko** (les deux scripts
@@ -299,10 +319,10 @@ cloud-init, illisibles à l'œil). Ce mode n'a pas été joué sur une VM.
 Le script d'amorce est [`deploy/cloud-init/spark-amorce.sh`](deploy/cloud-init/spark-amorce.sh).
 Il n'est pas à copier : le cloud-init que produit la commande ci-dessus
 l'**embarque**, avec [`scripts/creer-pool.sh`](scripts/creer-pool.sh), octet pour octet,
-et le lance. Il installe Incus depuis le dépôt amont Zabbly, **adopte** le pool s'il
-existe — et, sans pool, le **crée** seulement quand on lui donne `--pool-source`, ce
-que fait le cloud-init au premier démarrage : il appelle alors `creer-pool.sh`, qui
-refuse tout support déjà écrit —, pose le paquet `sparkd`, puis laisse l'exécuteur
+et le lance. Il installe Incus depuis le dépôt amont Zabbly, **adopte** le pool — celui
+que l'hébergeur a créé d'après le schéma (`zfs`) — et, si aucun pool n'est importable, ne
+le **crée** que quand on lui donne `--pool-source`, ce que fait le cloud-init (le repli) :
+il appelle alors `creer-pool.sh`, qui refuse tout support déjà écrit —, pose le paquet `sparkd`, puis laisse l'exécuteur
 `sparkd.forge_install` poser Caddy, `nftables`, l'ARC, le bridge, le durcissement SSH
 et les unités systemd, et finir par la recette `préflight` / `healthz` / `readyz`.
 
@@ -311,7 +331,7 @@ d'environnement, ni texte à éditer :
 
 | Argument | Rôle | Défaut |
 |---|---|---|
-| `--pool-source A,B` | les deux supports du miroir ZFS, ex. `/dev/nvme0n1p5,/dev/nvme1n1p5` ; sans pool existant, l'amorce le crée dessus | absent : l'amorce ne crée **jamais** rien |
+| `--pool-source A,B` | les deux supports du miroir ZFS, ex. `/dev/nvme0n1p5,/dev/nvme1n1p5` ; sans pool importable, l'amorce le crée dessus (repli) | absent : l'amorce ne crée **jamais** rien |
 | `--arc-gib N` | plafond de l'ARC ZFS en Gio | `16`, réglé pour 94 Gio de RAM |
 | `--net-mbit N` | débit déclaré, seulement si la carte n'en annonce aucun | absent : mesuré |
 

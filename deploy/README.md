@@ -15,7 +15,11 @@
 - `cloud-init/offres/` — les schemas de partitionnement PAR DEFAUT des offres de
   l'hebergeur relevees (`EM-L101X-SATA`, `EM-B311X-SATA`), un fichier par offre,
   tels qu'affiches par sa console : l'entree de `preparer-forge.py` (`--defaut`).
-  Leur provenance est dans le README du dossier. Unite **SPK-158**, DAT §66.7.
+  `cloud-init/offres/forge/` — pour chacune, le JSON de partition pret a coller (pool
+  ZFS declare), PRODUIT par `preparer-forge.py offres` et tenu a jour par une preuve.
+  Le cloud-init, lui, n'est PAS versionne : il embarque l'amorce, qui evolue ; il se
+  produit a la demande (`preparer-forge.py cloud-init --offre <NOM>`). Provenance dans
+  le README du dossier. Unite **SPK-158**, DAT §66.7 et §66.8.
 
 **Les unites systemd ne vivent PAS ici.** Elles sont emballees avec le paquet,
 dans `services/sparkd/src/sparkd/systemd/`, et posees par `python -m

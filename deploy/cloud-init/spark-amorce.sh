@@ -9,14 +9,17 @@
 #       docs/BACKLOG.md#SPK-157, docs/DAT.md §65.3 (les options IPv4 rejetees
 #       des le premier demarrage : CVE-2026-98432) ·
 #       docs/BACKLOG.md#SPK-159, docs/DAT.md §66.2 points 5 a 7, §66.4 (les
-#       reglages en arguments nommes ; le pool cree sur demande explicite)
+#       reglages en arguments nommes ; le pool cree sur demande explicite) ·
+#       docs/BACKLOG.md#SPK-158, docs/DAT.md §66.8 (le pool est declare a
+#       l'hebergeur et adopte ; la creation devient un repli)
 #
 # La machine est livree avec le schema de partitionnement que produit
-# `scripts/preparer-forge.py` : sda5 et sdb5 sont nues et AUCUN pool n'existe
-# (DAT §66.1). Au premier demarrage, cloud-init donne --pool-source : l'amorce cree
-# alors le pool, par /opt/creer-pool.sh, qui refuse tout support deja ecrit. Sans
-# cet argument — le rejeu manuel —, elle n'a jamais cree et ne cree rien : elle
-# adopte ce qu'elle trouve. Ce script ne FORMATE rien lui-meme.
+# `scripts/preparer-forge.py` : l'hebergeur y cree le pool miroir « spark » sur les
+# partitions « zfs » (DAT §66.8), et l'amorce l'ADOPTE. Si aucun pool n'est
+# importable ET que cloud-init a donne --pool-source — repli, ou schema produit avec
+# --sans-zfs —, elle le cree par /opt/creer-pool.sh, qui refuse tout support deja
+# ecrit. Sans cet argument — le rejeu manuel —, elle n'a jamais cree et ne cree
+# rien : elle adopte ce qu'elle trouve. Ce script ne FORMATE rien lui-meme.
 #
 # IDEMPOTENT, et c'est un contrat, pas un effet de bord (SPK-73). Un second
 # passage remet d'aplomb ce qui a derive et NE REINITIALISE PAS les Sparks :

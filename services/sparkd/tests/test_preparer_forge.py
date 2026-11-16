@@ -2,7 +2,9 @@
 
 @verifies docs/BACKLOG.md#SPK-158 · docs/DAT.md §66.2 a §66.5 (la decision, la regle
           de derivation, le cloud-init produit, la preuve), §66.7 (les schemas par
-          defaut des offres sont versionnes), §8.5, §8.6 · README.md (« Commander
+          defaut des offres sont versionnes), §66.8 (le pool est declare a
+          l'hebergeur ; le JSON de partition de chaque offre est versionne, le
+          cloud-init ne l'est PAS), §8.5, §8.6 · README.md (« Commander
           une Forge ») · scripts/README.md · deploy/cloud-init/offres/README.md
 
 Ce que ces preuves gardent, et ce qu'elles ne gardent PAS :
@@ -89,22 +91,56 @@ PARTITIONS_ATTENDUES = [
     {"label": "swap", "number": 2, "size": 4294967296, "useAllAvailableSpace": False},
     {"label": "boot", "number": 3, "size": 536870912, "useAllAvailableSpace": False},
     {"label": "root", "number": 4, "size": 214748364800, "useAllAvailableSpace": False},
-    {"label": "data", "number": 5, "size": 0, "useAllAvailableSpace": True},
+    {"label": "zfs", "number": 5, "size": 0, "useAllAvailableSpace": True},
 ]
+#: Le repli `--sans-zfs` : la meme chose, la partition du pool s'appelle `data`.
+PARTITIONS_ATTENDUES_SANS_ZFS = PARTITIONS_ATTENDUES[:-1] + [
+    {"label": "data", "number": 5, "size": 0, "useAllAvailableSpace": True}]
+#: La section `zfs` que la commande ecrit : name, type, devices — et RIEN d'autre (§66.8).
+ZFS_ATTENDU = {"pools": [{"name": "spark", "type": "mirror",
+                          "devices": ["/dev/sda5", "/dev/sdb5"]}]}
+TYPES_DE_POOL = {"unknown_type", "no_raid", "mirror", "raidz1", "raidz2"}
 
 
-def test_le_defaut_REEL_donne_le_schema_que_la_console_a_valide():
-    """A la mise en forme pres, c'est le JSON que la console de l'hebergeur a
-    affiche « correct and can be applied » le 2026-11-10 (capture du responsable) :
-    `root` bornee a 200 Gio, `data` prenant le reste, dans le dialecte du defaut."""
+def test_le_defaut_REEL_donne_le_schema_POUR_LA_FORGE_avec_le_pool_declare():
+    """DAT §66.8 : le schema produit est celui de la Forge — la partition 5 est `zfs`
+    et la section `zfs` declare le miroir `spark` sur les deux partitions."""
     schema, supports = pf.deriver(defaut(), 200)
-    assert list(schema) == ["disks", "filesystems", "raids"], "aucune cle ajoutee ni perdue"
+    assert list(schema) == ["disks", "filesystems", "raids", "zfs"]
     assert [d["device"] for d in schema["disks"]] == ["/dev/sda", "/dev/sdb"]
     for disque in schema["disks"]:
         assert disque["partitions"] == PARTITIONS_ATTENDUES, disque["device"]
+    assert schema["zfs"] == ZFS_ATTENDU
     assert schema["filesystems"] == defaut()["filesystems"], "recopie telle quelle"
     assert schema["raids"] == defaut()["raids"], "recopie telle quelle"
     assert supports == ["/dev/sda5", "/dev/sdb5"]
+
+
+def test_le_repli_SANS_ZFS_donne_le_schema_que_la_console_a_valide():
+    """A la mise en forme pres, c'est le JSON que la console de l'hebergeur a
+    affiche « correct and can be applied » le 2026-11-10 (capture du responsable) :
+    `root` bornee a 200 Gio, `data` prenant le reste, aucun pool declare."""
+    schema, supports = pf.deriver(defaut(), 200, declarer_zfs=False)
+    assert list(schema) == ["disks", "filesystems", "raids"], "aucune cle ajoutee ni perdue"
+    for disque in schema["disks"]:
+        assert disque["partitions"] == PARTITIONS_ATTENDUES_SANS_ZFS, disque["device"]
+    assert not schema.get("zfs")
+    assert supports == ["/dev/sda5", "/dev/sdb5"]
+
+
+def test_la_section_zfs_n_ecrit_QUE_name_type_et_devices():
+    """Le format des chaines `options` / `filesystem_options` n'est pas documente, et
+    leur cle dans le dialecte de la console est une deduction : elles ne s'ecrivent
+    pas (DAT §66.8). Une cle devinee peut etre refusee, une cle absente vaut vide."""
+    pool = pf.deriver(defaut(), 200)[0]["zfs"]["pools"][0]
+    assert set(pool) == {"name", "type", "devices"}
+    assert pool["type"] in TYPES_DE_POOL and pool["type"] == "mirror"
+
+
+def test_le_nom_du_pool_de_la_commande_est_celui_de_l_amorce():
+    """Deux textes, un seul nom : le registre attend « spark »."""
+    amorce = AMORCE.read_text(encoding="utf-8")
+    assert re.search(r"^POOL=(\S+)", amorce, re.M)[1] == pf.NOM_POOL == "spark"
 
 
 def test_les_deux_offres_relevees_sont_versionnees_et_decrites_au_README_du_dossier():
@@ -124,13 +160,20 @@ def test_les_deux_offres_relevees_ne_different_que_par_la_cle_zfs():
 
 
 @pytest.mark.parametrize("nom", ["EM-L101X-SATA.json", "EM-B311X-SATA.json"])
-def test_chaque_offre_RELEVEE_donne_les_partitions_attendues_et_garde_sa_cle_zfs(nom):
+def test_chaque_offre_RELEVEE_donne_les_partitions_attendues_et_le_pool_declare(nom):
     brut = json.loads((OFFRES_DIR / nom).read_text(encoding="utf-8"))
     schema, supports = pf.deriver(brut, 200)
     for disque in schema["disks"]:
         assert disque["partitions"] == PARTITIONS_ATTENDUES, disque["device"]
+    assert schema["zfs"] == ZFS_ATTENDU, "la cle `zfs` de l'offre (absente ou nulle) devient le pool"
     assert supports == ["/dev/sda5", "/dev/sdb5"]
-    assert schema.get("zfs", "absente") == brut.get("zfs", "absente"), "la cle zfs est recopiee telle quelle"
+
+
+@pytest.mark.parametrize("nom", ["EM-L101X-SATA.json", "EM-B311X-SATA.json"])
+def test_le_repli_sans_zfs_garde_la_cle_zfs_de_l_offre_telle_quelle(nom):
+    brut = json.loads((OFFRES_DIR / nom).read_text(encoding="utf-8"))
+    schema, _ = pf.deriver(brut, 200, declarer_zfs=False)
+    assert schema.get("zfs", "absente") == brut.get("zfs", "absente")
 
 
 @pytest.mark.parametrize("offre", OFFRES, ids=lambda f: f.stem)
@@ -140,12 +183,13 @@ def test_CHAQUE_offre_versionnee_se_derive_selon_la_regle(offre):
     brut = json.loads(offre.read_text(encoding="utf-8"))
     schema, supports = pf.deriver(brut, 200)
     assert len(supports) == 2 and all(pf.SUPPORT_SUR.fullmatch(s) for s in supports)
-    assert set(schema) == set(brut), "aucune cle ajoutee ni perdue"
+    assert set(schema) == set(brut) | {"zfs"}, "seule la cle `zfs` peut s'ajouter"
+    assert schema["zfs"]["pools"][0]["devices"] == supports
     for cle in brut:
-        if cle != "disks":
+        if cle not in ("disks", "zfs"):
             assert schema[cle] == brut[cle], f"« {cle} » est recopie tel quel"
     for disque, avant in zip(schema["disks"], brut["disks"]):
-        assert disque["partitions"][-1]["label"] == "data"
+        assert disque["partitions"][-1]["label"] == "zfs"
         assert disque["partitions"][:len(avant["partitions"]) - 1] == avant["partitions"][:-1]
 
 
@@ -169,6 +213,7 @@ def test_un_disque_NVMe_donne_des_supports_avec_le_p_de_partition():
     assert supports == ["/dev/nvme0n1p5", "/dev/nvme1n1p5"]
     assert [d["device"] for d in schema["disks"]] == ["/dev/nvme0n1", "/dev/nvme1n1"]
     assert "/dev/nvme0n1p3" in schema["raids"][0]["devices"], "les RAID restent ceux du defaut"
+    assert schema["zfs"]["pools"][0]["devices"] == supports, "le pool est declare sur les memes supports"
 
 
 def test_une_machine_UEFI_garde_sa_partition_uefi_et_son_boot_efi():
@@ -185,8 +230,9 @@ def test_le_dialecte_snake_case_est_CONSERVE():
     schema, _ = pf.deriver(entree, 200)
     texte = json.dumps(schema)
     assert "useAllAvailableSpace" not in texte
-    data = schema["disks"][0]["partitions"][-1]
-    assert data == {"label": "data", "number": 5, "size": 0, "use_all_available_space": True}
+    derniere = schema["disks"][0]["partitions"][-1]
+    assert derniere == {"label": "zfs", "number": 5, "size": 0, "use_all_available_space": True}
+    assert schema["zfs"] == ZFS_ATTENDU
 
 
 def _sans(schema, chemin):
@@ -228,10 +274,11 @@ def test_une_entree_qui_n_est_pas_un_schema_est_refusee(entree):
         pf.deriver(entree, 200)
 
 
-def test_appliquer_la_commande_a_sa_propre_sortie_est_REFUSE():
+@pytest.mark.parametrize("declarer", [True, False], ids=["pool declare", "--sans-zfs"])
+def test_appliquer_la_commande_a_sa_propre_sortie_est_REFUSE(declarer):
     """Le schema derive n'a plus de partition « reste » : le redonner par erreur
-    ne doit pas ajouter une partition `data` de plus, il doit dire pourquoi."""
-    derive, _ = pf.deriver(defaut(), 200)
+    ne doit pas ajouter une partition de plus, il doit dire pourquoi."""
+    derive, _ = pf.deriver(defaut(), 200, declarer)
     with pytest.raises(pf.Refus, match="deja derive"):
         pf.deriver(derive, 200)
 
@@ -259,24 +306,33 @@ def test_la_sortie_a_la_FORME_QUE_L_HEBERGEUR_ATTEND(variante):
             assert isinstance(p["size"], int) and p["size"] >= 0
             # « tout le reste » se dit size 0 ET drapeau : jamais l'un sans l'autre.
             assert (p["size"] == 0) == (p["useAllAvailableSpace"] is True), p
-        assert [p["label"] for p in disque["partitions"]].count("data") == 1
-        assert disque["partitions"][-1]["label"] == "data", "data est la derniere"
+        assert [p["label"] for p in disque["partitions"]].count("zfs") == 1
+        assert disque["partitions"][-1]["label"] == "zfs", "zfs est la derniere"
     assert all(r["level"] in NIVEAUX_RAID for r in schema["raids"])
     assert all(f["format"] in FORMATS for f in schema["filesystems"])
+    # La section `zfs` : une liste de pools, chacun du contrat (`name`, `type`, `devices`).
+    assert isinstance(schema["zfs"]["pools"], list) and len(schema["zfs"]["pools"]) == 1
+    for pool in schema["zfs"]["pools"]:
+        assert pool["type"] in TYPES_DE_POOL and pool["name"] and isinstance(pool["devices"], list)
 
 
+@pytest.mark.parametrize("declarer", [True, False], ids=["pool declare", "--sans-zfs"])
 @pytest.mark.parametrize("variante", [lambda s: s, _en_nvme], ids=["sata", "nvme"])
-def test_la_sortie_LAISSE_une_paire_de_partitions_NUE(variante):
-    """C'est tout l'objet du schema (§8.6) : confier les supports a `md` reproduirait
-    le probleme que le miroir ZFS resout, et les confier a l'hebergeur via `zfs`
-    ferait refuser `creer-pool.sh` (signature zfs_member)."""
-    schema, supports = pf.deriver(variante(defaut()), 200)
+def test_la_sortie_LAISSE_une_paire_de_partitions_NUE(variante, declarer):
+    """Les supports ne sont NI dans un RAID NI dans un systeme de fichiers : confier
+    `sda5` et `sdb5` a `md` reproduirait le probleme que le miroir ZFS resout (`md`
+    ne sait pas laquelle des deux copies est la bonne). Pool declare, ils ne sont
+    que dans la section `zfs` ; en repli, nulle part."""
+    schema, supports = pf.deriver(variante(defaut()), 200, declarer)
     assert len(supports) == 2
-    assert not schema.get("zfs"), "le pool ne se declare PAS a l'hebergeur"
     engages = {d for r in schema["raids"] for d in r["devices"]}
     engages |= {f["device"] for f in schema["filesystems"]}
     for libre in supports:
         assert libre not in engages, f"{libre} doit rester un peripherique NU"
+    if declarer:
+        assert schema["zfs"]["pools"][0]["devices"] == supports
+    else:
+        assert not schema.get("zfs"), "en repli, aucun pool n'est declare"
 
 
 def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
@@ -521,9 +577,9 @@ def test_E2E_un_fichier_absent_est_un_refus_pas_une_trace_de_pile():
 
 
 @pytest.mark.parametrize("argv, attendu", [
-    (["partitionnement"], "--defaut est obligatoire"),
+    (["partitionnement"], "donnez --offre"),
     (["cloud-init"], "--defaut"),
-    (["cloud-init", "--defaut", str(DEFAUT), "--pool-source", "/dev/a,/dev/b"], "pas les deux"),
+    (["cloud-init", "--defaut", str(DEFAUT), "--pool-source", "/dev/a,/dev/b"], "ni les deux"),
     (["cloud-init", "--pool-source", "/dev/sda5;reboot,/dev/sdb5"], "--pool-source"),
     (["cloud-init", "--pool-source", "/dev/a,/dev/b", "--arc-gib", "0"], "superieur ou egal a 1"),
     (["cloud-init", "--pool-source", "/dev/a,/dev/b", "--net-mbit", "vite"], "superieur ou egal a 1"),
@@ -537,9 +593,10 @@ def test_E2E_un_mauvais_usage_est_refuse_en_code_2_sans_rien_ecrire(argv, attend
 
 
 @pytest.mark.parametrize("sous_commande, noms", [
-    ("partitionnement", ["--defaut", "--racine-gio"]),
-    ("cloud-init", ["--defaut", "--racine-gio", "--pool-source", "--arc-gib", "--net-mbit",
-                    "--compresser"]),
+    ("partitionnement", ["--offre", "--defaut", "--racine-gio", "--sans-zfs"]),
+    ("offres", ["--racine-gio", "--verifier"]),
+    ("cloud-init", ["--offre", "--defaut", "--racine-gio", "--pool-source", "--arc-gib",
+                    "--net-mbit", "--compresser"]),
 ])
 def test_E2E_chaque_sous_commande_a_son_help_qui_nomme_ses_reglages(sous_commande, noms):
     """CLAUDE.md §3 : un reglage se lit dans la commande et dans son --help."""
@@ -555,3 +612,135 @@ def test_la_commande_ne_lit_aucune_variable_d_environnement():
     texte = COMMANDE.read_text(encoding="utf-8")
     code = "\n".join(l for l in texte.splitlines() if not l.lstrip().startswith("#"))
     assert not re.search(r"\bimport os\b|\bos\.environ\b|\bgetenv\b|\bfrom os\b", code)
+
+
+# --- Le repli --sans-zfs, par la commande (DAT §66.8) ------------------------------
+
+
+def test_E2E_le_defaut_declare_le_pool_et_le_dit_sur_la_sortie_d_erreur():
+    vu = _commande("partitionnement", "--defaut", str(DEFAUT))
+    assert vu.returncode == 0, vu.stderr
+    assert json.loads(vu.stdout)["zfs"] == ZFS_ATTENDU
+    assert "declare a l'hebergeur" in vu.stderr
+
+
+def test_E2E_sans_zfs_donne_le_repli_et_le_dit():
+    vu = _commande("partitionnement", "--defaut", str(DEFAUT), "--sans-zfs")
+    assert vu.returncode == 0, vu.stderr
+    assert json.loads(vu.stdout) == pf.deriver(defaut(), 200, False)[0]
+    assert [d["partitions"][-1]["label"] for d in json.loads(vu.stdout)["disks"]] == ["data", "data"]
+    assert "--sans-zfs" in vu.stderr and "aucun pool n'est declare" in vu.stderr
+
+
+# --- Le JSON de partition de chaque offre connue, versionne (DAT §66.8) --------------
+
+FORGE_DIR = OFFRES_DIR / "forge"
+
+
+def test_les_JSON_de_partition_versionnes_sont_ceux_que_la_commande_produit_AUJOURD_HUI():
+    """C'est la preuve qui les GARDE : changer la regle sans regenerer la fait echouer.
+    Pour regenerer : `python3 scripts/preparer-forge.py offres`."""
+    assert pf.verifier_offres() == []
+
+
+def test_AUCUN_cloud_init_n_est_versionne():
+    """Le cloud-init EMBARQUE l'amorce, qui evolue : une copie versionnee serait en
+    retard sur elle, et poserait une vieille amorce sur une machine neuve. Il se
+    produit a la demande, depuis l'amorce courante (`cloud-init --offre <NOM>`).
+    Un cloud-init pre-compile retrouve dans `forge/` est « sans offre » pour `offres
+    --verifier`, mais cette preuve le dit pour ce qu'il est."""
+    versionnes = [f.name for f in FORGE_DIR.iterdir() if f.suffix in (".yaml", ".yml")]
+    assert versionnes == [], f"cloud-init pre-compile versionne : {versionnes}"
+    assert all(f.name.endswith(".partitionnement.json") for f in FORGE_DIR.iterdir())
+
+
+@pytest.mark.parametrize("offre", OFFRES, ids=lambda f: f.stem)
+def test_chaque_offre_a_son_JSON_de_partition_pour_la_Forge(offre):
+    schema_attendu, _ = pf.deriver(json.loads(offre.read_text(encoding="utf-8")), 200)
+    part = FORGE_DIR / f"{offre.stem}.partitionnement.json"
+    assert part.is_file(), "le JSON de partition doit etre versionne"
+    schema = json.loads(part.read_text(encoding="utf-8"))
+    assert schema == schema_attendu
+    assert [d["partitions"][-1]["label"] for d in schema["disks"]] == ["zfs"] * len(schema["disks"])
+    assert schema["zfs"]["pools"][0]["name"] == "spark"
+
+
+def test_le_README_du_dossier_des_offres_nomme_le_JSON_versionne_et_le_cloud_init_a_la_demande():
+    readme = (OFFRES_DIR / "README.md").read_text(encoding="utf-8")
+    assert "forge/" in readme and "preparer-forge.py offres" in readme
+    assert "cloud-init --offre" in readme, "le cloud-init se produit par nom d'offre"
+
+
+def test_verifier_detecte_un_fichier_absent_perime_ou_sans_offre(tmp_path):
+    dossier = tmp_path / "offres"
+    dossier.mkdir()
+    for offre in OFFRES:
+        (dossier / offre.name).write_text(offre.read_text(encoding="utf-8"), encoding="utf-8")
+    nb = len(OFFRES)
+    assert len(pf.verifier_offres(dossier)) == nb and all(e.startswith("absent") for e in pf.verifier_offres(dossier))
+
+    ecrits = pf.ecrire_offres(dossier)
+    assert len(ecrits) == nb and pf.verifier_offres(dossier) == []
+
+    premiere = sorted(OFFRES)[0].stem
+    (dossier / "forge" / f"{premiere}.partitionnement.json").write_text("{}\n", encoding="utf-8")
+    (dossier / "forge" / "OFFRE-SUPPRIMEE.partitionnement.json").write_text("{}\n", encoding="utf-8")
+    (dossier / "forge" / f"{premiere}.cloud-init.yaml").write_text("#cloud-config\n", encoding="utf-8")
+    ecarts = pf.verifier_offres(dossier)
+    assert f"perime : forge/{premiere}.partitionnement.json" in ecarts
+    assert "sans offre : forge/OFFRE-SUPPRIMEE.partitionnement.json" in ecarts
+    assert f"sans offre : forge/{premiere}.cloud-init.yaml" in ecarts, "un cloud-init pre-compile est refuse"
+
+
+def test_une_offre_hors_regle_est_refusee_avec_son_nom_de_fichier(tmp_path):
+    dossier = tmp_path / "offres"
+    dossier.mkdir()
+    un_seul_disque = defaut()
+    un_seul_disque["disks"] = un_seul_disque["disks"][:1]
+    (dossier / "EM-X999X-SATA.json").write_text(json.dumps(un_seul_disque), encoding="utf-8")
+    with pytest.raises(pf.Refus, match=r"EM-X999X-SATA\.json : .*deux disques"):
+        pf.produire_offres(dossier)
+
+
+# --- Une offre connue, par son NOM (--offre) ---------------------------------------------
+
+
+@pytest.mark.parametrize("offre", OFFRES, ids=lambda f: f.stem)
+def test_E2E_offre_par_son_nom_donne_la_meme_sortie_que_par_son_fichier(offre):
+    for sous_commande in ("partitionnement", "cloud-init"):
+        par_nom = _commande(sous_commande, "--offre", offre.stem)
+        par_fichier = _commande(sous_commande, "--defaut", str(offre))
+        assert par_nom.returncode == 0, par_nom.stderr
+        assert par_nom.stdout == par_fichier.stdout, sous_commande
+
+
+def test_E2E_le_cloud_init_par_nom_d_offre_embarque_l_amorce_COURANTE():
+    """C'est tout l'interet de ne pas le versionner : demain, la meme commande
+    produit le cloud-init de l'amorce de demain."""
+    vu = _commande("cloud-init", "--offre", "EM-B311X-SATA")
+    assert vu.returncode == 0, vu.stderr
+    contenus = {f["path"]: f["content"] for f in yaml.safe_load(vu.stdout)["write_files"]}
+    assert contenus["/opt/spark-amorce.sh"] == AMORCE.read_text(encoding="utf-8")
+    assert contenus["/opt/creer-pool.sh"] == CREER_POOL.read_text(encoding="utf-8")
+    assert yaml.safe_load(vu.stdout)["runcmd"] == ["/opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5"]
+
+
+@pytest.mark.parametrize("argv, attendu", [
+    (["cloud-init", "--offre", "EM-INCONNUE"], "offre inconnue"),
+    (["partitionnement", "--offre", "EM-INCONNUE"], "offres versionnees : EM-B311X-SATA, EM-L101X-SATA"),
+    (["partitionnement", "--offre", "../README"], "offre inconnue"),
+    (["partitionnement", "--offre", "EM-B311X-SATA", "--defaut", str(DEFAUT)], "ni les deux"),
+    (["cloud-init", "--offre", "EM-B311X-SATA", "--pool-source", "/dev/a,/dev/b"], "ni les deux"),
+])
+def test_E2E_une_offre_inconnue_ou_un_usage_ambigu_est_refuse_sans_rien_ecrire(argv, attendu):
+    vu = _commande(*argv)
+    assert vu.returncode == 2, (vu.returncode, vu.stderr)
+    assert vu.stdout == "" and attendu in vu.stderr
+
+
+def test_E2E_offres_verifier_est_vert_sur_les_fichiers_versionnes_et_n_ecrit_rien():
+    avant = {f.name: f.read_bytes() for f in FORGE_DIR.iterdir()}
+    vu = _commande("offres", "--verifier")
+    assert vu.returncode == 0, vu.stderr
+    assert vu.stdout == "" and "a jour" in vu.stderr
+    assert {f.name: f.read_bytes() for f in FORGE_DIR.iterdir()} == avant, "--verifier n'ecrit RIEN"

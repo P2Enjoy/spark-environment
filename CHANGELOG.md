@@ -20,8 +20,9 @@
   `… cloud-init --defaut defaut.json` lisent le schéma de partitionnement **par
   défaut de l'offre** (la console l'affiche) et lui appliquent une règle :
   tout est conservé, `root` est bornée (200 Gio par défaut, `--racine-gio`), une
-  partition `data` prend le reste de chaque disque et ses deux supports restent
-  nus ; un schéma sans deux disques, déjà dérivé ou qui déclare un pool est
+  partition `zfs` prend le reste de chaque disque, ses deux supports restent nus
+  et le schéma **déclare à l'hébergeur le pool miroir `spark`** (section `zfs` ;
+  `--sans-zfs` donne le repli sans pool déclaré, où l'amorce crée le pool) ; un schéma sans deux disques, déjà dérivé ou qui déclare un pool est
   refusé avec ses mots, en code `2`, sans rien sur la sortie standard. Le
   cloud-init embarque `spark-amorce.sh` et `creer-pool.sh` **octet pour octet** et
   lance l'amorce avec `--pool-source`, `--arc-gib` et `--net-mbit` ;
@@ -32,11 +33,18 @@
   sur le schéma par défaut réel relevé le 2026-11-10, relu avec PyYAML
   (dépendance de test). Aucune migration, aucune variable d'environnement. DAT
   §66 ; README ; `scripts/README.md`.
-- **Les schémas par défaut des offres Scaleway relevées sont versionnés**
-  (SPK-158). `deploy/cloud-init/offres/EM-L101X-SATA.json` (relevé le 2026-11-10)
-  et `EM-B311X-SATA.json` (2026-11-16), copiés tels qu'affichés par la console :
-  pour une offre connue, `--defaut deploy/cloud-init/offres/<offre>.json` suffit,
-  sans rien copier. Les deux ne diffèrent que par la clé `"zfs": null`, que la
+- **Pour chaque offre Scaleway connue, le JSON de partition de la Forge est versionné,
+  prêt à coller, et le cloud-init se produit par son nom** (SPK-158).
+  `deploy/cloud-init/offres/forge/<offre>.partitionnement.json` est produit par
+  `preparer-forge.py offres` à partir des schémas **originaux** de l'hébergeur,
+  `EM-L101X-SATA.json` (relevé le 2026-11-10) et `EM-B311X-SATA.json` (2026-11-16),
+  copiés tels qu'affichés par la console ; **une preuve échoue s'il n'est plus ce que
+  la commande produit** (`offres --verifier`). Le cloud-init, lui, **n'est jamais
+  versionné** : il embarque l'amorce, qui évolue, et une copie serait en retard sur
+  elle ; `preparer-forge.py cloud-init --offre EM-B311X-SATA` l'écrit à la demande,
+  depuis l'amorce courante. Le JSON déclare le pool ZFS à l'hébergeur ; son acceptation
+  par la console et l'installateur n'est pas vérifiée, `--sans-zfs` donne le repli.
+  L'amorce garde son défaut d'ARC (16 Gio) : la RAM de chaque offre n'est pas relevée. Les deux ne diffèrent que par la clé `"zfs": null`, que la
   commande conserve. Ils servent de référence aux preuves de la règle, et une
   preuve dérive chaque fichier du dossier : une offre ajoutée dont le défaut sort
   de la règle est refusée avant qu'on commande la machine. Aucune capacité de

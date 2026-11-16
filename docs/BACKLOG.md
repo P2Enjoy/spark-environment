@@ -9654,9 +9654,11 @@ lien et en place des textes bruts ».
      des offres relevées — `EM-L101X-SATA`, `EM-B311X-SATA` — sont versionnés sous
      `deploy/cloud-init/offres/`, et les preuves dérivent chacun d'eux (DAT §66.7) ;
   7. *(décisions du 2026-11-16)* le schéma produit **déclare le pool ZFS** (partition
-     `zfs`, section `zfs`, `--sans-zfs` pour l'ancien comportement), et chaque offre
-     connue a ses deux fichiers prêts à coller versionnés sous
-     `deploy/cloud-init/offres/forge/`, tenus à jour par une preuve (DAT §66.8).
+     `zfs`, section `zfs`, `--sans-zfs` pour l'ancien comportement) ; chaque offre
+     connue a son **JSON de partition versionné** sous `deploy/cloud-init/offres/forge/`,
+     tenu à jour par une preuve, et son **cloud-init se produit à la demande par son
+     nom** (`--offre`) — il n'est jamais versionné, parce qu'il embarque l'amorce qui
+     évolue (DAT §66.8).
 - Aucune migration, aucune variable d'environnement, aucune opération de
   production.
 - DoD : preuves unitaires (dérivation, refus, NVMe, UEFI, YAML relu, contenu
@@ -9691,6 +9693,19 @@ lien et en place des textes bruts ».
   - **Mesuré** : le `user-data` fait environ **19 Ko** en clair (l'estimation
     écrite d'abord, 13 Ko, était fausse) ; `--compresser` le ramène à 11,5 Ko. La
     limite du champ chez l'hébergeur reste inconnue.
+  - **Pool déclaré, JSON de partition versionné et cloud-init par nom d'offre, le 2026-11-16** (point 7) :
+    `deriver` écrit la partition `zfs` et la section `zfs` (`name`, `type`, `devices`),
+    `--sans-zfs` garde l'ancien schéma ; `--offre <NOM>` désigne une offre connue ;
+    `preparer-forge.py offres [--verifier]` écrit et vérifie
+    `deploy/cloud-init/offres/forge/<offre>.partitionnement.json` pour chaque offre (2
+    fichiers versionnés) ; **aucun cloud-init n'est versionné** (une première version le
+    faisait : erreur relevée par le responsable avant le commit du code, retirée). La
+    suite de la commande compte **109 cas** ; elle porte la preuve que les JSON
+    versionnés sont ceux que la commande produit, qu'aucun cloud-init pré-compilé n'est
+    versionné, et que celui que produit `--offre` embarque l'amorce courante. Le DAT §8.6 et §66.3, le README,
+    l'en-tête de l'amorce sont corrigés : la raison de l'ancienne règle était périmée.
+    **Non éprouvé** : l'acceptation de la section `zfs` par la console et
+    l'installateur, et l'adoption par Incus d'un pool créé par l'hébergeur.
   - **Offres versionnées le 2026-11-16** (point 6) : `EM-L101X-SATA.json` (le
     premier schéma relevé, déplacé par `git mv` depuis la fixture de test) et
     `EM-B311X-SATA.json`, sous `deploy/cloud-init/offres/` avec leur README ; la
