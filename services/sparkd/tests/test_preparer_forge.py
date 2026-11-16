@@ -1041,3 +1041,20 @@ def test_E2E_les_options_incompatibles_du_cloud_init_sont_refusees_sans_rien_ecr
     vu = _commande("cloud-init", "--offre", "EM-B311X-SATA", *argv)
     assert vu.returncode == 2, (vu.returncode, vu.stderr)
     assert vu.stdout == "" and attendu in vu.stderr
+
+
+def test_le_cloud_init_leger_est_ENTIEREMENT_ASCII():
+    """La console de l'hebergeur a juge « invalide » un cloud-init leger dont le seul
+    octet hors ASCII etait le « § » d'un commentaire (2026-11-17), alors que
+    `cloud-init schema` 26.2 le declarait valide. Plus aucun octet hors ASCII."""
+    _leger().encode("ascii")
+    _leger(arc=4, net=1000).encode("ascii")
+
+
+@pytest.mark.skipif(shutil.which("cloud-init") is None, reason="cloud-init absent de ce poste")
+def test_le_cloud_init_leger_passe_le_validateur_de_cloud_init(tmp_path):
+    fichier = tmp_path / "user-data.yaml"
+    fichier.write_text(_leger(), encoding="ascii")
+    vu = subprocess.run(["cloud-init", "schema", "--config-file", str(fichier)],
+                        capture_output=True, text=True)
+    assert vu.returncode == 0 and "Valid schema" in vu.stdout + vu.stderr, vu.stdout + vu.stderr

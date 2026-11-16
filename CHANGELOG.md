@@ -56,7 +56,10 @@
   responsable : 19,7 Ko → ≈ 11 Ko, ≈ 6,6 Ko avec `--compresser`) ; `--ref` choisit le
   commit. Le banc de redémarrage utilise `--embarquer` (il remplace `sparkd` par une roue
   locale dans le texte de l'amorce). Non vérifié : l'acceptation par l'hébergeur, et le
-  téléchargement depuis une machine livrée. DAT §66.9. Les deux ne diffèrent que par la clé `"zfs": null`, que la
+  téléchargement depuis une machine livrée. DAT §66.9.
+- **Le cloud-init léger est entièrement ASCII** : la console de l'hébergeur l'a jugé
+  « invalide » alors que `cloud-init schema` l'acceptait ; son seul octet hors ASCII était un
+  « § » en commentaire. Une preuve l'impose désormais (SPK-158). Les deux ne diffèrent que par la clé `"zfs": null`, que la
   commande conserve. Ils servent de référence aux preuves de la règle, et une
   preuve dérive chaque fichier du dossier : une offre ajoutée dont le défaut sort
   de la règle est refusée avant qu'on commande la machine. Aucune capacité de

@@ -308,7 +308,7 @@ def rendre_cloud_init_leger(sha: str, empreintes: dict[str, str], supports: list
     return ("#cloud-config\n"
             "# Produit par scripts/preparer-forge.py : ne pas l'editer, relancer la commande.\n"
             f"# Les scripts ne sont PAS embarques : ils sont telecharges au commit {sha[:9]} et\n"
-            "# leur sha256 est verifie avant tout lancement (DAT §66.9). `runcmd` ne joue qu'une\n"
+            "# leur sha256 est verifie avant tout lancement (DAT 66.9). `runcmd` ne joue qu'une\n"
             "# fois par instance ; le rejeu passe par `sudo /opt/spark-amorce.sh` (README).\n"
             "\n"
             "runcmd:\n"

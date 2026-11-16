@@ -15142,3 +15142,10 @@ installée. Rien n'a été modifié sur la machine.
 après l'intervention. Les sessions web ouvertes par la capture n'ont pas pu être fermées
 explicitement (le point d'accès de déconnexion répond 404 sur ce microgiciel) : elles
 expirent d'elles-mêmes.
+
+**2026-11-17 — « le cloud-init généré est invalide ».** La console de l'hébergeur refuse le
+cloud-init léger. `cloud-init schema` 26.2 le déclare **valide** ; son seul octet hors ASCII
+était le « § » d'un commentaire d'en-tête (« DAT §66.9 »), et la console annonce cloud-init
+22.1. Corrigé : l'en-tête est en ASCII, une preuve exige que la sortie légère soit
+entièrement ASCII et qu'elle passe `cloud-init schema` quand l'outil est présent. **Non
+vérifié** : que c'était bien la cause — le texte exact du refus n'a pas été relevé.
