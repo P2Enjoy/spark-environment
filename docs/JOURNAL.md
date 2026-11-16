@@ -14952,3 +14952,46 @@ garder l'historique ; le README donne la commande sur un fichier versionné et n
 demande la copie depuis la console que pour une offre nouvelle.
 
 **Vérifications à ce stade.** Documentation seule, committée avant le code.
+
+## 2026-11-16 · SPK-158 : le schéma pour la Forge déclare le pool, et chaque offre connue a ses fichiers
+
+**Problème.** Le responsable demande pourquoi `"zfs": null` figure dans un schéma
+destiné à une Forge qui utilise ZFS, puis : « tu dois générer le NOUVEAU schéma pour y
+installer une Forge, pas faire un script qui recopie ». Puis, deux messages plus tard :
+« je t'ai donné les schémas ORIGINAUX des configs Scaleway ; pour un serveur par défaut
+de Scaleway je veux la config pour formater pour la Forge ; si demain je veux refaire un
+serveur de la config connue, je veux le JSON de partition à utiliser et le cloud-init. »
+
+**Ce que j'avais mal compris.** J'avais livré une commande qui dérive le schéma à la
+demande, et versionné les seuls **originaux**. Ce que le responsable attend est la sortie
+elle-même, versionnée, pour chaque offre connue : un schéma prêt à coller et son
+cloud-init. Une commande à relancer, dont le résultat n'est nulle part, n'était pas la
+demande.
+
+**Ce que j'avais mal justifié.** J'ai répondu à « pourquoi `zfs` null » en défendant la
+décision de ne pas déclarer le pool, avec la raison du DAT §8.6 — le refus de
+`creer-pool.sh` — **sans relire qu'elle datait d'avant l'adoption d'un pool existant par
+l'amorce** (SPK-159, que j'avais écrite moi-même la veille). Je l'ai reconnu à la question
+suivante ; le responsable, lui, l'avait pressenti.
+
+**Observations.** Contrat de l'API lu dans le SDK de Scaleway : `Schema.zfs.pools[]` avec
+`name`, `type` (`mirror`…), `devices`, `options`, `filesystem_options`, et un libellé de
+partition `zfs`. La clé `filesystem_options` s'écrit probablement `filesystemOptions`
+dans le dialecte de la console (qui écrit `useAllAvailableSpace`) : **déduction, non
+relevée**.
+
+**Solutions envisagées.** (a) Écrire `options` et `filesystem_options` vides, dans le
+dialecte supposé : risque d'une clé inconnue refusée. (b) **Ne pas les écrire** — retenu :
+une clé absente vaut une liste vide dans ce type d'API, une clé devinée peut être
+refusée. (c) Garder un repli `--sans-zfs`, parce que ni la console ni l'installateur n'ont
+été vus accepter la déclaration.
+
+**Décision.** DAT §66.8 : le schéma déclare le pool (partition `zfs`, section `zfs`,
+miroir `spark`) ; `--sans-zfs` garde l'ancien comportement ; `preparer-forge.py offres`
+écrit, pour chaque offre connue, `forge/<offre>.partitionnement.json` et
+`forge/<offre>.cloud-init.yaml`, et une preuve échoue si l'un diffère de la sortie
+courante. SPK-158 point 7 ; son statut reste `[~]`.
+
+**Vérifications à ce stade.** Documentation seule, committée avant le code. Rien de ce
+qui suit n'est encore éprouvé : ni la console, ni l'installateur, ni Incus sur un pool
+créé par l'hébergeur (DAT §66.8, « Ce qui n'est pas vérifié »).

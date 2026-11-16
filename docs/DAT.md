@@ -16393,6 +16393,72 @@ commande la machine. Une autre vérifie que les deux offres relevées sont prés
 default*, copier le JSON tel quel dans `<offre>.json`, ajouter une ligne au README du
 dossier, lancer les preuves.
 
+### 66.8 Le schéma pour la Forge déclare le pool ZFS, et il est versionné pour chaque offre connue
+
+*Décisions du responsable du 2026-11-16, écrites avant le code. Elles remplacent la
+« frontière » du §8.6 (« l'hébergeur livre des partitions, la Forge crée son pool ») et
+les points correspondants des §66.2, §66.3 et §66.7 ; ces passages sont corrigés dans
+le changement qui livre le code.*
+
+**Décision 1 — le schéma déclare le pool.** « Tu dois générer le NOUVEAU schéma pour y
+installer une Forge » : pour une offre donnée, le schéma que la commande produit est
+**celui de la Forge**, pas une copie du défaut. Il déclare le pool ZFS à l'hébergeur : la
+partition 5 de chaque disque porte le libellé **`zfs`** (et non plus `data`), et le
+schéma porte une section `zfs` avec un pool miroir sur les deux partitions.
+
+**Pourquoi la règle de §8.6 tombe.** Elle disait qu'un pool créé à l'installation ferait
+refuser `creer-pool.sh` (signature `zfs_member`). Depuis SPK-159 l'amorce **adopte** un
+pool existant (`zpool import`, puis `incus storage create … source=spark`) et n'appelle
+`creer-pool.sh` que si aucun pool n'est importable : ce refus n'est plus un obstacle. La
+raison qui avait été donnée est donc périmée, et c'est le responsable qui l'a relevé.
+
+**Le contrat de l'API** (relu le 2026-11-16 dans le SDK de Scaleway, `baremetal/v1`) :
+`Schema.zfs` vaut `{ "pools": [ … ] }` ; un pool porte `name`, `type` (`no_raid`,
+`mirror`, `raidz1`, `raidz2`), `devices`, `options` et `filesystem_options` ; le libellé
+de partition `zfs` existe dans l'énumération. **La commande n'écrit que `name`, `type`
+et `devices`** : le format des chaînes de `options` et `filesystem_options` n'est pas
+documenté dans ce que j'ai lu, et leur clé dans le dialecte de la console (camelCase,
+`filesystemOptions` ?) est une déduction non relevée. Deviner une clé que la console
+rejetterait serait pire que l'omettre.
+
+**La règle (§66.3 amendé).** Sur chaque disque : `root` bornée, puis `zfs` prend le
+reste. La section `zfs` porte un pool `spark`, type `mirror`, dont les `devices` sont les
+deux partitions. Les supports restent absents de `raids` et de `filesystems`. Le nom
+`spark` est la convention du produit (le registre l'attend, l'amorce a `POOL=spark`) :
+une preuve tient la commande et l'amorce ensemble.
+
+**`--sans-zfs`** : l'ancien comportement du 2026-11-10 (partition `data`, aucun pool
+déclaré, l'amorce crée le pool). Il existe parce que **l'acceptation de la déclaration
+par la console et par l'installateur n'est pas vérifiée** : si la console la refuse, le
+schéma de repli est déjà là, éprouvé sur le banc.
+
+**Le cloud-init est le même dans les deux modes** : il lance l'amorce avec
+`--pool-source`. Pool déclaré, l'amorce l'adopte ; l'argument ne sert alors que de repli
+si aucun pool n'est importable (et `creer-pool.sh` refuse un support déjà écrit).
+
+**Décision 2 — chaque offre connue a ses deux fichiers prêts à coller, dans git.** « Si
+demain je veux refaire un serveur de la config connue, je veux le JSON de partition à
+utiliser et le cloud-init. » Pour chaque `deploy/cloud-init/offres/<offre>.json` (le
+schéma **original** de l'hébergeur, entrée), la commande `preparer-forge.py offres`
+écrit dans `deploy/cloud-init/offres/forge/` :
+
+- `<offre>.partitionnement.json` — le JSON à coller dans la console ;
+- `<offre>.cloud-init.yaml` — le user-data complet.
+
+Refaire un serveur d'une config connue, c'est copier ces deux fichiers. **Une preuve
+échoue si un fichier versionné diffère de ce que la commande produit aujourd'hui** : un
+changement de l'amorce, de `creer-pool.sh` ou de la règle oblige à les régénérer, et ils
+ne peuvent pas dériver en silence. Le cloud-init versionné ne donne pas `--arc-gib` : la
+RAM de chaque offre n'est pas relevée, l'amorce garde son défaut de 16 Gio — à adapter
+avec la commande directe sur une machine qui en a moins.
+
+**Ce qui n'est pas vérifié.** (1) Que la console accepte la section `zfs` telle que la
+commande l'écrit (`name`, `type`, `devices`) ; (2) que l'installateur de Scaleway crée ce
+miroir sur des partitions, sous le nom `spark`, et que le système démarre dessus ; (3)
+qu'Incus adopte le pool tel que cet installateur le crée — le banc a prouvé l'adoption d'un
+pool créé par `zpool create -f spark mirror …` puis exporté (SPK-129), pas celle d'un pool
+créé par l'hébergeur ; (4) que l'OS de l'offre supporte ZFS.
+
 ## 67. La sauvegarde externe : les instantanés d'un Spark sur un S3 : contrat (SPK-160 à SPK-166)
 
 *Contrat écrit le 2026-11-10 sur arbitrage du responsable, **avant le code** : rien

@@ -9652,7 +9652,11 @@ lien et en place des textes bruts ».
      produit** ;
   6. *(ajouté le 2026-11-16, sur demande du responsable)* les schémas par défaut
      des offres relevées — `EM-L101X-SATA`, `EM-B311X-SATA` — sont versionnés sous
-     `deploy/cloud-init/offres/`, et les preuves dérivent chacun d'eux (DAT §66.7).
+     `deploy/cloud-init/offres/`, et les preuves dérivent chacun d'eux (DAT §66.7) ;
+  7. *(décisions du 2026-11-16)* le schéma produit **déclare le pool ZFS** (partition
+     `zfs`, section `zfs`, `--sans-zfs` pour l'ancien comportement), et chaque offre
+     connue a ses deux fichiers prêts à coller versionnés sous
+     `deploy/cloud-init/offres/forge/`, tenus à jour par une preuve (DAT §66.8).
 - Aucune migration, aucune variable d'environnement, aucune opération de
   production.
 - DoD : preuves unitaires (dérivation, refus, NVMe, UEFI, YAML relu, contenu
