@@ -9658,7 +9658,11 @@ lien et en place des textes bruts ».
      connue a son **JSON de partition versionné** sous `deploy/cloud-init/offres/forge/`,
      tenu à jour par une preuve, et son **cloud-init se produit à la demande par son
      nom** (`--offre`) — il n'est jamais versionné, parce qu'il embarque l'amorce qui
-     évolue (DAT §66.8).
+     évolue (DAT §66.8) ;
+  8. *(2026-11-16, après le refus « UserData: greater than max » de l'hébergeur sur
+     19 431 octets)* le cloud-init est **léger par défaut** : il télécharge les deux
+     scripts à un commit épinglé et vérifie leur sha256, environ 1,5 Ko ; `--embarquer`
+     garde l'ancien mode (DAT §66.9).
 - Aucune migration, aucune variable d'environnement, aucune opération de
   production.
 - DoD : preuves unitaires (dérivation, refus, NVMe, UEFI, YAML relu, contenu

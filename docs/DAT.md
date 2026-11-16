@@ -16478,7 +16478,51 @@ qu'Incus adopte le pool tel que cet installateur le crée — le banc a prouvé 
 pool créé par `zpool create -f spark mirror …` puis exporté (SPK-129), pas celle d'un pool
 créé par l'hébergeur ; (4) que l'OS de l'offre supporte ZFS.
 
-## 67. La sauvegarde externe : les instantanés d'un Spark sur un S3 : contrat (SPK-160 à SPK-166)
+### 66.9 Le cloud-init léger : il télécharge les scripts à un commit épinglé et vérifie leur empreinte
+
+*Décision du 2026-11-16, après un refus de l'hébergeur, écrite avant le code.*
+
+**Constat, mesuré.** Le `user-data` qui embarque l'amorce et `creer-pool.sh` (**19 431
+octets**) a été **refusé** par Scaleway : « HTTP error 400: Invalid argument: UserData:
+greater than max ». La limite n'est documentée nulle part (recherches du 2026-11-10 et du
+2026-11-16). La variante compressée (`--compresser`, 11,5 Ko) n'a pas été essayée et rien
+ne dit qu'elle passerait : le §66.4 comptait la limite « inconnue », elle est maintenant
+**atteinte**.
+
+**Décision.** Par défaut, le cloud-init **n'embarque plus les scripts**. Il les
+**télécharge** au premier démarrage depuis
+`raw.githubusercontent.com/P2Enjoy/spark-environment/<sha>/…`, **au commit épinglé** qui
+était `HEAD` à la génération, **vérifie leur sha256** — celui des fichiers du dépôt local —
+et ne lance l'amorce que si l'empreinte est bonne. Il fait environ 1,5 Ko. L'ancien mode,
+autonome, reste disponible : `--embarquer` (avec `--compresser`).
+
+**Pourquoi c'est acceptable.**
+
+1. L'amorce dépend déjà de GitHub au premier démarrage : elle installe `sparkd` par
+   `pip install git+https://github.com/P2Enjoy/spark-environment.git@main`.
+2. L'accès anonyme à `raw.githubusercontent.com` a été relevé le 2026-11-16, sur le
+   `HEAD` du jour : HTTP 200 pour les deux scripts, **sha256 identique** à celui du
+   fichier local.
+3. Le commit épinglé et l'empreinte rendent l'exécution **vérifiable** : un fichier
+   modifié sur GitHub après coup, ou différent de celui du dépôt local, fait échouer le
+   démarrage au lieu d'exécuter autre chose en `root`. C'est plus fort que le
+   `curl | sh` sur `main` que le journal avait écarté.
+
+**Ce que la commande vérifie avant d'écrire** : que `git` répond ; que la référence
+(`HEAD`, ou `--ref`) se résout en un commit, épinglé par son **sha complet** ; que chacun
+des deux scripts du dépôt local est **identique** à celui de ce commit ; que le commit est
+**sur une branche distante** (`git branch -r --contains`). Sinon elle refuse en le disant :
+la machine téléchargerait un fichier qui n'est pas celui qu'on croit, ou qui n'existe pas.
+
+**Ce qui n'est pas vérifié.** (1) Que l'hébergeur accepte ce `user-data` (la limite est
+inconnue ; 1,5 Ko est très en dessous de ce qui a été refusé). (2) Le téléchargement depuis
+une machine **livrée** par l'hébergeur (réseau sortant au premier démarrage). (3) Le banc
+de redémarrage éprouve le mode **embarqué** : il remplace `sparkd` par une roue locale
+dans le texte de l'amorce, ce que le mode léger, qui l'amène de GitHub, ne permet pas. Le
+mode léger est éprouvé par des preuves unitaires — un dépôt Git jetable pour
+l'épinglage, un `curl` doublé pour le téléchargement et la vérification d'empreinte — et
+par le relevé réel d'accès ci-dessus.
+ : les instantanés d'un Spark sur un S3 : contrat (SPK-160 à SPK-166)
 
 *Contrat écrit le 2026-11-10 sur arbitrage du responsable, **avant le code** : rien
 n'est livré. Chaque point porte son statut. **Arbitré** : décidé par le responsable

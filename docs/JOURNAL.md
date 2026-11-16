@@ -15034,3 +15034,34 @@ Deux preuves tiennent la décision : aucun cloud-init pré-compilé n'est versio
 `--offre` contient l'amorce courante octet pour octet. DAT §66.8, README, backlog et
 changelog disent la nouvelle décision ; la première n'y figure plus que dans cet
 erratum.
+\n
+## 2026-11-16 · SPK-158 : Scaleway refuse le user-data embarqué — le cloud-init devient léger
+
+**Problème.** Le responsable colle le cloud-init produit par la commande : « HTTP error
+400: Invalid argument: UserData: greater than max ». Le fichier faisait 19 431 octets.
+
+**Ce que je savais, et ce que j'en avais fait.** J'avais mesuré 19 Ko, écrit au DAT et au
+README que c'était « au-dessus des 16 Ko que fixent d'autres hébergeurs » et que la limite
+de Scaleway n'était pas documentée, ajouté `--compresser` comme échappatoire — puis livré
+le mode embarqué **comme défaut**, avec la mention « limite inconnue » en bas de page. Le
+risque était écrit ; je ne l'ai pas traité, je l'ai documenté.
+
+**Observations.** La limite n'est toujours pas documentée. `--compresser` (11,5 Ko) peut
+échouer à son tour : je ne connais pas le plafond. Les scripts sont servis anonymement par
+`raw.githubusercontent.com` au sha du `HEAD` (HTTP 200 ; sha256 identique au local).
+L'amorce fait déjà `pip install git+https://github.com/P2Enjoy/spark-environment.git@main`
+au premier démarrage : GitHub est déjà une dépendance du premier démarrage.
+
+**Solutions envisagées.** (a) Retirer des commentaires des scripts pour descendre sous une
+limite que je ne connais pas : un pari. (b) Compresser : 11,5 Ko, même pari. (c) **Ne plus
+embarquer** : un user-data d'environ 1,5 Ko qui télécharge les scripts. Le `curl | sh` sur
+`main` avait été écarté (exécution en `root` d'un texte non épinglé) ; **épingler au sha et
+vérifier le sha256** lève cette objection, et laisse le cloud-init sans copie du script qui
+évolue — l'objet de l'erratum du matin.
+
+**Décision.** DAT §66.9 : cloud-init léger par défaut, `--embarquer` pour l'ancien mode ;
+la commande refuse si les scripts locaux diffèrent du commit ou si le commit n'est pas
+poussé. SPK-158 point 8.
+
+**Vérifications à ce stade.** Documentation seule, committée avant le code. Non vérifié :
+que Scaleway accepte le user-data léger, et le téléchargement depuis une machine livrée.
