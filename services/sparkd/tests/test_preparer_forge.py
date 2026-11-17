@@ -6,11 +6,14 @@
           l'hebergeur ; le JSON de partition de chaque offre est versionne, le
           cloud-init ne l'est PAS), §66.9 (le cloud-init leger : il telecharge les
           scripts a un commit epingle ; le mode embarque est sans commentaires),
-          §8.5, §8.6 · README.md (« Commander
+          §8.5, §8.6 · deploy/cloud-init/offres/reference/ (le schema eprouve de
+          spark-experiment) · README.md (« Commander
           une Forge ») · scripts/README.md · deploy/cloud-init/offres/README.md
 
 Ce que ces preuves gardent, et ce qu'elles ne gardent PAS :
 
+- la regle de derivation reproduit OCTET POUR OCTET le schema avec lequel la Forge
+  en service `spark-experiment` a ete installee et demarre (releve le 2026-11-17) ;
 - la regle de derivation, sur les VRAIS schemas par defaut releves chez l'hebergeur
   et versionnes sous deploy/cloud-init/offres/ (EM-L101X-SATA le 2026-11-10,
   EM-B311X-SATA le 2026-11-16) — pas sur un schema que ce fichier aurait lui-meme
@@ -49,6 +52,11 @@ OFFRES_DIR = RACINE / "deploy" / "cloud-init" / "offres"
 OFFRES = sorted(OFFRES_DIR.glob("*.json"))
 #: La reference des preuves a structure exacte : le premier schema releve.
 DEFAUT = OFFRES_DIR / "EM-L101X-SATA.json"
+#: Le schema EPROUVE : le defaut de l'offre de `spark-experiment` et le JSON de partition
+#: avec lequel cette Forge a ete installee et demarre (DAT §66.8).
+REFERENCE_DIR = OFFRES_DIR / "reference"
+EPROUVE_DEFAUT = REFERENCE_DIR / "spark-experiment.defaut.json"
+EPROUVE = REFERENCE_DIR / "spark-experiment.partitionnement.json"
 AMORCE = RACINE / "deploy" / "cloud-init" / "spark-amorce.sh"
 CREER_POOL = RACINE / "scripts" / "creer-pool.sh"
 
@@ -95,19 +103,18 @@ PARTITIONS_ATTENDUES = [
     {"label": "swap", "number": 2, "size": 4294967296, "useAllAvailableSpace": False},
     {"label": "boot", "number": 3, "size": 536870912, "useAllAvailableSpace": False},
     {"label": "root", "number": 4, "size": 214748364800, "useAllAvailableSpace": False},
-    {"label": "zfs", "number": 5, "size": 0, "useAllAvailableSpace": True},
+    {"label": "data", "number": 5, "size": 0, "useAllAvailableSpace": True},
 ]
-#: Le repli `--sans-zfs` : la meme chose, la partition du pool s'appelle `data`.
-PARTITIONS_ATTENDUES_SANS_ZFS = PARTITIONS_ATTENDUES[:-1] + [
-    {"label": "data", "number": 5, "size": 0, "useAllAvailableSpace": True}]
-#: La section `zfs` que la commande ecrit : name, type, devices — et RIEN d'autre (§66.8).
-ZFS_ATTENDU = {"pools": [{"name": "spark", "type": "mirror",
-                          "devices": ["/dev/sda5", "/dev/sdb5"]}]}
+#: Le repli `--sans-zfs` : les memes partitions, seul le pool n'est pas declare.
+PARTITIONS_ATTENDUES_SANS_ZFS = PARTITIONS_ATTENDUES
+#: La section `zfs` du schema eprouve de `spark-experiment`, cles et ordre compris (§66.8).
+ZFS_ATTENDU = {"pools": [{"devices": ["/dev/sda5", "/dev/sdb5"], "filesystemOptions": [],
+                          "name": "spark", "options": ["ashift=12"], "type": "mirror"}]}
 TYPES_DE_POOL = {"unknown_type", "no_raid", "mirror", "raidz1", "raidz2"}
 
 
 def test_le_defaut_REEL_donne_le_schema_POUR_LA_FORGE_avec_le_pool_declare():
-    """DAT §66.8 : le schema produit est celui de la Forge — la partition 5 est `zfs`
+    """DAT §66.8 : le schema produit est celui de la Forge — la partition 5 est `data`
     et la section `zfs` declare le miroir `spark` sur les deux partitions."""
     schema, supports = pf.deriver(defaut(), 200)
     assert list(schema) == ["disks", "filesystems", "raids", "zfs"]
@@ -132,13 +139,46 @@ def test_le_repli_SANS_ZFS_donne_le_schema_que_la_console_a_valide():
     assert supports == ["/dev/sda5", "/dev/sdb5"]
 
 
-def test_la_section_zfs_n_ecrit_QUE_name_type_et_devices():
-    """Le format des chaines `options` / `filesystem_options` n'est pas documente, et
-    leur cle dans le dialecte de la console est une deduction : elles ne s'ecrivent
-    pas (DAT §66.8). Une cle devinee peut etre refusee, une cle absente vaut vide."""
+def test_le_defaut_de_spark_experiment_donne_OCTET_POUR_OCTET_le_schema_EPROUVE():
+    """LA preuve de la regle (DAT §66.8) : appliquee au defaut de l'offre de la Forge
+    en service, la commande produit exactement le JSON avec lequel cette Forge a ete
+    installee et demarre — libelles, options du pool, ordre des cles compris. Le
+    2026-11-16 elle ecrivait `zfs` au lieu de `data` et omettait `options` et
+    `filesystemOptions` : cette preuve l'aurait refuse."""
+    defaut_eprouve = json.loads(EPROUVE_DEFAUT.read_text(encoding="utf-8"))
+    schema, supports = pf.deriver(defaut_eprouve, 200)
+    eprouve = json.loads(EPROUVE.read_text(encoding="utf-8"))
+    assert json.dumps(schema, separators=(",", ":")) == json.dumps(eprouve, separators=(",", ":"))
+    assert supports == ["/dev/sda5", "/dev/sdb5"]
+
+
+def test_le_JSON_produit_a_coller_est_le_schema_eprouve_a_la_mise_en_forme_pres():
+    """Par la commande, comme l'exploitant la lance."""
+    vu = _commande("partitionnement", "--defaut", str(EPROUVE_DEFAUT))
+    assert vu.returncode == 0, vu.stderr
+    assert json.loads(vu.stdout) == json.loads(EPROUVE.read_text(encoding="utf-8"))
+
+
+def test_la_section_zfs_est_celle_du_schema_eprouve_cle_pour_cle():
     pool = pf.deriver(defaut(), 200)[0]["zfs"]["pools"][0]
-    assert set(pool) == {"name", "type", "devices"}
-    assert pool["type"] in TYPES_DE_POOL and pool["type"] == "mirror"
+    eprouve = json.loads(EPROUVE.read_text(encoding="utf-8"))["zfs"]["pools"][0]
+    assert list(pool) == list(eprouve) == ["devices", "filesystemOptions", "name", "options", "type"]
+    assert pool == eprouve
+    assert pool["type"] in TYPES_DE_POOL
+
+
+def test_un_root_final_a_TAILLE_FIXE_est_borne_comme_un_root_qui_prend_le_reste():
+    """Le defaut de l'offre de `spark-experiment` fixe `root` a la capacite du disque."""
+    schema, _ = pf.deriver(json.loads(EPROUVE_DEFAUT.read_text(encoding="utf-8")), 200)
+    for disque in schema["disks"]:
+        assert disque["partitions"] == PARTITIONS_ATTENDUES, disque["device"]
+
+
+@pytest.mark.parametrize("vide", [None, {"pools": []}], ids=["null", "pools vide"])
+def test_une_section_zfs_SANS_pool_n_est_pas_un_pool_declare(vide):
+    entree = defaut()
+    entree["zfs"] = vide
+    assert pf.deriver(entree, 200)[0]["zfs"] == ZFS_ATTENDU
 
 
 def test_le_nom_du_pool_de_la_commande_est_celui_de_l_amorce():
@@ -193,7 +233,7 @@ def test_CHAQUE_offre_versionnee_se_derive_selon_la_regle(offre):
         if cle not in ("disks", "zfs"):
             assert schema[cle] == brut[cle], f"« {cle} » est recopie tel quel"
     for disque, avant in zip(schema["disks"], brut["disks"]):
-        assert disque["partitions"][-1]["label"] == "zfs"
+        assert disque["partitions"][-1]["label"] == "data"
         assert disque["partitions"][:len(avant["partitions"]) - 1] == avant["partitions"][:-1]
 
 
@@ -235,7 +275,7 @@ def test_le_dialecte_snake_case_est_CONSERVE():
     texte = json.dumps(schema)
     assert "useAllAvailableSpace" not in texte
     derniere = schema["disks"][0]["partitions"][-1]
-    assert derniere == {"label": "zfs", "number": 5, "size": 0, "use_all_available_space": True}
+    assert derniere == {"label": "data", "number": 5, "size": 0, "use_all_available_space": True}
     assert schema["zfs"] == ZFS_ATTENDU
 
 
@@ -249,9 +289,10 @@ REFUS = [
     ("un seul disque", lambda s: s.update(disks=s["disks"][:1]), "deux disques"),
     ("un pool zfs deja declare", lambda s: s.update(zfs={"pools": [{"name": "spark"}]}), "« zfs »"),
     ("deux partitions qui prennent le reste",
-     lambda s: s["disks"][0]["partitions"][2].update(useAllAvailableSpace=True), "exactement une"),
-    ("aucune partition qui prend le reste",
-     lambda s: s["disks"][1]["partitions"][3].update(useAllAvailableSpace=False), "exactement une"),
+     lambda s: s["disks"][0]["partitions"][2].update(useAllAvailableSpace=True), "au plus une"),
+    ("la derniere partition, a taille fixe, n'est pas root",
+     lambda s: s["disks"][1]["partitions"][3].update(label="home", useAllAvailableSpace=False),
+     "pas « root »"),
     ("la partition qui prend le reste n'est pas la derniere",
      lambda s: s["disks"][0]["partitions"].append(
          {"label": "home", "number": 5, "size": 1, "useAllAvailableSpace": False}), "pas la derniere"),
@@ -310,8 +351,8 @@ def test_la_sortie_a_la_FORME_QUE_L_HEBERGEUR_ATTEND(variante):
             assert isinstance(p["size"], int) and p["size"] >= 0
             # « tout le reste » se dit size 0 ET drapeau : jamais l'un sans l'autre.
             assert (p["size"] == 0) == (p["useAllAvailableSpace"] is True), p
-        assert [p["label"] for p in disque["partitions"]].count("zfs") == 1
-        assert disque["partitions"][-1]["label"] == "zfs", "zfs est la derniere"
+        assert [p["label"] for p in disque["partitions"]].count("data") == 1
+        assert disque["partitions"][-1]["label"] == "data", "data est la derniere"
     assert all(r["level"] in NIVEAUX_RAID for r in schema["raids"])
     assert all(f["format"] in FORMATS for f in schema["filesystems"])
     # La section `zfs` : une liste de pools, chacun du contrat (`name`, `type`, `devices`).
@@ -667,7 +708,7 @@ def test_chaque_offre_a_son_JSON_de_partition_pour_la_Forge(offre):
     assert part.is_file(), "le JSON de partition doit etre versionne"
     schema = json.loads(part.read_text(encoding="utf-8"))
     assert schema == schema_attendu
-    assert [d["partitions"][-1]["label"] for d in schema["disks"]] == ["zfs"] * len(schema["disks"])
+    assert [d["partitions"][-1]["label"] for d in schema["disks"]] == ["data"] * len(schema["disks"])
     assert schema["zfs"]["pools"][0]["name"] == "spark"
 
 

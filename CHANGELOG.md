@@ -20,8 +20,10 @@
   `… cloud-init --defaut defaut.json` lisent le schéma de partitionnement **par
   défaut de l'offre** (la console l'affiche) et lui appliquent une règle :
   tout est conservé, `root` est bornée (200 Gio par défaut, `--racine-gio`), une
-  partition `zfs` prend le reste de chaque disque, ses deux supports restent nus
-  et le schéma **déclare à l'hébergeur le pool miroir `spark`** (section `zfs` ;
+  partition `data` prend le reste de chaque disque, ses deux supports restent nus
+  et le schéma **déclare à l'hébergeur le pool miroir `spark`** en `ashift=12` —
+  exactement le schéma avec lequel la Forge `spark-experiment` a été installée,
+  qu'une preuve exige de reproduire octet pour octet (section `zfs` ;
   `--sans-zfs` donne le repli sans pool déclaré, où l'amorce crée le pool) ; un schéma sans deux disques, déjà dérivé ou qui déclare un pool est
   refusé avec ses mots, en code `2`, sans rien sur la sortie standard. Le
   cloud-init embarque `spark-amorce.sh` et `creer-pool.sh` **octet pour octet** et
@@ -180,6 +182,15 @@
   aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
 
 ### Corrigé
+- **SPK-158 — le schéma pour la Forge s'écartait du schéma éprouvé de
+  `spark-experiment`.** Il écrivait le libellé `zfs` au lieu de `data` sur la
+  partition du pool, et un pool sans `options: ["ashift=12"]` ni
+  `filesystemOptions: []`. Les installations faites avec lui se figeaient dans
+  l'installateur de l'hébergeur après la synchronisation RAID (cause non prouvée).
+  La commande reproduit désormais ce schéma octet pour octet, versionné sous
+  `deploy/cloud-init/offres/reference/`. Elle accepte aussi le défaut de cette offre
+  (`root` à taille fixe, `"pools": []`), qu'elle refusait. Les JSON de partition des
+  deux offres sont régénérés.
 - **`creer-pool.sh` passe à Incus la source du miroir dans la forme que sa
   documentation décrit.** Il écrivait `source=mirror /dev/a /dev/b` ; Incus
   documente `source=mirror=/dev/a,/dev/b` (type de vdev, `=`, périphériques

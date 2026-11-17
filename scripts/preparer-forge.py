@@ -71,6 +71,8 @@ RACINE_GIO_DEFAUT = 200
 NOM_POOL = "spark"
 #: Les deux ecritures du drapeau « tout l'espace restant » : la console de
 #: l'hebergeur emploie la premiere, le contrat de l'API la seconde (DAT §66.1).
+#: Les options du pool du schema eprouve de `spark-experiment` (DAT §66.8).
+OPTIONS_POOL = ("ashift=12",)
 CLES_RESTE = ("useAllAvailableSpace", "use_all_available_space")
 #: Un support de pool finit dans une ligne YAML puis dans un script lance en root :
 #: chemins surs seulement. A employer avec `fullmatch` — jamais `match` avec `$`, que
@@ -102,11 +104,12 @@ def deriver(defaut: object, racine_gio: int,
             declarer_zfs: bool = True) -> tuple[dict, list[str]]:
     """Le schema par defaut -> (le schema a fournir, les supports du pool).
 
-    `root` est bornee, puis une partition prend le reste de chaque disque ; tout le
-    reste est recopie tel quel. Par defaut cette partition est `zfs` et le schema
-    DECLARE le pool miroir a l'hebergeur (DAT §66.8) ; sans cela (`declarer_zfs=False`)
-    elle est `data`, aucun pool n'est declare et l'amorce le cree (repli, §66.2 point 6).
-    Le schema d'entree n'est jamais modifie.
+    `root` est bornee, puis une partition `data` prend le reste de chaque disque ; tout
+    le reste est recopie tel quel. Par defaut le schema DECLARE le pool miroir a
+    l'hebergeur, cle pour cle celui du schema eprouve de `spark-experiment` (DAT §66.8,
+    `deploy/cloud-init/offres/reference/`) ; avec `declarer_zfs=False` aucun pool n'est
+    declare et l'amorce le cree (repli, §66.2 point 6). Le schema d'entree n'est jamais
+    modifie.
     """
     if not isinstance(defaut, dict) or not isinstance(defaut.get("disks"), list):
         raise Refus("le schema par defaut doit etre un objet JSON portant une liste « disks »")
@@ -114,14 +117,13 @@ def deriver(defaut: object, racine_gio: int,
     if len(disques) < 2:
         raise Refus(f"une Forge exige deux disques (DAT §8.5) ; ce schema n'en porte que "
                     f"{len(disques)} — la machine n'est pas eligible")
-    if defaut.get("zfs"):
+    if (defaut.get("zfs") or {}).get("pools"):
         raise Refus("le schema donne declare deja un pool « zfs » — est-ce un schema deja derive "
                     "par cette commande ? Donnez le schema PAR DEFAUT de l'offre : la commande "
                     "declare elle-meme le pool (DAT §66.8)")
 
     schema = copy.deepcopy(defaut)
     supports: list[str] = []
-    libelle = "zfs" if declarer_zfs else "data"
     for disque in schema["disks"]:
         nom = disque.get("device") if isinstance(disque, dict) else None
         partitions = disque.get("partitions") if isinstance(disque, dict) else None
@@ -131,13 +133,15 @@ def deriver(defaut: object, racine_gio: int,
         if not all(isinstance(p, dict) and isinstance(p.get("number"), int) for p in partitions):
             raise Refus(f"disque {nom} : chaque partition doit porter un « number » entier")
 
+        # La partition systeme est la derniere ; elle prend le reste, ou porte une taille
+        # fixe (le defaut de l'offre de `spark-experiment` fixe `root`, DAT §66.3).
         restantes = [p for p in partitions if _drapeau(p)]
-        if len(restantes) != 1:
-            raise Refus(f"disque {nom} : {len(restantes)} partition(s) prennent « tout l'espace "
-                        f"restant » ({' / '.join(CLES_RESTE)}) ; il en faut exactement une, celle "
+        if len(restantes) > 1:
+            raise Refus(f"disque {nom} : {len(restantes)} partitions prennent « tout l'espace "
+                        f"restant » ({' / '.join(CLES_RESTE)}) ; il en faut au plus une, celle "
                         "du systeme — est-ce bien le schema PAR DEFAUT de l'offre, et non un "
                         "schema deja derive ?")
-        racine = restantes[0]
+        racine = restantes[0] if restantes else max(partitions, key=lambda p: p["number"])
         if racine["number"] != max(p["number"] for p in partitions):
             raise Refus(f"disque {nom} : la partition « {racine.get('label')} » qui prend le reste "
                         "n'est pas la derniere ; aucune partition ne peut lui succeder")
@@ -145,14 +149,15 @@ def deriver(defaut: object, racine_gio: int,
             raise Refus(f"disque {nom} : la derniere partition est deja « {racine['label']} » — ce "
                         "schema est deja derive ; donnez le schema PAR DEFAUT de l'offre")
         if racine.get("label") != "root":
-            raise Refus(f"disque {nom} : la partition qui prend le reste est « {racine.get('label')} », "
-                        "pas « root » ; la commande ne borne que le systeme")
+            raise Refus(f"disque {nom} : la partition systeme (la derniere, ou celle qui prend le "
+                        f"reste) est « {racine.get('label')} », pas « root » ; la commande ne "
+                        "borne que le systeme")
 
-        cle = _drapeau(racine)
+        cle = _drapeau(racine) or next((c for c in CLES_RESTE if c in racine), CLES_RESTE[0])
         racine["size"] = racine_gio * GIB
         racine[cle] = False
         numero = racine["number"] + 1
-        partitions.append({"label": libelle, "number": numero, "size": 0, cle: True})
+        partitions.append({"label": "data", "number": numero, "size": 0, cle: True})
         supports.append(_support(nom, numero))
 
     engages = {d for r in schema.get("raids") or [] for d in r.get("devices", [])}
@@ -162,12 +167,10 @@ def deriver(defaut: object, racine_gio: int,
         raise Refus(f"{', '.join(pris)} figure deja dans « raids » ou « filesystems » : le miroir "
                     "natif exige des peripheriques nus (DAT §8.5)")
     if declarer_zfs:
-        # Le contrat de l'API (SDK baremetal/v1) : `zfs.pools[]` avec name, type, devices,
-        # options, filesystem_options. Seuls les trois premiers s'ecrivent : le format des
-        # chaines d'options n'est pas documente, et la cle de `filesystem_options` dans le
-        # dialecte de la console est une deduction — une cle absente vaut une liste vide,
-        # une cle devinee peut etre refusee (DAT §66.8).
-        schema["zfs"] = {"pools": [{"name": NOM_POOL, "type": "mirror", "devices": list(supports)}]}
+        # Le pool du schema eprouve de `spark-experiment`, cles et ordre compris (DAT §66.8).
+        schema["zfs"] = {"pools": [{"devices": list(supports), "filesystemOptions": [],
+                                    "name": NOM_POOL, "options": list(OPTIONS_POOL),
+                                    "type": "mirror"}]}
     return schema, supports
 
 
@@ -440,15 +443,15 @@ def _parseur() -> argparse.ArgumentParser:
     part = sous.add_parser(
         "partitionnement", parents=[commun], help="ecrit le JSON a coller dans la console",
         description="Derive du schema par defaut de l'offre le schema POUR LA FORGE : « root » est "
-                    "bornee, une partition « zfs » prend le reste de chaque disque et le schema "
-                    "DECLARE le pool miroir « spark » a l'hebergeur ; tout le reste est conserve. "
+                    "bornee, une partition « data » prend le reste de chaque disque et le schema "
+                    "DECLARE le pool miroir « spark » (ashift=12) a l'hebergeur, comme le schema "
+                    "eprouve de spark-experiment ; tout le reste est conserve. "
                     "La commande ne connait pas la capacite des disques : la console de "
                     "l'hebergeur controle que les tailles tiennent.")
     part.add_argument(
         "--sans-zfs", action="store_true",
-        help="REPLI : ne declare pas le pool a l'hebergeur. La partition reste « data » et "
-             "l'amorce cree le pool au premier demarrage. A employer si la console refuse la "
-             "section « zfs » (son acceptation n'est pas verifiee, DAT §66.8)")
+        help="REPLI : ne declare pas le pool a l'hebergeur ; l'amorce cree le pool au premier "
+             "demarrage. A employer si l'installateur de l'hebergeur bloque sur le pool (DAT §66.8)")
 
     cloud = sous.add_parser(
         "cloud-init", parents=[commun], help="ecrit le user-data complet a coller dans la console",
@@ -548,7 +551,7 @@ def main(argv: list[str] | None = None) -> int:
             declarer = not args.sans_zfs
             schema, supports = deriver(_lire_defaut(source), args.racine_gio, declarer)
             sortie = partitionnement_texte(schema)
-            pool = (f"« zfs » prend le reste et le pool miroir « {NOM_POOL} » est declare a "
+            pool = (f"« data » prend le reste et le pool miroir « {NOM_POOL} » est declare a "
                     "l'hebergeur" if declarer else "« data » prend le reste, aucun pool n'est "
                     "declare (--sans-zfs : l'amorce le cree)")
             print(f"« root » bornee a {args.racine_gio} Gio, {pool} ; "

@@ -9653,8 +9653,10 @@ lien et en place des textes bruts ».
   6. *(ajouté le 2026-11-16, sur demande du responsable)* les schémas par défaut
      des offres relevées — `EM-L101X-SATA`, `EM-B311X-SATA` — sont versionnés sous
      `deploy/cloud-init/offres/`, et les preuves dérivent chacun d'eux (DAT §66.7) ;
-  7. *(décisions du 2026-11-16)* le schéma produit **déclare le pool ZFS** (partition
-     `zfs`, section `zfs`, `--sans-zfs` pour l'ancien comportement) ; chaque offre
+  7. *(décisions du 2026-11-16, corrigées le 2026-11-17)* le schéma produit **déclare le
+     pool ZFS** comme le schéma éprouvé de `spark-experiment` (partition `data`, section
+     `zfs` : miroir `spark`, `ashift=12`), qu'une preuve exige de reproduire octet pour
+     octet ; `--sans-zfs` pour l'ancien comportement ; chaque offre
      connue a son **JSON de partition versionné** sous `deploy/cloud-init/offres/forge/`,
      tenu à jour par une preuve, et son **cloud-init se produit à la demande par son
      nom** (`--offre`) — il n'est jamais versionné, parce qu'il embarque l'amorce qui
@@ -9699,8 +9701,7 @@ lien et en place des textes bruts ».
     écrite d'abord, 13 Ko, était fausse) ; `--compresser` le ramène à 11,5 Ko. La
     limite du champ chez l'hébergeur reste inconnue.
   - **Pool déclaré, JSON de partition versionné et cloud-init par nom d'offre, le 2026-11-16** (point 7) :
-    `deriver` écrit la partition `zfs` et la section `zfs` (`name`, `type`, `devices`),
-    `--sans-zfs` garde l'ancien schéma ; `--offre <NOM>` désigne une offre connue ;
+    `deriver` écrit la partition 5 et la section `zfs`, `--sans-zfs` garde l'ancien schéma ; `--offre <NOM>` désigne une offre connue ;
     `preparer-forge.py offres [--verifier]` écrit et vérifie
     `deploy/cloud-init/offres/forge/<offre>.partitionnement.json` pour chaque offre (2
     fichiers versionnés) ; **aucun cloud-init n'est versionné** (une première version le
@@ -9709,8 +9710,14 @@ lien et en place des textes bruts ».
     versionnés sont ceux que la commande produit, qu'aucun cloud-init pré-compilé n'est
     versionné, et que celui que produit `--offre` embarque l'amorce courante. Le DAT §8.6 et §66.3, le README,
     l'en-tête de l'amorce sont corrigés : la raison de l'ancienne règle était périmée.
-    **Non éprouvé** : l'acceptation de la section `zfs` par la console et
-    l'installateur, et l'adoption par Incus d'un pool créé par l'hébergeur.
+    **Corrigé le 2026-11-17** : ce schéma s'écartait du schéma éprouvé de
+    `spark-experiment` sur trois points sans preuve — libellé `zfs` au lieu de `data`,
+    `options: ["ashift=12"]` et `filesystemOptions: []` absents. Les installations faites
+    avec lui se figent après la synchronisation de `md1` (cause non prouvée). La règle
+    reproduit désormais le schéma éprouvé octet pour octet (preuve sur
+    `deploy/cloud-init/offres/reference/`), accepte un `root` final à taille fixe et
+    `"pools": []`. **Non éprouvé** : une installation réelle de l'offre EM-B311X-SATA
+    avec le schéma corrigé.
   - **Cloud-init léger, le 2026-11-16** (point 8) : Scaleway a refusé le `user-data` de
     19 431 octets (« UserData: greater than max »). `cloud-init` télécharge désormais les
     scripts au **commit épinglé** et vérifie leur sha256 (**1 058 octets** mesurés) ;
