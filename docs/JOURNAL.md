@@ -15179,3 +15179,13 @@ ou Alpine — ce que porte l'environnement LinuxKit de l'installateur. **Déduct
 vérifiée** : la machine est restée dans l'installateur de l'hébergeur, dont le `sshd`
 n'accepte que ses propres clés ; le système n'a jamais été installé, ce qui explique le refus
 des clés bien mieux qu'un défaut de clé.
+
+**02:47 — même machine (même numéro de série, même MAC), nouvel accès iDRAC.** Dernier
+démarrage à 00:55:22, aucun depuis. L'écran est toujours celui de l'installateur : la
+synchronisation de `md1` s'est **terminée** (« md: md1: resync done » à 1 179 s, vers
+01:15), puis **plus rien pendant une heure et demie**, et aucun redémarrage vers le système
+installé. Le SSH de l'adresse publique s'annonce toujours `OpenSSH_9.1` avec la même clé
+d'hôte : c'est celui de l'installateur. La console de l'hébergeur affiche « Ubuntu 24.04 »,
+mais c'est le système demandé, pas un système démarré. L'installateur reste bloqué **après**
+la synchronisation RAID, à une étape qu'on ne voit pas à l'écran. Rien n'a été écrit sur la
+machine.
