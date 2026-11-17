@@ -15301,3 +15301,37 @@ transfert se bâtit sur SPK-161, 162, 166 et 168 : s'il devient une unité, il s
 après le lot 9. Cinq points restent ouverts (§8 de l'exploration).
 
 **Vérifications.** Documentation seule ; aucun code ni aucune mesure.
+
+## 2026-11-17 · SPK-158 et SPK-159 : la Forge en service a été installée en Ubuntu 26.04, la nouvelle machine est commandée en 24.04
+
+**Problème.** Le ticket préparé pour l'hébergeur affirmait que la nouvelle machine recevait
+« la même configuration » que `spark-experiment`. Seuls le JSON de partition (identique
+octet pour octet) et le cloud-init avaient été comparés ; ni le système d'exploitation ni
+le matériel ne l'avaient été.
+
+**Observations** (lecture seule sur `spark-experiment`, par SSH) :
+- `/etc/os-release` : Ubuntu 26.04.1 LTS. `/var/log/dist-upgrade` est vide, et le plus ancien
+  `dpkg.log` date du 2026-04-21, la date de construction de l'image. `/` a été formaté le
+  2026-08-30, le jour de l'installation. La machine a donc été **installée directement en
+  26.04**, sans montée de version ;
+- matériel : Dell PowerEdge R320, démarrage BIOS, 2 × Toshiba MG08ADA6 de 6 To ;
+- la nouvelle machine est commandée en **Ubuntu 24.04**, sur un R730 avec 2 × 12 To ;
+- **`spark-experiment` est dégradée** : `sdb5` est FAULTED dans le pool `spark` (6 erreurs de
+  lecture, 283 d'écriture). `sdb3` et `sdb4` sont marqués `(F)` dans `md0` et `md1`, qui
+  tournent sur `sda` seul. Le dernier scrub, le 2026-10-11, ne signalait aucune erreur.
+
+**Hypothèse, non vérifiée.** L'installateur de l'hébergeur pour Ubuntu 24.04 ne traite pas
+la section `zfs` comme celui de 26.04, sur lequel le schéma a été éprouvé. Le blocage se
+produit juste après la resync de `md1`, à l'étape où le pool devrait être créé.
+
+**Décision.**
+- Le ticket mentionne l'OS et le matériel des deux machines. Il ne parle plus d'une
+  configuration identique.
+- Le test le plus direct, s'il est proposé pour l'offre : réinstaller la nouvelle machine en
+  Ubuntu 26.04 avec le même schéma.
+- La panne de disque de `spark-experiment` est signalée au responsable. Aucune action n'est
+  menée sur la production.
+
+**Vérifications.** Commandes en lecture seule : `os-release`, `lsblk`, `sgdisk -p`,
+`zpool status`, `/proc/mdstat`, `dpkg.log`, `tune2fs -l`, `journalctl --list-boots`.
+Aucune écriture.
