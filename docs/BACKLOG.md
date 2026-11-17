@@ -10151,5 +10151,7 @@ puis le retrait de l'option — il reste `s1 s2`, avec les données d'avant la r
   spécification ni un contrat. Aucun identifiant n'est réservé.
 - `runtime: vm` pour charges non maîtrisées — VT-x est présent sur l'hôte, donc
   techniquement ouvert.
-- Multi-serveurs.
+- Multi-serveurs. Le **transfert d'un Spark entre deux Forges** a été exploré le
+  2026-11-17 avec le responsable, et laissé non planifié : `docs/EXPLORATION_TRANSFERT.md`
+  (il se bâtirait sur le lot 9).
 - Quotas d'E/S disque par Spark au-delà de la priorité.

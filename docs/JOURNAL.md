@@ -15256,3 +15256,48 @@ le reste, et prenait la liste de pools vide pour un pool déjà déclaré.
 diagnostic préparé pour le support de l'hébergeur doit être corrigé : la première chose à
 faire est de réinstaller avec le schéma corrigé, et d'écrire au support seulement si cela
 échoue encore.
+
+## 2026-11-17 · Transférer un Spark d'une Forge à une autre : exploration avec le responsable
+
+**Problème.** Le responsable demande si l'implémentation actuelle de `sparkd` permet de
+transférer un Spark d'une Forge à une autre. Il demande une exploration, pas du code.
+
+**Observations** (relevées dans le dépôt).
+
+- Le pilote Incus (`sparkd/incus.py`) n'exporte ni n'importe aucune instance. Le README
+  dit « Un seul serveur » ; le backlog range « Multi-serveurs » dans *Réservé*.
+- `forge.id` vaut toujours 1 ; `forge.uid` est prévu par SPK-161.
+- Le lot 9 (DAT §67) spécifie déjà la génération (export optimisé et fiche), le
+  chiffrement, la batterie V1–V12 et la récupération depuis **une autre Forge** du même
+  bucket (§67.11). SPK-160 a mesuré l'import dans un pool recréé et sous un autre nom.
+- Ce qui manque pour en faire un transfert : la mise au repos (une génération prise
+  Spark arrêté), la bascule publique (DNS, TLS, ports, réseaux privés et liens, rebond
+  SSH) et le sort de la source.
+
+**Solutions envisagées.** (1) Le S3 comme relais, qui réemploie le lot 9 sans confiance
+entre Forges. (2) La migration Incus directe, incrémentale, mais qui donne à A l'API
+Incus de B, donc `root` sur B. (3) Un flux par la console, limité par le lien du poste.
+
+**Décisions du responsable.**
+
+1. Scénarios : déplacer un Spark, évacuer une Forge, reprise sur sinistre.
+2. Indisponibilité à froid, de quelques minutes à une heure.
+3. Le S3 comme relais, avec une poignée de main à deux bouts dans l'interface : A propose,
+   B accepte, chacun vérifie les paramètres de l'autre et les droits sur le S3, et le
+   transfert se lance depuis l'un ou l'autre bout.
+4. Un même propriétaire, une seule console, qui porte l'offre et l'acceptation.
+5. La destination de sauvegarde externe est réutilisée quand le bucket est partagé ;
+   sinon un S3 temporaire.
+6. Une clé d'appairage éphémère, avec un code court comparé sur les deux écrans. La clé
+   de sauvegarde de A ne quitte pas A.
+7. Une bascule complète par la console : DNS, TLS, routes vérifiées.
+8. La source est gardée arrêtée comme retour arrière ; sa destruction est un geste
+   séparé.
+
+**Conséquences.** L'exploration est consignée dans `docs/EXPLORATION_TRANSFERT.md`, qui
+n'est ni une spécification ni un contrat. Aucun identifiant SPK n'est réservé. La ligne
+« Multi-serveurs » du backlog et la limite « Un seul serveur » du README y renvoient. Le
+transfert se bâtit sur SPK-161, 162, 166 et 168 : s'il devient une unité, il s'ordonne
+après le lot 9. Cinq points restent ouverts (§8 de l'exploration).
+
+**Vérifications.** Documentation seule ; aucun code ni aucune mesure.

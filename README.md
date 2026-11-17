@@ -643,7 +643,8 @@ Une intégration continue serait plus forte ; elle n'a jamais tourné sur ce dé
 et le responsable a tranché le 2026-09-14 de s'en passer plutôt que de laisser
 une garde qui n'existe que dans un fichier de workflow.
 
-- Un seul serveur. Aucun ordonnancement inter-machines.
+- Un seul serveur. Aucun ordonnancement inter-machines. Le transfert d'un Spark d'une
+  Forge à une autre est exploré, non planifié : [docs/EXPLORATION_TRANSFERT.md](docs/EXPLORATION_TRANSFERT.md).
 - **La console n'obéit qu'à sa propre page, pas au poste entier** (`docs/DAT.md`
   §63). Elle refuse les requêtes d'un autre site et le *DNS rebinding* ; elle
   ne distingue pas, en revanche, un programme local d'elle-même — la frontière
