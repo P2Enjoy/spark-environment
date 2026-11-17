@@ -15168,3 +15168,14 @@ restait figée**. À partir de 00:41 l'iDRAC ne répond plus du tout (délais d�
 essai jusqu'à l'arrêt de la surveillance à 00:55) : plus rien n'est observable. SSH n'a
 jamais répondu en 55 minutes d'attente. Cause toujours inconnue ; aucune écriture faite
 sur la machine.
+
+**Installation suivante (relancée vers 00:57).** L'iDRAC est coupé par l'hébergeur pendant
+l'installation (constat du responsable, confirmé : aucune réponse pendant une heure).
+Après une heure : l'hôte répond au ping, **le port 22 est ouvert**, mais le serveur SSH
+s'annonce `OpenSSH_9.1` **sans suffixe de distribution** et refuse nos clés pour `root` comme
+pour `ubuntu` (« Permission denied (publickey) »). Ubuntu 26.04 s'annonce
+`OpenSSH_10.x … Ubuntu-…` ; une version 9.1 sans suffixe est celle d'une construction amont
+ou Alpine — ce que porte l'environnement LinuxKit de l'installateur. **Déduction, non
+vérifiée** : la machine est restée dans l'installateur de l'hébergeur, dont le `sshd`
+n'accepte que ses propres clés ; le système n'a jamais été installé, ce qui explique le refus
+des clés bien mieux qu'un défaut de clé.
