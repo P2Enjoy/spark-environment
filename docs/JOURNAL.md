@@ -15189,3 +15189,26 @@ d'hôte : c'est celui de l'installateur. La console de l'hébergeur affiche « U
 mais c'est le système demandé, pas un système démarré. L'installateur reste bloqué **après**
 la synchronisation RAID, à une étape qu'on ne voit pas à l'écran. Rien n'a été écrit sur la
 machine.
+
+**03:00-03:20 — tentative d'installation manuelle d'Ubuntu 26.04 par la console KVM, à la
+demande du responsable.** Préparé : la mini ISO d'installation réseau officielle de Canonical
+(26.04.1, SHA-256 vérifié), et une image `cidata` (ISO 9660) portant une configuration
+d'installation automatique — effacement de toute signature sur les deux disques, RAID 1
+`/boot` et `/`, quatrième partition nue pour le pool, serveur SSH et clés du poste, notre
+cloud-init léger avec `--pool-source /dev/sda4,/dev/sdb4`, réseau et console série comme chez
+l'hébergeur ; validée par `cloud-init schema`, jamais jouée.
+
+**Ce qui a empêché de la jouer.** La console HTML5 de l'iDRAC s'ouvre sous Playwright
+(Chromium, puis Firefox), mais son canal vidéo `wss://…:5900` ferme la connexion dès
+l'établissement ; ensuite le port 5900 refuse même la poignée TLS. Les connexions web
+répétées de la soirée ont saturé les sessions de l'iDRAC (sa déconnexion répond 404 sur ce
+microgiciel) : c'est la cause probable, non vérifiée. Le Firefox de Playwright plante en mode
+affiché sur ce bureau (schéma GNOME `xsettings`) ; il fonctionne sans affichage.
+
+**L'« outillage Scaleway » relevé sur la Forge existante (Ubuntu 26.04.1).** Aucun paquet ni
+service : deux fichiers cloud-init — `91-scaleway-netcfg.cfg` (interface `eth0` reconnue par
+son adresse MAC, DHCP) et `92-scaleway-baremetal.cfg` (source de données `Scaleway`,
+produit `baremetal`, URL de métadonnées contenant l'identifiant du serveur chez
+l'hébergeur, `disable_root`, `apt.preserve_sources_list`) — et `console=tty1 console=ttyS0`
+sur la ligne du noyau. L'identifiant du nouveau serveur n'est pas lisible avec la clé d'API
+du projet (403 sur l'API Elastic Metal).
