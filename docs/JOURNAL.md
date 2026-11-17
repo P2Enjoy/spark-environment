@@ -15212,3 +15212,47 @@ produit `baremetal`, URL de métadonnées contenant l'identifiant du serveur che
 l'hébergeur, `disable_root`, `apt.preserve_sources_list`) — et `console=tty1 console=ttyS0`
 sur la ligne du noyau. L'identifiant du nouveau serveur n'est pas lisible avec la clé d'API
 du projet (403 sur l'API Elastic Metal).
+
+## 2026-11-17 · SPK-158 : le schéma pour la Forge s'écartait du schéma éprouvé de `spark-experiment`
+
+**Problème.** Le responsable fournit le JSON de partition avec lequel la Forge en service,
+`spark-experiment`, a été installée et démarre, ainsi que le schéma par défaut de son offre.
+Il demande pourquoi la commande a « tout cassé » alors que ce schéma était éprouvé.
+
+**Observation : comparaison clé par clé.** La règle de dérivation reproduit ce schéma à
+l'identique (`root` bornée à 200 Gio, partition 5 qui prend le reste, RAID inchangés, pool
+miroir `spark` sur `sda5`/`sdb5`), **sauf sur trois points, tous de mon fait et sans
+preuve** :
+
+1. le libellé de la partition 5 : `zfs` chez nous, **`data`** dans le schéma éprouvé ;
+2. le pool ne portait pas `options` : le schéma éprouvé porte **`["ashift=12"]`** ;
+3. le pool ne portait pas `filesystemOptions` : le schéma éprouvé porte une **liste vide**.
+
+J'avais choisi le libellé `zfs` dans l'énumération du SDK, et omis les options parce que
+leur format n'était pas documenté (DAT §66.8, version du 2026-11-16). Le schéma éprouvé
+existait : il fallait le relever et le copier.
+
+**Lien avec la panne.** Toutes les installations observées avec ce schéma se figent dans
+l'installateur de l'hébergeur **juste après la synchronisation de `md1`**, à l'étape où il
+doit créer le pool. La coïncidence est forte, **mais le lien de cause n'est pas prouvé** : le
+responsable rapporte aussi l'échec d'une installation avec les réglages par défaut, que je
+n'ai pas observée moi-même.
+
+**Second défaut.** Le défaut de l'offre de `spark-experiment` porte `root` à taille fixe et
+`"zfs": {"pools": []}` : la commande le **refusait**. Elle exigeait une partition qui prenne
+le reste, et prenait la liste de pools vide pour un pool déjà déclaré.
+
+**Décision.**
+- La référence est le schéma éprouvé, versionné tel que relevé dans
+  `deploy/cloud-init/offres/reference/` (le défaut et le JSON de partition).
+- La commande produit `data` et le pool `{devices, filesystemOptions: [], name: "spark",
+  options: ["ashift=12"], type: "mirror"}`, dans cet ordre de clés.
+- Elle accepte un `root` final à taille fixe, et `pools: []` comme « aucun pool ».
+- Une preuve exige que la dérivation du défaut de `spark-experiment` reproduise le schéma
+  éprouvé **octet pour octet**.
+- DAT §66.3 et §66.8 sont corrigés en conséquence.
+
+**Conséquences.** Les JSON de partition versionnés des deux offres sont régénérés. Le
+diagnostic préparé pour le support de l'hébergeur doit être corrigé : la première chose à
+faire est de réinstaller avec le schéma corrigé, et d'écrire au support seulement si cela
+échoue encore.

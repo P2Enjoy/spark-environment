@@ -36,12 +36,18 @@ Le JSON de partition se reproduit de la même façon (`partitionnement --offre <
 preuve échoue s'il n'est plus ce que la commande produit.
 
 **Ce que contient le JSON de partition** : sur chaque disque, la partition `root` bornée à
-200 Gio, puis une partition **`zfs`** qui prend tout le reste ; le système reste en RAID 1 ;
-la section `zfs` du schéma **déclare le pool miroir `spark`** sur les deux partitions. Tout
-le reste est celui de l'offre.
+200 Gio, puis une partition **`data`** qui prend tout le reste ; le système reste en RAID 1 ;
+la section `zfs` du schéma **déclare le pool miroir `spark`** (`ashift=12`) sur les deux
+partitions. Tout le reste est celui de l'offre.
 
-**Si la console refuse la section `zfs`** : son acceptation n'est pas vérifiée (DAT
-§66.8). Le repli est le schéma sans pool déclaré, que l'amorce complète en créant le pool :
+**La référence : `spark-experiment`.** [`reference/`](reference/) porte le schéma par
+défaut de l'offre de la Forge en service et le JSON de partition **avec lequel elle a été
+installée et démarre** (relevés le 2026-11-17). Une preuve exige que la commande, appliquée
+à ce défaut, reproduise ce JSON octet pour octet. Ces fichiers ne sont pas une offre : la
+commande `offres` ne les lit pas.
+
+**Si l'installateur bloque sur le pool** : le repli est le schéma sans pool déclaré, que
+l'amorce complète en créant le pool :
 `python3 scripts/preparer-forge.py partitionnement --offre <NOM> --sans-zfs`. Le
 cloud-init est le même.
 

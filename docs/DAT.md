@@ -16280,21 +16280,27 @@ Entrée : l'objet JSON du schéma par défaut — `disks`, `filesystems`, `raids
 éventuellement `zfs`.
 
 - **Au moins deux disques** (§8.5), sinon refus.
-- **`zfs` déjà déclaré** (non nul, non vide) : refus. C'est la commande qui déclare
-  le pool (§66.8) : un schéma qui en porte un est un schéma déjà dérivé, ou une offre
-  que la commande ne sait pas traiter.
-- **Sur chaque disque, une et une seule partition porte « tout l'espace
-  restant »** (`useAllAvailableSpace` ou `use_all_available_space` : le dialecte
-  du schéma lu est conservé), elle est la dernière par numéro et son libellé est
-  `root`. Sinon refus, avec le disque et la partition nommés.
+- **Un pool déjà déclaré** (`zfs.pools` non vide) : refus. C'est la commande qui
+  déclare le pool (§66.8) : un schéma qui en porte un est un schéma déjà dérivé, ou
+  une offre que la commande ne sait pas traiter. `"zfs": null`, une clé absente et
+  `"zfs": {"pools": []}` valent tous « aucun pool ».
+- **La partition système est la dernière de chaque disque, par numéro, et son
+  libellé est `root`.** Elle prend « tout l'espace restant » (`useAllAvailableSpace`
+  ou `use_all_available_space` : le dialecte du schéma lu est conservé), ou porte une
+  taille fixe (le défaut de l'offre de `spark-experiment` fixe `root` à la capacité du
+  disque). Aucune autre partition ne prend le reste. Sinon refus, avec le disque et la
+  partition nommés.
 - **Cette partition est bornée** à `--racine-gio` Gio (200 par défaut : la Forge
-  de validation en consomme 2,7) et perd le drapeau ; **une partition `zfs`**
-  lui succède (numéro suivant, `size: 0`, drapeau levé) — `data` avec `--sans-zfs`.
-- **Les supports du pool** sont les `zfs` de chaque disque : `/dev/sda5`,
+  de validation en consomme 2,7) et ne prend plus le reste ; **une partition `data`**
+  lui succède (numéro suivant, `size: 0`, « tout l'espace restant »), avec ou sans
+  `--sans-zfs`.
+- **Les supports du pool** sont les `data` de chaque disque : `/dev/sda5`,
   `/dev/sdb5` ; `/dev/nvme0n1p5` quand le nom du disque finit par un chiffre.
   Aucun ne figure dans `raids` ni dans `filesystems`, sinon refus : ils restent
-  nus, comme l'exige le miroir natif (§8.5). **Le schéma gagne une section `zfs`**
-  (§66.8) : le pool miroir `spark`, `devices` = ces deux supports ; sans `--sans-zfs`.
+  nus, comme l'exige le miroir natif (§8.5). **La section `zfs` du schéma déclare le
+  pool** (§66.8), sauf avec `--sans-zfs` : `devices` = ces deux supports,
+  `filesystemOptions` vide, `name` `spark`, `options` `["ashift=12"]`, `type`
+  `mirror` — clé pour clé le pool de `spark-experiment`.
 - **Tout le reste est recopié tel quel**, ordre des clés compris : partitions
   `uefi`, `legacy`, `boot`, `swap`, RAID, systèmes de fichiers.
 - La commande **ne connaît pas la capacité des disques**. Ce contrôle est celui de
@@ -16420,8 +16426,24 @@ changement.*
 **Décision 1 — le schéma déclare le pool.** « Tu dois générer le NOUVEAU schéma pour y
 installer une Forge » : pour une offre donnée, le schéma que la commande produit est
 **celui de la Forge**, pas une copie du défaut. Il déclare le pool ZFS à l'hébergeur : la
-partition 5 de chaque disque porte le libellé **`zfs`** (et non plus `data`), et le
-schéma porte une section `zfs` avec un pool miroir sur les deux partitions.
+partition 5 de chaque disque porte le libellé **`data`**, et le schéma porte une section
+`zfs` avec un pool miroir sur les deux partitions.
+
+**La référence est le schéma éprouvé de `spark-experiment`** (relevé par le responsable
+le 2026-11-17, versionné dans `deploy/cloud-init/offres/reference/`). C'est le schéma
+avec lequel la Forge en service a été installée et démarre. La commande, appliquée au
+schéma par défaut de cette offre, doit le reproduire **octet pour octet** ; une preuve
+l'exige.
+
+*Correction du 2026-11-17.* La première version de cette décision écrivait un libellé
+**`zfs`** sur la partition 5 et un pool réduit à `name`, `type` et `devices`, **sans
+`options` ni `filesystemOptions`**. Ces trois écarts n'avaient aucune preuve : le libellé
+avait été choisi dans l'énumération du SDK, et les options omises parce que leur format
+n'était pas documenté. Or le schéma éprouvé de `spark-experiment` existait déjà. Les
+installations lancées avec la version fautive restent figées dans l'installateur de
+l'hébergeur juste après la synchronisation de `md1`, c'est-à-dire là où il crée le pool.
+Le lien de cause n'est pas prouvé, mais la règle copie désormais le schéma qui marche au
+lieu d'en inventer un.
 
 **Pourquoi la règle de §8.6 tombe.** Elle disait qu'un pool créé à l'installation ferait
 refuser `creer-pool.sh` (signature `zfs_member`). Depuis SPK-159 l'amorce **adopte** un
@@ -16431,23 +16453,21 @@ raison qui avait été donnée est donc périmée, et c'est le responsable qui l
 
 **Le contrat de l'API** (relu le 2026-11-16 dans le SDK de Scaleway, `baremetal/v1`) :
 `Schema.zfs` vaut `{ "pools": [ … ] }` ; un pool porte `name`, `type` (`no_raid`,
-`mirror`, `raidz1`, `raidz2`), `devices`, `options` et `filesystem_options` ; le libellé
-de partition `zfs` existe dans l'énumération. **La commande n'écrit que `name`, `type`
-et `devices`** : le format des chaînes de `options` et `filesystem_options` n'est pas
-documenté dans ce que j'ai lu, et leur clé dans le dialecte de la console (camelCase,
-`filesystemOptions` ?) est une déduction non relevée. Deviner une clé que la console
-rejetterait serait pire que l'omettre.
+`mirror`, `raidz1`, `raidz2`), `devices`, `options` et `filesystem_options`. Dans le
+dialecte de la console, relevé sur le schéma éprouvé, les clés sont `devices`,
+`filesystemOptions`, `name`, `options` et `type`, et `options` vaut `["ashift=12"]`. Le
+libellé de partition `zfs` existe dans l'énumération, mais le schéma éprouvé ne
+l'emploie pas : ses partitions de pool sont `data`.
 
-**La règle (§66.3 amendé).** Sur chaque disque : `root` bornée, puis `zfs` prend le
-reste. La section `zfs` porte un pool `spark`, type `mirror`, dont les `devices` sont les
-deux partitions. Les supports restent absents de `raids` et de `filesystems`. Le nom
+**La règle (§66.3 amendé).** Sur chaque disque : `root` bornée, puis `data` prend le
+reste. La section `zfs` porte le pool de `spark-experiment` : `spark`, `mirror`,
+`ashift=12`, dont les `devices` sont les deux partitions. Les supports restent absents de `raids` et de `filesystems`. Le nom
 `spark` est la convention du produit (le registre l'attend, l'amorce a `POOL=spark`) :
 une preuve tient la commande et l'amorce ensemble.
 
-**`--sans-zfs`** : l'ancien comportement du 2026-11-10 (partition `data`, aucun pool
-déclaré, l'amorce crée le pool). Il existe parce que **l'acceptation de la déclaration
-par la console et par l'installateur n'est pas vérifiée** : si la console la refuse, le
-schéma de repli est déjà là, éprouvé sur le banc.
+**`--sans-zfs`** : l'ancien comportement du 2026-11-10 (même partition `data`, aucun
+pool déclaré, l'amorce crée le pool). C'est le repli si l'installateur de l'hébergeur
+bloque sur la création du pool ; il est éprouvé sur le banc, pas sur une machine réelle.
 
 **Le cloud-init est le même dans les deux modes** : il lance l'amorce avec
 `--pool-source`. Pool déclaré, l'amorce l'adopte ; l'argument ne sert alors que de repli
@@ -16477,12 +16497,12 @@ commit du code.* Le cloud-init produit par nom d'offre ne donne pas `--arc-gib` 
 de chaque offre n'est pas relevée, l'amorce garde son défaut de 16 Gio — à adapter avec
 `--arc-gib` sur une machine qui en a moins.
 
-**Ce qui n'est pas vérifié.** (1) Que la console accepte la section `zfs` telle que la
-commande l'écrit (`name`, `type`, `devices`) ; (2) que l'installateur de Scaleway crée ce
-miroir sur des partitions, sous le nom `spark`, et que le système démarre dessus ; (3)
-qu'Incus adopte le pool tel que cet installateur le crée — le banc a prouvé l'adoption d'un
-pool créé par `zpool create -f spark mirror …` puis exporté (SPK-129), pas celle d'un pool
-créé par l'hébergeur ; (4) que l'OS de l'offre supporte ZFS.
+**Ce qui est établi, et ce qui ne l'est pas.** Le schéma éprouvé (libellé `data`, pool
+`spark` miroir en `ashift=12`) est accepté par la console, appliqué par l'installateur de
+l'hébergeur, et la Forge `spark-experiment` démarre dessus. Le schéma que la commande
+produit est désormais identique pour cette offre (preuve). **N'est pas vérifié** : qu'il
+s'installe sur l'offre EM-B311X-SATA, où toutes les installations de la nuit du 16 au 17
+novembre ont échoué, celles faites avec les réglages par défaut comprises.
 
 ### 66.9 Le cloud-init léger : il télécharge les scripts à un commit épinglé et vérifie leur empreinte
 
