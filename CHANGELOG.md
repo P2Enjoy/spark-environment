@@ -163,6 +163,13 @@
   (`*.monapi.fr`) et toute valeur qui n'est pas un nom d'hôte valide restent du texte. Aucun
   changement d'API, de schéma ni de variable d'environnement. DAT §72 ; design system
   SPK-DS-49 ; manuel M7.
+- **`.env.example` : jeton GitHub classic documenté, `SCW_DEFAULT_PROJECT_ID` ajoutée, décompte des doublons corrigé.**
+  Le commentaire de `SPARK_GITHUB_DEPLOY_TOKEN` décrit les deux sortes de jeton — *fine-grained*
+  (un seul propriétaire) et *classic* au seul scope `repo` pour mêler dépôts personnels et
+  d'organisation. `SCW_DEFAULT_PROJECT_ID`, lue par `host/dns.js`, manquait à l'exemple et au
+  README : ajoutée aux deux. L'exemple disait « six » doublons d'épreuve pour sept. La garde des
+  variables (`test_variables_documentees.py`) lit désormais aussi les noms en `SCW_` : retirée de
+  l'exemple, `SCW_DEFAULT_PROJECT_ID` la fait rougir.
 - **SPK-178 — la console pose la clé d'un Spark en *deploy key* sur son dépôt GitHub.**
   Sur la facette *Clés*, sous l'identité du Spark, une carte **Dépôt GitHub** : saisir
   `propriétaire/dépôt`, *Vérifier* (état daté : non posée, posée en lecture seule, posée

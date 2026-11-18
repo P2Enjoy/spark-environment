@@ -26,24 +26,27 @@ RACINE = Path(__file__).resolve().parents[3]
 
 #: Les trois grammaires par lesquelles le dépôt lit son environnement.
 LECTURES = (
-    re.compile(r"process\.env\.(SPARKD?_[A-Z0-9_]+)"),
-    re.compile(r"process\.env\[['\"](SPARKD?_[A-Z0-9_]+)['\"]\]"),
-    re.compile(r"os\.environ(?:\.get)?[\(\[]['\"](SPARKD?_[A-Z0-9_]+)['\"]"),
-    re.compile(r"source\.get\(['\"](SPARKD?_[A-Z0-9_]+)['\"]"),
-    re.compile(r"\$\{(SPARKD?_[A-Z0-9_]+)(?::-[^}]*)?\}"),
+    re.compile(r"process\.env\.((?:SPARKD?|SCW)_[A-Z0-9_]+)"),
+    re.compile(r"process\.env\[['\"]((?:SPARKD?|SCW)_[A-Z0-9_]+)['\"]\]"),
+    re.compile(r"os\.environ(?:\.get)?[\(\[]['\"]((?:SPARKD?|SCW)_[A-Z0-9_]+)['\"]"),
+    re.compile(r"source\.get\(['\"]((?:SPARKD?|SCW)_[A-Z0-9_]+)['\"]"),
+    re.compile(r"\$\{((?:SPARKD?|SCW)_[A-Z0-9_]+)(?::-[^}]*)?\}"),
     # SPK-62 · §53.3 : les DOUBLONS ne se lisent pas par `process.env` — ils
     # passent par `epreuve.commande('X')`, et leur table les déclare en chaîne.
     # La garde ne les voyait donc PAS, et elle était verte pour cette raison :
     # les quatre doublons de SPK-100 étaient documentés par vigilance, pas par
     # preuve. Le cinquième, ajouté le 2026-09-14, a traversé sans un mot — ce
     # qui est exactement ce que le `CLAUDE.md` §3 dit de ne pas laisser arriver.
-    re.compile(r"epreuve\.commande\(['\"](SPARKD?_[A-Z0-9_]+)['\"]\)"),
-    re.compile(r"variable:\s*['\"](SPARKD?_[A-Z0-9_]+)['\"]"),
+    re.compile(r"epreuve\.commande\(['\"]((?:SPARKD?|SCW)_[A-Z0-9_]+)['\"]\)"),
+    re.compile(r"variable:\s*['\"]((?:SPARKD?|SCW)_[A-Z0-9_]+)['\"]"),
     # SPK-178 : l'hôte console lit aussi son environnement par l'objet `env`
     # (`env.SPARK_GITHUB_DEPLOY_TOKEN`), que `process.env` ne révèle pas. La garde
     # ne le voyait pas : une variable lue ainsi pouvait manquer à la
     # documentation sans qu'aucune preuve ne rougisse.
-    re.compile(r"\benv\??\.(SPARKD?_[A-Z0-9_]+)"),
+    re.compile(r"\benv\??\.((?:SPARKD?|SCW)_[A-Z0-9_]+)"),
+    # Le jeton et le projet du fournisseur DNS (`SCW_*`) se lisent par ce même
+    # objet `env` : `SCW_DEFAULT_PROJECT_ID` a manqué au fichier d'exemple et au
+    # README tant que la garde ne regardait que les noms en `SPARK_`.
 )
 
 #: Où l'on cherche. Les fichiers de test en sont exclus : ils POSENT des
@@ -141,7 +144,7 @@ def test_chaque_variable_de_l_exemple_porte_un_COMMENTAIRE(lues):
         lignes = (RACINE / exemple).read_text(encoding="utf-8").splitlines()
         muettes = []
         for i, ligne in enumerate(lignes):
-            declaration = re.match(r"^#?\s*(SPARKD?_[A-Z0-9_]+)=", ligne)
+            declaration = re.match(r"^#?\s*((?:SPARKD?|SCW)_[A-Z0-9_]+)=", ligne)
             if not declaration:
                 continue
             # On remonte : les lignes qui précèdent doivent porter du commentaire
@@ -152,12 +155,12 @@ def test_chaque_variable_de_l_exemple_porte_un_COMMENTAIRE(lues):
             # Seule une déclaration active ferme le bloc.
             precedentes = []
             for avant in reversed(lignes[:i]):
-                if re.match(r"^SPARKD?_[A-Z0-9_]+=", avant) or not avant.strip():
+                if re.match(r"^(?:SPARKD?|SCW)_[A-Z0-9_]+=", avant) or not avant.strip():
                     break
                 precedentes.append(avant)
             explique = [l for l in precedentes
                         if l.lstrip().startswith("#")
-                        and not re.match(r"^#\s*SPARKD?_[A-Z0-9_]+=", l.lstrip())]
+                        and not re.match(r"^#\s*(?:SPARKD?|SCW)_[A-Z0-9_]+=", l.lstrip())]
             if not explique:
                 muettes.append(declaration.group(1))
         assert muettes == [], (
