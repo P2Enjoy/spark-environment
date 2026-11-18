@@ -35,6 +35,9 @@
   formulaires d'Alertes **retiennent leur saisie** à chaque frappe (jamais les mots de passe). Preuve : un parcours
   qui retarde la lecture de la Forge de 2,5 s, passe à l'onglet Alertes, tape, et constate que la saisie survit —
   rouge sans les deux remèdes, vert avec.
+- **Corrigé, vu sur spark-010 — une sonde HTTPS sans route recevait un refus avant toute saisie.** Sur un Spark sans
+  route TLS, la modale ouvrait sur « Aucun domaine dans l'adresse » : exact, mais prématuré. L'aperçu attend qu'il y ait une
+  route à viser. Un parcours l'épingle (rouge sans le remède).
 - **Corrigé — un parcours E2E laissait le webhook désactivé** : « l'onglet Alertes se règle » finissait par un envoi
   qui gardait la case décochée par le refus précédent, et le parcours suivant ne recevait plus aucune alerte.
 - **SPK-186 — l'onglet « Santé » de la console.** Facette **Santé** de la fenêtre d'un Spark : par sonde, l'état

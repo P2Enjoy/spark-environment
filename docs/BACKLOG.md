@@ -3063,8 +3063,12 @@ avant la première ligne de code.
   registre en clair ni au journal, la reprise au démarrage, le mot de passe illisible, l'avis de coupure par les deux
   canaux ; 14 tests de composant ; parcours E2E depuis l'accueil (souris et clavier) jusqu'à un courriel reçu par un
   serveur SMTP, le refus affiché dans son formulaire, la coupure dite par les deux canaux ; captures desktop et
-  mobile observées ; manuel M11. **Non prouvé** : un vrai fournisseur ; la modale TLS par l'écran (le serveur de
-  parcours est sans TLS — les modes TLS sont prouvés par l'API Python).
+  mobile observées ; manuel M11. **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — canal courriel réglé depuis l'écran avec le relais de l'AUTRE Forge
+  (Scaleway TEM, TLS implicite, port 2465, identifiants lus dans la cellule qui les porte et jamais affichés), puis un **vrai geste**
+  (créer et supprimer un instantané, puis supprimer le Spark d'essai) : **le relais a accepté les courriels** — 2 envoyés, 0 en
+  échec, certificat vérifié —, et le mot de passe ne ressort pas de l'API. **Non prouvé** : la **réception dans une boîte** par
+  un humain (destinataire `admin@lelabs.tech`, non joignable ici) ; les DEUX canaux ensemble sur une même Forge réelle (spark-010 n'a
+  pas de webhook) ; les modes TLS par l'écran (le serveur de parcours est sans TLS — prouvés par l'API Python).
 - **Ne pourra pas être prouvé ici** : l'acceptation par un vrai fournisseur (Scaleway TEM, Gmail,
   un relais d'entreprise) — authentification, limites, anti-spam. L'unité reste `[~]` tant
   qu'un courriel n'a pas été reçu d'une vraie Forge par un vrai destinataire.
@@ -9227,7 +9231,7 @@ ligne des totaux face à ce que la Forge a au total. Arbitrages du jour : la for
   alloue 92 % du CPU partagé (voir le journal du 2026-11-18). Le manuel est M8 (« Lire les
   mesures »).
 
-### [~] SPK-174 · Désigner l'image proposée par défaut à la création
+### [x] SPK-174 · Désigner l'image proposée par défaut à la création
 
 **Demandé le 2026-11-18** par le responsable, en lisant le refus de retrait du catalogue :
 « « images:debian/13 » est l'image proposée par défaut à la création. Le produit n'offre
@@ -9251,7 +9255,9 @@ pré-renseignement, donc l'entrée par défaut n'est retirable par personne.
   depuis l'accueil (Forge → Images → désigner → retirer l'ancienne) ; captures observées ;
   manuel M5, DAT §33.7, README si concerné, seed et changelog à jour.
 
-**État (2026-11-18) : livré, `[~]`.** Prouvé : 14 tests de service et d'API contre le vrai registre
+**État (2026-11-18) : livré et vérifié, `[x]`.** **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — « Définir par défaut » depuis la console sur la
+Forge réelle : une seule entrée par défaut côté Forge, puis l'état d'avant rétabli (`op48-preuves.mjs image`).
+Prouvé : 14 tests de service et d'API contre le vrai registre
 (`test_image_defaut.py` : atomicité sous panne d'audit, une seule entrée par défaut, idempotence sans écriture,
 refus `missing`/`unknown`/inconnue par requête directe, journal `image.default`, pas d'alerte hors bande, retrait
 de l'ancienne entrée possible ensuite) ; 12 tests de composant (bouton seulement sur une entrée vérifiée,
@@ -9260,8 +9266,7 @@ pastille, refus, phrase annoncée ; présélection de la création) ; parcours E
 n'est plus refusé pour cette raison → requêtes directes refusées → la pile est remise dans l'état du seed) ;
 captures desktop et mobile observées. **Défauts trouvés par le parcours et corrigés** : l'écran de création
 figeait `images:debian/13`, donc le défaut du catalogue n'avait aucun effet ; les deux boutons côte à côte
-rognaient « Retirer » à 1440 px. **Non prouvé** : sur une Forge réelle (le catalogue y est relevé sur le vrai
-dépôt).
+rognaient « Retirer » à 1440 px.
 
 ### [~] SPK-179 · Le domaine d'une route est un lien, ouvert dans un nouvel onglet
 
@@ -9325,8 +9330,11 @@ rétention et l'API. L'écran est SPK-183.
   requête directe (Spark protégé, rétention absente, fréquence trop rapprochée, suppression non
   confirmée) ; une prise et une rétention réelles par le planificateur contre le doublon ;
   migration et `docs/PROD_MIGRATIONS.md` à jour.
-- **État au 2026-11-18 : implémenté et vérifié contre le doublon Incus et le vrai registre,
-  pas sur une Forge réelle — reste `[~]`.** Prouvé : l'analyseur crontab (55 tests : formes,
+- **État au 2026-11-18 : prouvé sur la Forge réelle spark-010 pour la prise et la rétention — reste `[~]` pour le
+  rattrapage après un arrêt réel de `sparkd`.** **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — SLA `*/15` sur un Spark d'essai : **le vrai planificateur a pris
+  `SLA_20261118-203029`** (20:30:29, statut `ok`, taille mesurée 192 512 o), puis `…-204530`, puis `…-210000` — et au
+  troisième passage **a supprimé de lui-même le plus ancien** (rétention par nombre, 2). **Incus accepte le nom `SLA_…`**
+  (majuscules, souligné), vérifié aussi à la main. Prouvé en local : Prouvé : l'analyseur crontab (55 tests : formes,
   refus avec raison, « ou » du jour, bissextile, écart minimal, phrases) ; le service (50 tests,
   horloge injectée : sélection de la rétention, aperçu, confirmation, rattrapage unique, reprises,
   Spark sans cellule, provenance, acteur `sla`/`runtime`) ; l'API (23 tests, **refus par requête
@@ -9335,11 +9343,9 @@ rétention et l'API. L'écran est SPK-183.
   migration dans les deux sens (10 tests) ; le seed (trois SLA par le vrai planificateur) ; la
   suite complète de `sparkd` verte, contrat OpenAPI régénéré. **Défaut trouvé par les tests** :
   `Planificateur.un_pas` ouvrait la connexion avant son `try`, donc une panne du registre tuait le
-  fil. **Non prouvé** : que le vrai Incus accepte le nom `SLA_…` (DAT §74.4) ; une prise et une
-  suppression réelles sur la VM d'installation fraîche (README §28.7) ; le comportement après un
-  vrai arrêt de `sparkd`. Décisions du rédacteur à confirmer : DAT §74.11.
+  fil. **Non prouvé** : le comportement après un vrai arrêt de `sparkd` (rattrapage unique) sur une Forge réelle. Décisions du rédacteur à confirmer : DAT §74.11.
 
-### [~] SPK-183 · Le SLA des instantanés dans la console : le panneau et sa modale
+### [x] SPK-183 · Le SLA des instantanés dans la console : le panneau et sa modale
 
 Suite de SPK-182 : l'**écran**. Dans l'onglet Instantanés d'un Spark, une section « SLA des
 instantanés » et la modale qui la règle.
@@ -9354,8 +9360,8 @@ instantanés » et la modale qui la règle.
 - DoD : tests unitaires de composant ; E2E depuis l'accueil, à la souris et au clavier ;
   captures observées (desktop, mobile, états : sans SLA, actif, suspendu, en échec, aperçu de
   suppression) ; manuel M9, seed et changelog à jour.
-- **État au 2026-11-18 : implémenté et vérifié sur la pile de développement factice, pas sur une
-  Forge réelle — reste `[~]`.** Prouvé : 34 tests de composant (le menu ne stocke rien, l'engagement
+- **État au 2026-11-18 : livré et vérifié, `[x]`.** **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — le SLA est programmé **depuis l'onglet Instantanés** sur un Spark
+  d'essai, la section dit l'état réel, et la Forge l'exécute (voir SPK-182). Prouvé en local : 34 tests de composant (le menu ne stocke rien, l'engagement
   change de nom et de variante quand l'enregistrement supprimerait, un SLA illisible ne se rend pas
   comme une absence, UTC puis fuseau) ; le parcours E2E « le SLA des instantanés se programme… » vert
   depuis l'accueil — **souris et clavier** (Entrée ouvre, Échap ferme et rend le focus), chaîne refusée
@@ -9363,9 +9369,8 @@ instantanés » et la modale qui la règle.
   enregistrement qui supprime exactement ce qui a été montré, deux instantanés manuels intacts, suspendre,
   reprendre, annuler un retrait, refus d'un Spark protégé dit dans la modale avec la saisie conservée ;
   captures observées (desktop, mobile, chaîne refusée, aperçu de suppression, suspendu, refus) ;
-  illustrations `m9-sla`, `m9-sla-apercu` et `m9-restauration-refusee` renouvelées. **Non prouvé** : sur
-  une Forge réelle ; la prise réelle d'un instantané `SLA_…` par Incus (SPK-182). Sur le doublon la taille
-  des instantanés est nulle (« 0 o »). Décisions du rédacteur à confirmer : DAT §74.11.
+  illustrations `m9-sla`, `m9-sla-apercu` et `m9-restauration-refusee` renouvelées. Sur le
+  doublon la taille des instantanés est nulle (« 0 o ») ; sur la Forge réelle elle est mesurée. Décisions du rédacteur à confirmer : DAT §74.11.
 
 ### [~] SPK-184 · La santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes
 
@@ -9395,8 +9400,10 @@ l'écran SPK-186.
   n'est pas une route du Spark, joker, Spark protégé, cadence trop rapprochée, seuil hors bornes) ;
   une sonde HTTPS et un script réels contre le doublon ; une alerte réellement émise vers un canal
   d'épreuve ; migration et `docs/PROD_MIGRATIONS.md` à jour.
-- **État au 2026-11-18 : implémenté et vérifié contre les doublons et un récepteur HTTP réel, pas sur
-  une Forge réelle — reste `[~]`.** Prouvé : la machine à états (pure, 5 tests) ; la validation (la
+- **État au 2026-11-18 : prouvé sur la Forge réelle spark-010 pour les sondes script — reste `[~]` pour la sonde HTTPS
+  et le compte rootless.** **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — deux sondes script exécutées par la **vraie cellule** (`incus exec`) : `true` → Saine,
+  `exit 2` → En panne (« code de sortie 2 (attendu 0) »), relevés planifiés toutes les 5 minutes, « Tester » sans écriture.
+  Prouvé en local : Prouvé : la machine à états (pure, 5 tests) ; la validation (la
   cible ne peut viser que les routes du Spark : adresse IP, localhost, API de Caddy, route d'un autre
   Spark, joker, port, identifiants, route en clair — tous refusés avec leur raison) ; les deux
   exécuteurs ; l'alerte **réellement reçue par un serveur HTTP local** — deux messages pour sept
@@ -9405,11 +9412,11 @@ l'écran SPK-186.
   l'arrêt, puis le rétablissement d'une panne annoncée ; l'historique borné ; le fil à pool borné et sa
   survie à une panne du registre ; l'API (refus par requête directe : Spark protégé 423 sur chaque
   écriture et sur le test, domaine étranger 422) ; la migration dans les deux sens ; le seed. **Non
-  prouvé** : un script sous le compte rootless contre un vrai Docker, la sonde contre le vrai Caddy et
-  un vrai certificat, une alerte vers un vrai destinataire (SPK-62). Décisions du rédacteur à confirmer :
+  prouvé** : un script sous le compte rootless contre un vrai Docker, la sonde HTTPS contre le vrai Caddy et
+  un vrai certificat (le Spark d'essai n'avait pas de route TLS). Décisions du rédacteur à confirmer :
   DAT §75.11.
 
-### [~] SPK-185 · La paire `health` / `health.?` : l'agent propose une sonde
+### [x] SPK-185 · La paire `health` / `health.?` : l'agent propose une sonde
 
 Suite de SPK-184 : le fichier réel `/etc/spark/health`, régénéré depuis le registre, et sa
 proposition `/etc/spark/health.?`, comme les six paires du DAT §55.
@@ -9421,8 +9428,9 @@ proposition `/etc/spark/health.?`, comme les six paires du DAT §55.
   acceptation ; l'en-tête qui apprend la grammaire à l'agent ; le dossier et le brief.
 - DoD : tests unitaires de la grammaire ; API (une proposition ne pose rien, ne retire rien, écarter
   n'est pas refuser) ; la proposition d'un script se montre avec sa commande exacte.
-- **État au 2026-11-18 : implémenté et vérifié contre le doublon, pas sur une Forge réelle — reste `[~]`.**
-  Prouvé : la septième paire (en-tête qui apprend la grammaire et le script ; fichier réel régénéré après
+- **État au 2026-11-18 : livré et vérifié, `[x]`.** **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — sparkd a lui-même écrit `/etc/spark/health` et
+  `/etc/spark/health.?` dans la cellule ; une ligne écrite dans `health.?` apparaît dans l'onglet avec le verdict du serveur,
+  **ne pose rien**, et l'acceptation pose la sonde. Prouvé en local : la septième paire (en-tête qui apprend la grammaire et le script ; fichier réel régénéré après
   chaque geste, qui dit l'état au dernier relevé sans jamais une sortie, et qu'écrire à la main ne
   change pas) ; une proposition **ne pose aucune sonde** ; l'acceptation passe par le chemin normal et
   **vide** le fichier ; une ligne refusable refuse **tout**, laisse la première **non posée** et **ne
@@ -9431,7 +9439,7 @@ proposition `/etc/spark/health.?`, comme les six paires du DAT §55.
   jusqu'à la fin de ligne, refus nommés, nom doublé dit, étiquette). L'écran qui montre la proposition
   avec la commande exacte d'un script, et ses refus ligne par ligne, est SPK-186 (livré).
 
-### [~] SPK-186 · L'onglet « Santé » dans la console
+### [x] SPK-186 · L'onglet « Santé » dans la console
 
 Suite de SPK-184 et SPK-185 : la facette « Santé » de la fenêtre d'un Spark.
 
@@ -9446,12 +9454,14 @@ Suite de SPK-184 et SPK-185 : la facette « Santé » de la fenêtre d'un Spark.
   observées (desktop, mobile, sans sonde, sain, instable, en panne, arrêté, proposition) ; manuel,
   seed et changelog à jour.
 
-**État (2026-11-18) : livré, `[~]`.** Prouvé : tests de composant (`sante-view.test.js`,
+**État (2026-11-18) : livré et vérifié, `[x]`.** **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — liste, essai, ajout, proposition relue ligne par ligne et acceptée,
+sur une vraie cellule (captures `op48-spark-010-sante-*`, `-proposition*`). Un défaut d'ergonomie vu là — une sonde HTTPS sans
+route recevait un refus avant toute saisie — est corrigé et épinglé par le parcours. Prouvé en local : tests de composant (`sante-view.test.js`,
 `sante-import.test.js`, `spark-suggestions-sante.test.js`), parcours E2E depuis l'accueil à la souris et au clavier
 (liste du seed saine / instable / en panne, Spark arrêté, proposition relue ligne par ligne, ajout partiel, essai
 sans écriture, cadence refusée, suspendre / reprendre / retirer, Spark protégé), captures desktop et mobile
-observées, manuel M14. **Non prouvé** : le cas « aucun canal d'alerte » en E2E (la pile des parcours a un canal ;
-prouvé au rendu) ; rien contre une vraie Forge.
+observées, manuel M14. Le cas « aucun canal d'alerte » est prouvé au rendu (la pile des parcours a un canal) ; sur la
+Forge réelle, il disparaît dès que le canal courriel est actif.
 
 ---
 

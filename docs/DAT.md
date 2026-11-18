@@ -18496,7 +18496,7 @@ bouton **« Tester »**. Quand aucun canal d'alerte n'est configuré, la facette
 panne ne se verrait qu'ici. `POST …/health/validate` renvoie, avec la définition normalisée, la **phrase** et les
 **prochains relevés** : la modale les affiche sans réimplémenter la grammaire crontab. Une proposition ne se montre que
 dans la facette `sante` (liste des facettes de proposition) et reste relue ligne par ligne, avec le verdict du
-serveur. Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-51. Livrée, non prouvée sur une Forge réelle.
+serveur. Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-51. Livrée et vue sur la Forge réelle spark-010 (2026-11-18) : sondes script dans une vraie cellule, proposition `health.?` relue et acceptée.
 
 ### 75.11 Décisions du rédacteur, à confirmer par le responsable
 

@@ -16030,8 +16030,13 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **Défaut trouvé sur la vraie Forge, que les doublons ne montraient pas** : un chargement tardif de l'écran Forge
   repeignait l'onglet Alertes et effaçait la saisie (voir CHANGELOG). Les doublons répondent en quelques ms ; la vraie
   Forge en plusieurs secondes. Un parcours qui **retarde** la lecture reproduit désormais le défaut.
-- **Constat d'ergonomie, non corrigé** : sur un Spark sans route TLS, la modale d'une sonde ouvre sur le type HTTPS avec
-  l'erreur « Aucun domaine dans l'adresse » avant toute saisie ; le message est exact mais prématuré.
+- **Constat d'ergonomie, corrigé ensuite** : sur un Spark sans route TLS, la modale d'une sonde ouvrait sur le type HTTPS
+  avec l'erreur « Aucun domaine dans l'adresse » avant toute saisie ; l'aperçu attend désormais une route à viser.
+- **Rétention réelle** : au troisième passage du planificateur (21:00:30), `SLA_20261118-203029` a été supprimé de lui-même ;
+  il restait `…-204530` et `…-210000`. Le Spark d'essai a ensuite été supprimé depuis l'écran, et la Forge est revenue à
+  son seul Spark d'origine (`magiline-mcp`, jamais touché). Le canal courriel est resté actif sur spark-010, comme demandé.
+- **Statuts** : SPK-174, 183, 185 et 186 passent à `[x]` (preuve réelle obtenue). SPK-182 reste `[~]` (rattrapage après arrêt
+  réel de `sparkd`), SPK-184 (sonde HTTPS, compte rootless) et SPK-62 (réception en boîte, deux canaux sur une même Forge).
 - **Non prouvé** : la sonde HTTPS contre le vrai Caddy (le Spark d'essai n'a pas de route), le script sous le compte
   rootless contre un vrai Docker, et le webhook sur spark-010 (non configuré ; prouvé en local, et sur l'autre Forge).
 - **Le mot de passe des canaux de spark-010** a été fixé au premier usage et vit dans `~/.config/spark/op48-garde-spark-010`

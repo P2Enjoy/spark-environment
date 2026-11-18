@@ -7990,6 +7990,11 @@ test('l\u2019onglet Santé montre les sondes d\u2019un Spark, relit leur proposi
     await page.waitForSelector('dialog#sante[open]', { timeout: 10000 });
     // « analytics » n'a qu'une route en clair : rien à sonder en HTTPS, et la modale le DIT.
     assert.match(await page.textContent('dialog#sante'), /n’a aucune route servie en TLS/);
+    // Et elle ne montre PAS en plus un refus du serveur avant toute saisie (vu sur spark-010 : « Aucun domaine
+    // dans l'adresse »). On laisse l'aperçu patienter le temps de l'attente de saisie (250 ms) et de la réponse.
+    await page.waitForTimeout(800);
+    assert.equal(await page.locator('#sante-apercu [role="alert"]').count(), 0,
+      'une sonde HTTPS sans route ne reçoit pas de refus avant d\u2019être complète');
     await page.fill('#sante-name', 'prive');
     await page.selectOption('#sante-kind', 'script');
     await page.fill('#sante-commande', 'true');

@@ -3498,6 +3498,14 @@ async function majApercuSante() {
   const rang = ++rangApercuSante;
   s.chargement = true;
   s.test = null;
+  // Une sonde HTTPS sans route à viser (un Spark sans route TLS : l'aide du champ le dit déjà) n'a rien à
+  // faire valider : le serveur répondrait « Aucun domaine dans l'adresse » avant toute saisie, un refus
+  // exact mais prématuré (vu le 2026-11-18 sur spark-010). On attend donc que la sonde soit complète.
+  if (s.values.kind === 'http' && !String(s.values.route ?? '').trim()) {
+    s.chargement = false; s.apercu = null; s.erreur = null;
+    majZoneSante();
+    return;
+  }
   majZoneSante();
   const r = await appel('POST', urlSante('/validate'), definitionSante(s.values))
     .catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));

@@ -127,6 +127,11 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-48 · Le canal SMTP des alertes hors bande (SPK-62)
 
 ```
+État          : APPLIQUÉ le 2026-11-18 sur spark-010, sur instruction du responsable. Canal réglé depuis
+                l'écran avec les réglages du relais de l'autre Forge (secrets compris, jamais affichés) ;
+                un vrai geste a produit des courriels acceptés par le relais (2 envoyés, 0 en échec).
+                RESTE : confirmer la réception chez le destinataire ; le mot de passe des canaux de spark-010
+                vit dans ~/.config/spark/op48-garde-spark-010 (0600, sur le poste).
 Quoi          : un second canal d'alerte, par courriel, aux côtés du webhook.
 Migration     : AUCUNE (la table notify_channels de la 016 porte déjà les colonnes).
 À redéployer  : sparkd (le code d'envoi) et la console (la carte « Courriel »).
@@ -145,6 +150,9 @@ Risques       : un serveur SMTP muet tient un fil jusqu'à son délai de garde ;
 ### OP-47 · La santé d'un Spark dans `sparkd` : migration 024, relevés et alertes (SPK-184)
 
 ```
+État          : APPLIQUÉ le 2026-11-18 sur spark-010 (schéma 22 → 24, par « Code déployé »). Sondes script
+                prouvées dans une vraie cellule ; proposition health.? relue et acceptée. RESTE : la sonde
+                HTTPS contre le vrai Caddy, le script sous le compte rootless contre un vrai Docker.
 État          : EN ATTENTE — à jouer sur instruction du responsable.
 Objectif      : sparkd porte les sondes de santé (DAT §75) : HTTPS vers une route
                 du Spark par la boucle locale (127.0.0.1:443, SNI), ou script dans
@@ -182,12 +190,15 @@ Risques       : un script s'exécute dans la cellule sans qu'une personne regard
                 sortie d'un script n'est ni stockée ni envoyée. Si la Forge
                 tombe, plus aucune sonde ni alerte ne part (DAT §75.7). L'onglet
                 Santé de la console (SPK-186) règle les sondes et relit les
-                propositions health.? ; il n'a pas été vu sur une Forge réelle.
+                propositions health.? ; il a été vu sur spark-010 le 2026-11-18.
 ```
 
 ### OP-46 · Le SLA des instantanés dans `sparkd` : migration 023 et planificateur (SPK-182)
 
 ```
+État          : APPLIQUÉ le 2026-11-18 sur spark-010 (schéma 22 → 24, par « Code déployé »). Prise réelle
+                SLA_20261118-203029 acceptée par Incus, rétention par nombre jouée par le vrai planificateur.
+                RESTE : le rattrapage après un arrêt réel de sparkd. spark-experiment n'a PAS reçu ce code.
 État          : EN ATTENTE — à jouer sur instruction du responsable.
 Objectif      : sparkd porte la politique de prise automatique et de
                 rétention des instantanés (DAT §74). Migration 023 : la table
