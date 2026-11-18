@@ -199,6 +199,14 @@
   aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
 
 ### Corrigé
+- **SPK-175 — une Forge survit à la montée de version majeure d'Ubuntu.** Après la montée
+  de 24.04 à 26.04, sparkd ne démarrait plus : son environnement Python restait lié à 3.12.
+  L'amorce compare désormais la version de cet environnement à celle de `python3`. Si
+  elles diffèrent, elle met l'environnement de côté (`/opt/sparkd/venv.avant-<version>`),
+  le reconstruit et le dit. Sur `spark-010`, la panne a été reproduite puis réparée par le
+  seul rejeu, avec une recette à 19 contrôles. La procédure de montée est au runbook,
+  §A.5 : `core.efi` orphelin, chargeur BIOS sur les deux disques, rejeu de l'amorce, et
+  `zpool upgrade` laissé à l'installation. DAT §70.4.
 - **SPK-170 — l'amorce n'importe plus en silence un pool qui n'est pas sain.**
   L'installateur de l'hébergeur n'efface pas les partitions. Le 2026-11-18, l'amorce
   avait importé le pool dégradé d'une installation ratée et l'avait confié à Incus.

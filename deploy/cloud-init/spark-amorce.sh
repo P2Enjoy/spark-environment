@@ -13,7 +13,8 @@
 #       docs/BACKLOG.md#SPK-158, docs/DAT.md §66.8 (le pool est declare a
 #       l'hebergeur et adopte ; la creation devient un repli) ·
 #       docs/BACKLOG.md#SPK-170, docs/DAT.md §70.2 (un pool importable qui n'est
-#       pas sain n'est jamais importe)
+#       pas sain n'est jamais importe) · docs/BACKLOG.md#SPK-175, docs/DAT.md §70.4
+#       (l'environnement de sparkd suit l'interpreteur apres une montee d'Ubuntu)
 #
 # La machine est livree avec le schema de partitionnement que produit
 # `scripts/preparer-forge.py` : l'hebergeur y cree le pool miroir « spark » sur les
@@ -257,6 +258,24 @@ fi
 incus storage show "$POOL" >/dev/null 2>&1 \
   || incus storage create "$POOL" zfs "source=$POOL"
 
+# SPK-175 · docs/DAT.md §70.4 : apres une montee de version d'Ubuntu, l'environnement
+# reste lie a l'ancien interpreteur (3.12 en 24.04, 3.14 en 26.04) et sparkd ne
+# demarre plus. Le garder parce qu'il « existe » rendait le rejeu impuissant : on
+# compare donc les versions, et un environnement qui ne correspond plus est MIS DE
+# COTE — jamais efface — puis reconstruit.
+version_python() {
+  "$1" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true
+}
+if [ -e /opt/sparkd/venv ]; then
+  venv_avant=$(version_python /opt/sparkd/venv/bin/python)
+  venv_systeme=$(version_python python3)
+  if [ "$venv_avant" != "$venv_systeme" ]; then
+    venv_cote="/opt/sparkd/venv.avant-${venv_avant:-illisible}"
+    [ ! -e "$venv_cote" ] || venv_cote="$venv_cote.$(date +%Y%m%d%H%M%S)"
+    echo "amorce: l'environnement de sparkd est lie a Python ${venv_avant:-illisible}, le systeme fournit $venv_systeme : mis de cote sous $venv_cote, puis reconstruit."
+    mv /opt/sparkd/venv "$venv_cote"
+  fi
+fi
 # Paquet sparkd, sans checkout du depot sur la Forge (runbook §A.2).
 [ -x /opt/sparkd/venv/bin/python ] || python3 -m venv /opt/sparkd/venv
 /opt/sparkd/venv/bin/pip install --upgrade \

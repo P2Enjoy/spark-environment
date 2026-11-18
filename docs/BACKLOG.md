@@ -10011,7 +10011,7 @@ avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS
 - DoD : preuve qu'une Forge neuve accepte la première signature de la console sans geste
   manuel ; refus d'une clé non déclarée toujours prouvé ; runbook à jour.
 
-### [ ] SPK-175 · Une Forge survit à la montée de version majeure d'Ubuntu
+### [x] SPK-175 · Une Forge survit à la montée de version majeure d'Ubuntu
 
 **Constaté le 2026-11-18 sur `spark-010`** (24.04 → 26.04, journal du jour). Deux gestes
 manuels ont été nécessaires :
@@ -10031,6 +10031,17 @@ fait échouer `grub-efi-amd64-signed` sur une machine BIOS. Déplacé à la main
   réécrit à chaque passage · `docs/AGENT_RUNBOOK.md` §A.5 (la procédure de montée).
 - Dépend de : SPK-159.
 - DoD : test unitaire de la détection ; procédure du runbook jouée sur une Forge réelle.
+- **Fait le 2026-11-18.**
+  - **Tests** : le vrai bloc de l'amorce est joué avec de faux interpréteurs dans cinq
+    cas : versions différentes, interpréteur qui ne s'exécute plus, environnement juste
+    (rien ne bouge), sauvegarde précédente jamais écrasée, absence d'environnement.
+  - **Sur `spark-010`** : l'environnement est remis dans l'état d'après la montée
+    (interpréteur 3.12) et sparkd ne démarre plus. Le seul rejeu de l'amorce répare :
+    « lie a Python 3.12, le systeme fournit 3.14 : mis de cote sous
+    /opt/sparkd/venv.avant-3.12, puis reconstruit », sparkd actif, `/readyz` 200, recette
+    à 19 contrôles. Les copies de l'essai ont ensuite été retirées.
+  - **La procédure du runbook (§A.5)** est celle jouée à la main le matin même pour la
+    vraie montée.
 
 ### [ ] SPK-176 · L'installation de la Forge propose la mise à niveau du pool ZFS, sans l'imposer
 

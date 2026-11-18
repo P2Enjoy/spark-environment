@@ -7,7 +7,8 @@
           points 5 a 7, §66.4, §66.5 (les reglages en arguments nommes ; le pool
           cree seulement sur --pool-source, par creer-pool.sh) ·
           docs/BACKLOG.md#SPK-170 · docs/DAT.md §70.2 (un pool importable non
-          sain n'est jamais importe)
+          sain n'est jamais importe) · docs/BACKLOG.md#SPK-175 · docs/DAT.md §70.4
+          (l'environnement de sparkd reconstruit apres une montee d'Ubuntu)
 
 Le script vivait auparavant SEULEMENT sur la machine, produit par le `user_data`
 du serveur : ni versionne, ni relisible en revue, ni testable. Ces preuves
@@ -448,3 +449,85 @@ def test_un_pool_DEJA_importe_est_adopte_quel_que_soit_son_etat(tmp_path):
     assert vu.returncode == 0, vu.stderr
     assert "zpool import" not in appels
 
+
+# --- l'environnement Python de sparkd survit a une montee d'Ubuntu (SPK-175) ---
+#
+# @verifies docs/BACKLOG.md#SPK-175 · docs/DAT.md §70.4 (un environnement lie a un
+#           autre interpreteur est mis de cote puis reconstruit, jamais efface)
+
+def _bloc_venv() -> str:
+    bloc = re.search(r"^version_python\(\) \{.*?^\[ -x /opt/sparkd/venv/bin/python \] "
+                     r"\|\| python3 -m venv /opt/sparkd/venv$", source(), re.S | re.M)
+    assert bloc, "le bloc de l'environnement doit etre repere dans l'amorce"
+    return bloc.group(0)
+
+
+def _interprete(chemin: Path, version: str | None) -> None:
+    """Un faux Python qui rend sa version, ou qui ne s'execute plus (None)."""
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    corps = f'echo "{version}"' if version else "exit 127"
+    chemin.write_text(f"#!/bin/sh\n{corps}\n")
+    chemin.chmod(0o755)
+
+
+def _jouer_bloc_venv(tmp_path: Path, *, venv: str | None, systeme: str):
+    """Le VRAI bloc, avec /opt/sparkd remplace par un dossier jetable."""
+    opt = tmp_path / "opt"
+    if venv is not None:
+        _interprete(opt / "venv" / "bin" / "python", venv or None)
+    binaire = tmp_path / "bin"
+    journal = tmp_path / "appels.txt"
+    _interprete(binaire / "python3", systeme)
+    # `python3 -m venv` : le double pose l'environnement neuf, a la version du systeme.
+    (binaire / "python3").write_text(
+        "#!/bin/sh\n"
+        f'if [ "$1" = -m ]; then echo "python3 $*" >> "{journal}"; mkdir -p "$3/bin";'
+        f' printf \'#!/bin/sh\\necho {systeme}\\n\' > "$3/bin/python"; chmod 755 "$3/bin/python"; exit 0; fi\n'
+        f'echo "{systeme}"\n')
+    (binaire / "python3").chmod(0o755)
+    programme = "set -eu\n" + _bloc_venv().replace("/opt/sparkd", str(opt)) + "\necho FIN\n"
+    env = {**os.environ, "PATH": f"{binaire}:{os.environ['PATH']}"}
+    vu = subprocess.run(["sh", "-c", programme], capture_output=True, text=True, env=env)
+    return vu, (journal.read_text() if journal.exists() else ""), opt
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_un_environnement_lie_a_l_ANCIEN_python_est_mis_de_cote_puis_reconstruit(tmp_path):
+    """La panne de `spark-010` le 2026-11-18 : 3.12 dans le venv, 3.14 au systeme."""
+    vu, appels, opt = _jouer_bloc_venv(tmp_path, venv="3.12", systeme="3.14")
+    assert vu.returncode == 0, vu.stderr
+    assert (opt / "venv.avant-3.12" / "bin" / "python").exists(), "mis de cote, pas efface"
+    assert "python3 -m venv" in appels, "reconstruit"
+    assert "mis de cote sous" in vu.stdout and "3.12" in vu.stdout and "3.14" in vu.stdout
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_un_environnement_dont_l_interpreteur_ne_s_execute_plus_est_reconstruit(tmp_path):
+    vu, appels, opt = _jouer_bloc_venv(tmp_path, venv="", systeme="3.14")
+    assert vu.returncode == 0, vu.stderr
+    assert (opt / "venv.avant-illisible").exists()
+    assert "python3 -m venv" in appels
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_un_environnement_JUSTE_n_est_ni_deplace_ni_reconstruit(tmp_path):
+    """Le rejeu d'une Forge saine : idempotent (SPK-73)."""
+    vu, appels, opt = _jouer_bloc_venv(tmp_path, venv="3.14", systeme="3.14")
+    assert vu.returncode == 0, vu.stderr
+    assert appels == "" and not list(opt.glob("venv.avant-*"))
+    assert "mis de cote" not in vu.stdout
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_une_sauvegarde_precedente_n_est_jamais_ecrasee(tmp_path):
+    (tmp_path / "opt" / "venv.avant-3.12").mkdir(parents=True)
+    vu, _, opt = _jouer_bloc_venv(tmp_path, venv="3.12", systeme="3.14")
+    assert vu.returncode == 0, vu.stderr
+    assert len(list(opt.glob("venv.avant-3.12*"))) == 2
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_sans_environnement_il_est_cree(tmp_path):
+    vu, appels, _ = _jouer_bloc_venv(tmp_path, venv=None, systeme="3.14")
+    assert vu.returncode == 0, vu.stderr
+    assert "python3 -m venv" in appels and "mis de cote" not in vu.stdout

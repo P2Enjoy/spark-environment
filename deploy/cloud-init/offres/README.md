@@ -21,9 +21,10 @@ s'installe quand il ne le déclare pas. La commande porte ce choix pour chaque o
 versionnée, et refuse une offre qui ne l'a pas.
 
 **EM-B311X-SATA s'installe en Ubuntu 24.04**, puis se monte en 26.04, la version visée par
-le produit. Deux gestes manuels sont nécessaires : déplacer `/boot/grub/x86_64-efi/core.efi`,
-laissé par l'image sur une machine BIOS, et mettre `/opt/sparkd/venv` de côté avant de
-rejouer l'amorce (journal du 2026-11-18, SPK-175).
+le produit. Un geste manuel reste nécessaire avant la montée : déplacer
+`/boot/grub/x86_64-efi/core.efi`, laissé par l'image sur une machine BIOS. L'amorce,
+rejouée après la montée, reconstruit elle-même l'environnement de sparkd lié à l'ancien
+Python (SPK-175). La procédure est au runbook, §A.5.
 
 **Le cloud-init n'est PAS versionné**, et c'est voulu : il dépend de l'amorce
 (`spark-amorce.sh`) et de `creer-pool.sh`, qui évoluent. Une copie versionnée serait en

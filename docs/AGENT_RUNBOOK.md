@@ -16,7 +16,7 @@ porte `sparkd` ; un **Spark** est une cellule d'exécution de cette Forge.
 **Entrée** : un accès SSH root sans mot de passe — `ssh root@<hôte>` — ou un
 compte à `sudo` sans mot de passe.
 
-**Sortie** : `sparkd` actif, estampillé, et les 17 contrôles du préflight verts.
+**Sortie** : `sparkd` actif, estampillé, et les 19 contrôles du préflight verts.
 
 ### A.1 Ce que la machine doit avoir AVANT
 
@@ -89,6 +89,36 @@ La seconde délègue à `~/.ssh/config` — rebond, clé dédiée, algorithmes i
 (§22.4 bis). Depuis la console : `POST /api/servers`, ou l'écran des serveurs.
 
 ---
+
+### A.5 Monter de version majeure d'Ubuntu (24.04 → 26.04)
+
+<!-- @spec docs/BACKLOG.md#SPK-175 · docs/DAT.md §70.4 -->
+
+Jouée sur `spark-010` le 2026-11-18 (journal du jour). La montée ne touche ni au pool
+ni aux Sparks ; deux pièges l'ont arrêtée, et ils sont tous les deux traités ici.
+
+1. **Avant** `do-release-upgrade` : sur une machine qui démarre en BIOS, sans
+   `/sys/firmware/efi`, un `core.efi` laissé par l'image de l'hébergeur fait échouer
+   `grub-efi-amd64-signed`. On le déplace, on ne l'efface pas :
+
+   ```bash
+   [ -d /sys/firmware/efi ] || { [ -e /boot/grub/x86_64-efi/core.efi ] && \
+     sudo mkdir -p /root/grub-efi-orphelin && \
+     sudo mv /boot/grub/x86_64-efi/core.efi /root/grub-efi-orphelin/; }
+   ```
+
+2. `sudo do-release-upgrade`, puis le redémarrage qu'il demande. Avant ce
+   redémarrage, vérifier que le chargeur BIOS est réinstallé sur **les deux** disques
+   (`sudo grub-install --target=i386-pc /dev/disk/by-id/<disque>` pour chacun, puis
+   `sudo update-grub`).
+3. Au retour, rejouer l'amorce **sans** `--pool-source` : `sudo /opt/spark-amorce.sh`.
+   Elle reconstruit l'environnement de sparkd s'il est lié à l'ancien Python et le dit
+   (l'ancien reste sous `/opt/sparkd/venv.avant-<version>`). Elle réécrit aussi le dépôt
+   Incus pour la nouvelle version.
+4. Relire le préflight : 19 contrôles verts.
+5. **Ne pas lancer `zpool upgrade`.** Il est irréversible : après lui, le pool ne
+   s'importe plus avec un ZFS plus ancien. Il est proposé, décoché, dans l'installation
+   de la Forge (`docs/DAT.md` §70.6).
 
 ## B. Créer un Spark sur une Forge existante
 
