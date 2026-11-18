@@ -124,9 +124,11 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ```
 État          : EN ATTENTE sur la Forge de test (51.158.54.202) — à jouer sur
-                instruction du responsable. `spark-010` porte déjà la part sparkd
-                de SPK-169 (build 7c5b1b176, posée par le rejeu de l'amorce le
-                2026-11-18) ; la suite s'y pose par la mise à jour de la console.
+                instruction du responsable. `spark-010` porte toute la part sparkd
+                (build c58ec92c2, posée le 2026-11-18 par le runbook A.2). La
+                console d'exploitation du poste a été redémarrée sur le nouveau
+                code le 2026-11-18 à 11:37 (étape 3), et a posé sa ligne sur
+                spark-010. Reste : les étapes 1 et 2 sur la Forge de test.
 Objectif      : - préflight à 19 contrôles : STO-MIROIR (zpool status) et
                   SYS-RAID (/proc/mdstat) — DAT §70.1 ;
                 - l'amorce et forge_install n'importent plus un pool importable

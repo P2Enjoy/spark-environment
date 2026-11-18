@@ -10068,6 +10068,14 @@ avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS
     défile dans son conteneur, avec l'indication.
   - **Écart à noter** : « Relever le catalogue » n'est pas un témoin, car il entre au
     journal comme un geste automatique, non signé.
+  - **Console d'exploitation (port 5175), le 2026-11-18 à 11:37**
+    (`e2e/forge-reelle/op43-console.mjs`) :
+    - elle est redémarrée par son propre geste, après confirmation qui disait
+      qu'aucune session de terminal n'était ouverte ;
+    - elle montre « clé reconnue par la Forge » pour `spark-010`, et l'onglet
+      *Mises à jour* répond ;
+    - les captures versionnées `spk172-serveurs-signature` et `-mobile` masquent les
+      adresses : le dépôt est public.
 
 ### [x] SPK-175 · Une Forge survit à la montée de version majeure d'Ubuntu
 
