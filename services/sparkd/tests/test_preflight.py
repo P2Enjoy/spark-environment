@@ -324,6 +324,8 @@ def test_chaque_controle_porte_un_code_stable_et_unique():
         "NET-ISOLATION",
         # SPK-129 · §51.5 : ce qui fait reprendre l'ingress après un redémarrage.
         "ING-UNITE", "ING-CONCORDE",
+        # SPK-169 · §70.1 : l'état du miroir, et non plus seulement son pilote.
+        "STO-MIROIR", "SYS-RAID",
     }
 
 
@@ -953,3 +955,165 @@ def test_ING_CONCORDE_ne_conclut_rien_sans_registre_ou_sans_caddy():
     assert preflight.caddy_sert_le_registre(hote()).etat == preflight.INCONNU
     assert preflight.caddy_sert_le_registre(
         hote(attendue=lambda: CONFIG)).etat == preflight.INCONNU
+
+
+# --- l'état du miroir (SPK-169) ---------------------------------------------
+#
+# @verifies docs/BACKLOG.md#SPK-169 · docs/DAT.md §70.1 (STO-MIROIR, SYS-RAID :
+#           un miroir dégradé est signalé, un pool hors service est un échec) ·
+#           §8.5 (la promesse du miroir) · §31.2 (inconnu n'est pas fautif)
+
+#: Relevé RÉEL de `sudo zpool status spark` sur `spark-010`, le 2026-11-18, après
+#: la montée en 26.04 : sain, et ZFS signale des fonctionnalités à activer.
+ZPOOL_SAIN_REEL = """\
+  pool: spark
+ state: ONLINE
+status: Some supported and requested features are not enabled on the pool.
+\tThe pool can still be used, but some features are unavailable.
+action: Enable all features using 'zpool upgrade'. Once this is done,
+\tthe pool may no longer be accessible by software that does not support
+\tthe features. See zpool-features(7) for details.
+config:
+
+\tNAME        STATE     READ WRITE CKSUM
+\tspark       ONLINE       0     0     0
+\t  mirror-0  ONLINE       0     0     0
+\t    sda5    ONLINE       0     0     0
+\t    sdb5    ONLINE       0     0     0
+
+errors: No known data errors"""
+
+#: Relevé RÉEL de `sudo zpool status spark` sur `spark-experiment`, le 2026-11-18 :
+#: `sdb5` FAULTED, 6 erreurs de lecture et 283 d'écriture. C'est ce pool que le
+#: préflight disait vert, 17 sur 17.
+ZPOOL_DEGRADE = """\
+  pool: spark
+ state: DEGRADED
+status: One or more devices are faulted in response to persistent errors.
+\tSufficient replicas exist for the pool to continue functioning in a
+\tdegraded state.
+action: Replace the faulted device, or use 'zpool clear' to mark the device
+\trepaired.
+  scan: scrub repaired 0B in 00:01:22 with 0 errors on Sun Oct 11 00:25:24 2026
+config:
+
+\tNAME        STATE     READ WRITE CKSUM
+\tspark       DEGRADED     0     0     0
+\t  mirror-0  DEGRADED     0     0     0
+\t    sda5    ONLINE       0     0     0
+\t    sdb5    FAULTED      6   283     0  too many errors
+
+errors: No known data errors"""
+
+ZPOOL_SANS_REDONDANCE = """\
+  pool: spark
+ state: ONLINE
+config:
+
+\tNAME        STATE     READ WRITE CKSUM
+\tspark       ONLINE       0     0     0
+\t  sda5      ONLINE       0     0     0
+\tcache
+\t  sdc1      ONLINE       0     0     0
+
+errors: No known data errors"""
+
+ZPOOL_SUSPENDU = ZPOOL_DEGRADE.replace(" state: DEGRADED", " state: SUSPENDED")
+
+INCUS_SPARK = "driver: zfs\nconfig:\n  source: spark\n  zfs.pool_name: spark\n"
+
+
+def _hote_miroir(statut: str | None, incus: str | None = INCUS_SPARK) -> Hote:
+    return hote({"incus storage show spark": incus, "zpool status spark": statut})
+
+
+def test_STO_MIROIR_un_miroir_sain_est_VERT_et_nomme_ses_membres():
+    verdict = preflight.miroir_du_pool(_hote_miroir(ZPOOL_SAIN_REEL))
+    assert verdict.code == "STO-MIROIR"
+    assert verdict.etat == OK, verdict
+    assert "mirror-0" in verdict.releve
+    assert "sda5" in verdict.releve and "sdb5" in verdict.releve
+
+
+def test_STO_MIROIR_un_miroir_DEGRADE_est_SIGNALE_avec_le_membre_en_cause():
+    """Le défaut du 2026-11-18 : ce pool rendait un préflight à 17 sur 17."""
+    verdict = preflight.miroir_du_pool(_hote_miroir(ZPOOL_DEGRADE))
+    assert verdict.etat == AVERTISSEMENT, verdict
+    assert not verdict.bloquant, "la Forge dégradée sert : sa reprise reste possible"
+    assert "DEGRADED" in verdict.releve
+    assert "sdb5 FAULTED" in verdict.releve
+    assert "6" in verdict.releve and "283" in verdict.releve
+    # Le remède nomme le geste ET le risque.
+    assert "zpool replace" in verdict.remede
+    assert "prochaine panne" in verdict.remede
+
+
+def test_STO_MIROIR_un_pool_sans_redondance_est_SIGNALE():
+    verdict = preflight.miroir_du_pool(_hote_miroir(ZPOOL_SANS_REDONDANCE))
+    assert verdict.etat == AVERTISSEMENT
+    assert "aucune redondance" in verdict.releve and "sda5" in verdict.releve
+    # Le cache n'est pas un vdev de données : il ne doit pas être nommé comme tel.
+    assert "sdc1" not in verdict.releve
+
+
+def test_STO_MIROIR_un_pool_HORS_SERVICE_est_un_echec():
+    verdict = preflight.miroir_du_pool(_hote_miroir(ZPOOL_SUSPENDU))
+    assert verdict.etat == ECHEC and "SUSPENDED" in verdict.releve
+
+
+def test_STO_MIROIR_illisible_est_INCONNU_pas_fautif():
+    assert preflight.miroir_du_pool(_hote_miroir(None)).etat == INCONNU
+
+
+def test_STO_MIROIR_lit_le_zpool_que_le_pool_Incus_designe():
+    """Le pool Incus et le zpool sont deux objets (§50.3) : un pool « spark »
+    adopté depuis un zpool « tank » se lit dans « tank »."""
+    incus = "driver: zfs\nconfig:\n  source: tank\n  zfs.pool_name: tank\n"
+    vu = hote({"incus storage show spark": incus, "zpool status tank": ZPOOL_SAIN_REEL})
+    assert preflight.miroir_du_pool(vu).etat == OK
+
+
+MDSTAT_SAIN_REEL = """\
+Personalities : [raid0] [raid1] [raid4] [raid5] [raid6] [raid10] [linear] 
+md1 : active raid1 sdb4[1] sda4[0]
+      209583104 blocks super 1.2 [2/2] [UU]
+      bitmap: 1/2 pages [4KB], 65536KB chunk
+
+md0 : active raid1 sdb3[1] sda3[0]
+      523264 blocks super 1.2 [2/2] [UU]
+      
+unused devices: <none>"""
+
+#: Relevé RÉEL de `/proc/mdstat` sur `spark-experiment`, le 2026-11-18 : `sdb3` et
+#: `sdb4` sortis de `md0` et `md1`.
+MDSTAT_DEGRADE = """\
+Personalities : [raid0] [raid1] [raid4] [raid5] [raid6] [raid10] [linear] 
+md0 : active raid1 sdb3[1](F) sda3[0]
+      523264 blocks super 1.2 [2/1] [U_]
+      
+md1 : active raid1 sdb4[1](F) sda4[0]
+      209583104 blocks super 1.2 [2/1] [U_]
+      bitmap: 2/2 pages [8KB], 65536KB chunk
+
+unused devices: <none>"""
+
+
+def test_SYS_RAID_deux_md_sains_sont_VERTS():
+    verdict = preflight.raid_logiciel(hote(fichiers={"/proc/mdstat": MDSTAT_SAIN_REEL}))
+    assert verdict.code == "SYS-RAID" and verdict.etat == OK
+    assert "md0" in verdict.releve and "md1" in verdict.releve
+
+
+def test_SYS_RAID_un_md_degrade_est_SIGNALE_avec_ses_membres_sortis():
+    verdict = preflight.raid_logiciel(hote(fichiers={"/proc/mdstat": MDSTAT_DEGRADE}))
+    assert verdict.etat == AVERTISSEMENT, verdict
+    assert "md1 [2/1]" in verdict.releve and "sdb4 sorti" in verdict.releve
+    assert "md0 [2/1]" in verdict.releve and "sdb3 sorti" in verdict.releve
+    assert "mdadm" in verdict.remede
+
+
+def test_SYS_RAID_sans_RAID_logiciel_n_est_pas_une_faute():
+    """Un VPS n'a pas de RAID logiciel : ce n'est pas une Forge en panne."""
+    for fichiers in ({}, {"/proc/mdstat": "Personalities : \nunused devices: <none>"}):
+        verdict = preflight.raid_logiciel(hote(fichiers=fichiers))
+        assert verdict.etat == OK and "aucun RAID logiciel" in verdict.releve

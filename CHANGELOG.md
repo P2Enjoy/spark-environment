@@ -199,6 +199,16 @@
   aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
 
 ### Corrigé
+- **SPK-169 — le préflight lit l'état du miroir, et plus seulement son pilote.** Deux
+  contrôles de plus, et la série passe de 17 à 19.
+  - `STO-MIROIR` lit `zpool status` : un miroir dégradé est **signalé**, avec le support
+    en cause et ses compteurs d'erreurs ; un pool hors service est **bloquant**.
+  - `SYS-RAID` lit `/proc/mdstat` : un RAID du système qui a perdu un membre est signalé.
+
+  Le 2026-11-18, `spark-experiment` tournait sur un seul disque et le préflight rendait
+  pourtant 17 sur 17. Ses relevés réels deviennent les jeux d'essai, et la nouvelle série
+  rend 19 sur 19 sur `spark-010`. DAT §70.1, manuel M2, `docs/PROD_MIGRATIONS.md`.
+  Aucune migration, aucune variable d'environnement.
 - **SPK-158 — le schéma pour la Forge s'écartait du schéma éprouvé de
   `spark-experiment`.** Il écrivait le libellé `zfs` au lieu de `data` sur la
   partition du pool, et un pool sans `options: ["ashift=12"]` ni

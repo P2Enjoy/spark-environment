@@ -9910,7 +9910,7 @@ en éditant le fichier, serveur par serveur.
   - **Close le 2026-11-18.** Reste ouvert, hors de cette unité : l'adoption silencieuse
     d'un pool étranger (SPK-170).
 
-### [ ] SPK-169 · Le préflight dit l'état du miroir, pas seulement son pilote
+### [x] SPK-169 · Le préflight dit l'état du miroir, pas seulement son pilote
 
 **Constaté le 2026-11-18, sur deux Forges réelles.** `STO-POOL` rend « zfs … — miroir ZFS
 natif », OK, sans lire l'état du pool. Or `spark-experiment` tourne **dégradée** (`sdb5`
@@ -9926,6 +9926,19 @@ qui n'en a plus qu'une moitié ne tient pas cette promesse, et l'écran le dit v
 - Dépend de : SPK-28.
 - DoD : test unitaire rouge avant correction sur les sorties `zpool status` relevées le
   2026-11-18 ; verdict observé sur une Forge réelle ; manuel et DAT à jour.
+- **Fait le 2026-11-18.**
+  - **Tests** : dix tests, rouges avant le code, sur les sorties réelles `zpool status` et
+    `/proc/mdstat` : `spark-010` sain, `spark-experiment` dégradé, plus un pool sans
+    redondance et un pool suspendu. La série complète est gardée à 19 codes, et la suite
+    sparkd passe en entier.
+  - **Machine réelle** : la nouvelle série, jouée sur `spark-010` depuis une copie du
+    paquet, rend 19 sur 19, avec `STO-MIROIR` « spark ONLINE — mirror-0 : sda5, sdb5 ».
+  - **Cas dégradé** : les relevés réels de `spark-experiment`, lus en lecture seule et
+    passés au code en local, rendent deux avertissements, `sdb5 FAULTED (lecture 6,
+    écriture 283)` puis `sdb3` et `sdb4` sortis. On n'a rien écrit sur cette Forge de
+    production.
+  - **Documentation** : manuel M2, `docs/PROD_MIGRATIONS.md`, runbook (19 contrôles) et
+    la limite retirée du README.
 
 ### [ ] SPK-170 · L'amorce n'adopte pas en silence un pool qu'elle n'a pas créé
 

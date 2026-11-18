@@ -125,7 +125,7 @@ en service sans vous demander ce qu'elle va faire.
 sudo /opt/sparkd/venv/bin/python -m sparkd.preflight
 ```
 
-Elle rend dix-sept contrôles. Chacun dit son verdict, **la valeur qu'il a relevée**,
+Elle rend dix-neuf contrôles. Chacun dit son verdict, **la valeur qu'il a relevée**,
 et la commande qui corrige — pour vous éviter d'aller remesurer à la main ce que
 le programme venait de mesurer.
 
@@ -133,6 +133,8 @@ le programme venait de mesurer.
 |---|---|
 | `INC-VERSION` | Incus ≥ 6.19 |
 | `STO-POOL` | pool ZFS présent |
+| `STO-MIROIR` | le pool est un miroir **sain** : un miroir dégradé (un disque en faute) est signalé avec le support en cause, un pool hors service bloque |
+| `SYS-RAID` | les RAID logiciels qui portent `/` et `/boot` ont tous leurs membres ; aucun RAID logiciel n'est pas une faute |
 | `STO-COMPRESSION` | compression active |
 | `MEM-ARC` | plafond de l'ARC ZFS posé et raisonnable |
 | `NET-BRIDGE` | bridge privé présent |

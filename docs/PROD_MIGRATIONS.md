@@ -1937,6 +1937,8 @@ sudo /opt/sparkd/venv/bin/python -m sparkd.preflight
 |---|---|
 | `INC-VERSION` | Incus ≥ 6.19, sans quoi aucun conteneur Docker ne démarre dans un Spark |
 | `STO-POOL` | pool ZFS présent ; nomme la disposition et ce qu'elle ne couvre pas |
+| `STO-MIROIR` | `zpool status` : miroir sain ; dégradé signalé (support nommé, remède `zpool replace`), hors service bloquant (DAT §70.1) |
+| `SYS-RAID` | `/proc/mdstat` : chaque `md` a tous ses membres ; un membre sorti est signalé (DAT §70.1) |
 | `STO-COMPRESSION` | compression active |
 | `MEM-ARC` | plafond de l'ARC posé et ≤ 16 Gio |
 | `NET-BRIDGE` | bridge privé présent |

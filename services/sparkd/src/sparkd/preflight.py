@@ -8,7 +8,8 @@
       docs/DAT.md §57.4 (NET-ISOLATION lit les clés effectives des NIC) ·
       docs/BACKLOG.md#SPK-129, docs/DAT.md §51.5 (ING-UNITE, ING-CONCORDE : ce
       qui fait reprendre l'ingress après un redémarrage) ·
-      docs/PROD_MIGRATIONS.md
+      docs/BACKLOG.md#SPK-169, docs/DAT.md §70.1 (STO-MIROIR, SYS-RAID : l'état
+      du miroir, pas seulement son pilote) · docs/PROD_MIGRATIONS.md
 
 La même série sert AVANT l'installation — pour savoir ce qui manque — et APRÈS,
 pour constater que le serveur est en état. Deux listes distinctes finiraient par
@@ -279,6 +280,143 @@ def pool_de_stockage(hote: Hote, nom: str | None = None) -> Verdict:
                        "libres sur deux disques (docs/DAT.md §8.5).")
     return Verdict("STO-POOL", f"Pool de stockage « {nom} »", OK,
                    releve + " — miroir ZFS natif")
+
+
+#: SPK-169 · §70.1 : états d'un pool qui ne sert plus — l'échec. `DEGRADED` n'y
+#: est pas : un miroir qui a perdu une moitié sert encore, et sa reprise doit
+#: rester possible pendant qu'on attend le disque (§48.2, même raison).
+POOL_HORS_SERVICE = {"FAULTED", "UNAVAIL", "SUSPENDED", "OFFLINE", "REMOVED"}
+
+#: Les vdevs de premier niveau qui portent une redondance.
+_REDONDANT = re.compile(r"^(mirror|raidz\d?|draid\d?)(-|:|$)")
+
+#: Les classes qui ne sont pas des données : leurs supports ne disent rien de la
+#: redondance du pool.
+_CLASSES_HORS_DONNEES = {"logs", "cache", "spares"}
+
+REMEDE_MIROIR = (
+    "Faire remplacer le disque par l'hébergeur, puis « zpool replace <pool> "
+    "<ancien> <nouveau> » (et « mdadm --add » pour les RAID du système). La Forge "
+    "sert toujours, mais la prochaine panne de disque emporte le pool "
+    "(docs/DAT.md §70.1).")
+
+
+def _arbre_zpool(statut: str) -> tuple[str | None, list[dict]]:
+    """L'état du pool et ses vdevs de DONNÉES, lus dans `zpool status`.
+
+    @spec docs/BACKLOG.md#SPK-169 · docs/DAT.md §70.1
+
+    La profondeur se lit à l'indentation : la racine porte le nom du pool, ses
+    vdevs sont deux espaces plus loin, leurs membres deux de plus. Une classe
+    `logs`, `cache` ou `spares` au niveau de la racine ouvre une section qui n'est
+    pas des données : on cesse d'y lire des vdevs.
+    """
+    etat = re.search(r"^\s*state:\s*(\S+)", statut, re.M)
+    lignes = statut.splitlines()
+    try:
+        debut = next(i for i, l in enumerate(lignes)
+                     if re.match(r"^\s*NAME\s+STATE\b", l))
+    except StopIteration:
+        return (etat.group(1) if etat else None), []
+    vdevs: list[dict] = []
+    racine = None
+    hors_donnees = False
+    for ligne in lignes[debut + 1:]:
+        if not ligne.strip():
+            if racine is not None:
+                break
+            continue
+        retrait = len(ligne.expandtabs(8)) - len(ligne.expandtabs(8).lstrip())
+        champs = ligne.split()
+        if racine is None:
+            racine = retrait
+            continue
+        if retrait == racine:
+            hors_donnees = champs[0] in _CLASSES_HORS_DONNEES or hors_donnees
+            continue
+        if hors_donnees:
+            continue
+        membre = {"nom": champs[0], "etat": champs[1] if len(champs) > 1 else "?",
+                  "erreurs": champs[2:5]}
+        if retrait == racine + 2:
+            vdevs.append({**membre, "membres": []})
+        elif vdevs:
+            vdevs[-1]["membres"].append(membre)
+    return (etat.group(1) if etat else None), vdevs
+
+
+def miroir_du_pool(hote: Hote, nom: str | None = None) -> Verdict:
+    """Le pool tient-il la promesse du miroir (docs/DAT.md §8.5, §70.1) ?
+
+    @spec docs/BACKLOG.md#SPK-169 · docs/DAT.md §70.1 · §31.2
+
+    `STO-POOL` dit le PILOTE ; ce contrôle lit le POOL. Le 2026-11-18, deux
+    Forges réelles tournaient sur un seul disque, `sdb5` FAULTED, avec un
+    préflight à 17 sur 17.
+    """
+    nom = nom or reglages().storage_pool
+    titre = f"Miroir du pool « {nom} »"
+    montre = hote.executer(["incus", "storage", "show", nom]) or ""
+    designe = re.search(r"^\s*zfs\.pool_name:\s*(\S+)", montre, re.M)
+    zpool = designe.group(1) if designe else nom
+    statut = hote.executer(["zpool", "status", zpool])
+    if statut is None:
+        return Verdict("STO-MIROIR", titre, INCONNU,
+                       f"« zpool status {zpool} » illisible", "")
+    etat, vdevs = _arbre_zpool(statut)
+    if etat is None:
+        return Verdict("STO-MIROIR", titre, INCONNU, "état du pool illisible", "")
+    if etat in POOL_HORS_SERVICE:
+        return Verdict("STO-MIROIR", titre, ECHEC,
+                       f"{zpool} {etat} : le pool ne sert plus", REMEDE_MIROIR)
+
+    def membres(vdev: dict) -> str:
+        return ", ".join(m["nom"] for m in vdev["membres"])
+
+    sans_redondance = [v["nom"] for v in vdevs if not _REDONDANT.match(v["nom"])]
+    abimes = [
+        f"{m['nom']} {m['etat']} (lecture {m['erreurs'][0]}, écriture "
+        f"{m['erreurs'][1]}, somme {m['erreurs'][2]})"
+        if len(m["erreurs"]) == 3 else f"{m['nom']} {m['etat']}"
+        for v in vdevs for m in v["membres"] if m["etat"] != "ONLINE"]
+    if etat != "ONLINE" or abimes:
+        return Verdict("STO-MIROIR", titre, AVERTISSEMENT,
+                       f"{zpool} {etat} — " + ("; ".join(abimes) or "membre en cause non lu"),
+                       REMEDE_MIROIR)
+    if sans_redondance or not vdevs:
+        return Verdict("STO-MIROIR", titre, AVERTISSEMENT,
+                       f"{zpool} ONLINE, aucune redondance : "
+                       + (", ".join(sans_redondance) or "aucun vdev lu"),
+                       "Une Forge exige un miroir sur deux disques (docs/DAT.md §8.5).")
+    return Verdict("STO-MIROIR", titre, OK, f"{zpool} ONLINE — " + " ; ".join(
+        f"{v['nom']} : {membres(v)}" for v in vdevs))
+
+
+def raid_logiciel(hote: Hote) -> Verdict:
+    """Les RAID logiciels du système (`/` et `/boot`, §8.6) ont-ils leurs membres ?
+
+    @spec docs/BACKLOG.md#SPK-169 · docs/DAT.md §70.1 · §8.6
+
+    `[2/1] [U_]` : deux membres attendus, un seul actif. Un membre marqué `(F)`
+    est sorti. Pas de `md` du tout est l'état d'un VPS, pas une panne.
+    """
+    titre = "RAID logiciel du système"
+    texte = hote.lire("/proc/mdstat") or ""
+    tableaux = re.findall(
+        r"^(md\d+)\s*:\s*\S+\s+\S+\s+([^\n]*)\n\s*[^\n]*\[(\d+)/(\d+)\]\s*\[([U_]+)\]",
+        texte, re.M)
+    if not tableaux:
+        return Verdict("SYS-RAID", titre, OK, "aucun RAID logiciel")
+    abimes = []
+    for md, membres, attendus, actifs, carte in tableaux:
+        if int(actifs) < int(attendus) or "_" in carte:
+            sortis = [m.split("[")[0] + " sorti" for m in membres.split() if "(F)" in m]
+            abimes.append(f"{md} [{attendus}/{actifs}] [{carte}]"
+                          + (f" : {', '.join(sortis)}" if sortis else ""))
+    releve = ", ".join(f"{md} [{a}/{b}]" for md, _, a, b, _ in tableaux)
+    if abimes:
+        return Verdict("SYS-RAID", titre, AVERTISSEMENT, "; ".join(abimes), REMEDE_MIROIR)
+    return Verdict("SYS-RAID", titre, OK, releve)
 
 
 def compression_active(hote: Hote, dataset: str | None = None) -> Verdict:
@@ -974,6 +1112,9 @@ CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     incus_assez_recent,
     paquets_coherents,
     pool_de_stockage,
+    # SPK-169 · §70.1 : le pool tient-il le miroir qu'il promet ?
+    miroir_du_pool,
+    raid_logiciel,
     compression_active,
     arc_plafonne,
     bridge_prive,

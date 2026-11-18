@@ -316,8 +316,9 @@ télécharge les scripts. Pour une offre nouvelle dont l'installation bloque,
 **Une machine réinstallée garde ses partitions.** L'installateur de l'hébergeur ne les
 efface pas, et l'amorce importe un pool `spark` laissé par une installation précédente
 (journal du 2026-11-18, SPK-170). Après l'installation, `sudo zpool status spark` doit
-montrer les deux moitiés `ONLINE`. Le préflight ne vérifie pas encore cet état
-(SPK-169).
+montrer les deux moitiés `ONLINE`. Le préflight le vérifie : `STO-MIROIR` signale un
+miroir dégradé avec le support en cause, et `SYS-RAID` un RAID du système qui a perdu
+un membre (SPK-169, `docs/DAT.md` §70.1).
 
 **Ce que la commande ne sait pas :** la capacité des disques. La console de l'hébergeur la
 contrôle, et l'hébergeur sait aussi vérifier un schéma avant toute installation par
@@ -655,9 +656,6 @@ Une intégration continue serait plus forte ; elle n'a jamais tourné sur ce dé
 et le responsable a tranché le 2026-09-14 de s'en passer plutôt que de laisser
 une garde qui n'existe que dans un fichier de workflow.
 
-- **Le préflight ne lit pas l'état du miroir** (SPK-169). Il dit « miroir ZFS natif »
-  sur un pool dont une moitié est en faute. Deux Forges réelles étaient dans ce cas le
-  2026-11-18, et rendaient pourtant 17 sur 17. À vérifier à la main : `sudo zpool status spark`.
 - Un seul serveur. Aucun ordonnancement inter-machines. Le transfert d'un Spark d'une
   Forge à une autre est exploré, non planifié : [docs/EXPLORATION_TRANSFERT.md](docs/EXPLORATION_TRANSFERT.md).
 - **La console n'obéit qu'à sa propre page, pas au poste entier** (`docs/DAT.md`
