@@ -16101,3 +16101,18 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **État du dépôt à l'écriture** : le projet porte deux chantiers d'une autre session non commités (SPK-187 dans `app.py` et
   `briefing.py` ; SPK-68 dans l'installateur de la console). Ils ne sont pas les miens : chaque commit de cette unité ne porte que
   ses propres fichiers et hunks.
+
+**Le journal d'une installation échouée dépassé par un relevé (SPK-68), le 2026-11-19.**
+
+- **Signalé par le responsable** (capture à l'appui) : sur spark-experiment, « Installation arrêtée sur un échec » restait en
+  rouge — phase 4, « le zpool « spark » a encore des fonctionnalités à activer après zpool upgrade », puis « code 2 » — alors que
+  le relevé du même écran disait la Forge installée et prête (dix contrôles verts). Rien n'effaçait le journal : l'hôte le persiste
+  (§50.4 : une vue rouverte le retrouve) et l'écran le rendait sans le confronter au relevé.
+- **Décision** : un journal est une **trace**, on ne l'efface pas ; mais un échec que le relevé suivant dépasse n'est plus une
+  erreur courante. Les quatre conditions (arrêté, relevé prêt, relevé postérieur, date connue) sont toutes nécessaires — dans le
+  doute, le rouge reste : cacher un vrai échec serait pire que montrer un vieux.
+- **Pourquoi une date côté console** : le relevé n'en portait pas. `releveA` est posée quand le diagnostic aboutit ; à la
+  réouverture de l'écran le relevé suit toujours la restauration du journal, donc il est postérieur.
+- **Vu à l'écran sur la Forge réelle** (lecture seule, depuis la console) : encadré neutre « Dernière tentative d'installation »,
+  journal replié, aucun rouge.
+

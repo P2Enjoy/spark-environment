@@ -4820,6 +4820,8 @@ async function diagnostiquerForge() {
     if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
     installer.status = 'ready';
     installer.result = corps;
+    // L'instant de CE relevé : il dit si le journal d'une installation arrêtée lui est antérieur (§50.4).
+    installer.releveA = new Date().toISOString();
     // §50.4 : le formulaire repart de ce que la Forge DÉCLARE, pas des défauts
     // du contrat de déploiement. Sans cela, une Forge installée sur un pool
     // « tank » se voyait reproposer « spark » à chaque relevé, et le plan

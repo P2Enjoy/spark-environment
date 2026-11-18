@@ -13551,6 +13551,15 @@ et relance d'abord le diagnostic ; deux écritures simultanées pour une même F
 sont refusées. La reprise saute uniquement les invariants de nouveau constatés
 conformes : elle ne recrée jamais un pool, un registre ou une instance existante.
 
+**Le journal d'une tentative arrêtée, face à un relevé qui la dépasse (2026-11-19).** Le journal persiste ; l'écran le
+rend. Un échec ou une interruption n'y est plus un encadré d'erreur dès que **quatre** conditions tiennent ensemble : l'exécution
+est arrêtée (jamais en cours, jamais réussie) ; le relevé affiché constate la Forge **prête** (`conformity.ready` : les dix
+contrôles, `/healthz` et `/readyz` mesurés) ; ce relevé est **postérieur** à la dernière écriture du journal (`releveA` > `updatedAt`) ;
+et ces deux dates sont connues. Alors : « Dernière tentative d'installation » en neutre, une phrase qui dit que le journal est
+antérieur, et le journal **replié mais consultable** — une trace ne s'efface pas. Dans le doute, le rouge reste : cacher un vrai
+échec serait pire que montrer un vieux. Vu sur spark-experiment (phase « Conserver le pool, puis activer ses fonctionnalités ZFS »,
+code 2), signalé par le responsable.
+
 ### 50.5 Exécuteur d'installation et recette
 
 Après une confirmation valide, l'hôte lance uniquement l'installateur versionné

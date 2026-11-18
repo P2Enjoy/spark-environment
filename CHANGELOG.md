@@ -35,6 +35,14 @@
   formulaires d'Alertes **retiennent leur saisie** à chaque frappe (jamais les mots de passe). Preuve : un parcours
   qui retarde la lecture de la Forge de 2,5 s, passe à l'onglet Alertes, tape, et constate que la saisie survit —
   rouge sans les deux remèdes, vert avec.
+- **Corrigé, signalé par le responsable sur spark-experiment — le journal d'une installation échouée restait un encadré
+  d'erreur sous un relevé qui ne voyait plus d'écart.** « Installation arrêtée sur un échec », en rouge, avec « Reprendre le
+  diagnostic », restait affiché indéfiniment : le journal persiste, et l'écran le montrait comme un fait courant. Désormais, si
+  l'exécution s'est arrêtée (échec ou interruption), que le relevé affiché constate la Forge **prête** (dix contrôles verts,
+  `/healthz` et `/readyz` mesurés) et qu'il est **postérieur** à la dernière écriture du journal, l'écran dit « Dernière tentative
+  d'installation » en neutre, explique que le journal est antérieur, et le garde **consultable, replié**. Sans date de relevé, ou si
+  le relevé n'est pas prêt, ou s'il est plus ancien que l'échec : le rouge reste. Sept tests de composant (trois rouges avant) ;
+  vu sur la vraie spark-experiment, depuis la console. DAT §50.4.
 - **Corrigé, vu sur la Forge réelle spark-010 — un Spark rootless jouait ses sondes script sous `root`.** `docker_mode` vit
   dans l'observation d'amorçage, pas sur la ligne du Spark que lisait le runner : il valait toujours « absent », donc un Spark
   rootless était traité comme enraciné, sans accès à son socket Docker — `docker ps` y sortait en code 1. Les doublons passaient

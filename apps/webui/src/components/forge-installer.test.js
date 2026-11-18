@@ -277,3 +277,79 @@ test('le plan relu redit la mise à niveau et son irréversibilité', () => {
   const html = renderForgeInstaller({ status: 'planned', result: A_NIVEAU, plan });
   assert.match(html, /activer les fonctionnalités ZFS disponibles — irréversible/);
 });
+
+
+// --- un échec ANTÉRIEUR à un relevé qui ne voit plus d'écart n'est pas une erreur courante -------------------
+//
+// @verifies docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.4 (une vue rouverte retrouve le journal, puis relit la
+//           machine — et le journal d'un échec que ce relevé dépasse ne reste pas un encadré d'erreur)
+//
+// Vu le 2026-11-19 sur spark-experiment : « Installation arrêtée sur un échec » restait en rouge, avec « Reprendre
+// le diagnostic », alors que le relevé du même écran disait la Forge installée et prête.
+
+const ECHEC = {
+  status: 'failed', plan: PLAN, startedAt: '2026-11-18T12:00:00.000Z', updatedAt: '2026-11-18T12:05:00.000Z',
+  error: 'L’installateur distant s’est arrêté avec le code 2.',
+  events: [
+    { phase: 'access', status: 'done', message: 'Plan version 1 et Forge concordants' },
+    { phase: 'storage', status: 'failed',
+      message: 'le zpool « spark » a encore des fonctionnalités à activer après zpool upgrade' },
+  ],
+};
+const PRET = { ...CONFORME, conformity: { ready: true, installed: true, missing: [], checks: [] } };
+const PAS_PRET = { ...CONFORME, conformity: { ready: false, installed: true, missing: ['readyz'], checks: [] } };
+
+test('un échec que le relevé POSTÉRIEUR dépasse n’est plus un encadré d’erreur', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: PRET, releveA: '2026-11-19T08:00:00.000Z',
+    execution: ECHEC });
+  assert.match(html, /Dernière tentative d’installation/);
+  assert.match(html, /ne trouve plus aucun écart/);
+  assert.doesNotMatch(html, /class="refus"/, 'plus de rouge : rien n’est refusé maintenant');
+  assert.doesNotMatch(html, /Installation arrêtée sur un échec/);
+  assert.doesNotMatch(html, /data-action="diagnostiquer-forge">Reprendre le diagnostic/,
+    'le relevé vient d’avoir lieu : « reprendre » n’a plus d’objet');
+});
+
+test('le journal du vieil échec RESTE consultable, replié — on ne l’efface pas', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: PRET, releveA: '2026-11-19T08:00:00.000Z',
+    execution: ECHEC });
+  assert.match(html, /<details[^>]*class="installation__journal"/);
+  assert.doesNotMatch(html, /<details[^>]* open/);
+  assert.match(html, /fonctionnalités à activer après zpool upgrade/, 'la cause reste lisible');
+  assert.match(html, /L’installateur distant s’est arrêté avec le code 2/);
+});
+
+test('un relevé qui N’est PAS prêt laisse l’échec en rouge, comme avant', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: PAS_PRET, releveA: '2026-11-19T08:00:00.000Z',
+    execution: ECHEC });
+  assert.match(html, /Installation arrêtée sur un échec/);
+  assert.match(html, /class="refus"/);
+});
+
+test('un relevé ANTÉRIEUR à l’échec ne le dépasse pas : l’échec reste le fait le plus récent', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: PRET, releveA: '2026-11-18T11:00:00.000Z',
+    execution: ECHEC });
+  assert.match(html, /Installation arrêtée sur un échec/);
+  assert.match(html, /class="refus"/);
+});
+
+test('sans date de relevé, on ne conclut RIEN : l’échec reste affiché', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: PRET, execution: ECHEC });
+  assert.match(html, /Installation arrêtée sur un échec/);
+});
+
+test('une installation INTERROMPUE dépassée par un relevé prêt est traitée de la même façon', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: PRET, releveA: '2026-11-19T08:00:00.000Z',
+    execution: { ...ECHEC, status: 'interrupted', error: 'Connexion interrompue.' } });
+  assert.match(html, /Dernière tentative d’installation/);
+  assert.doesNotMatch(html, /Installation interrompue/);
+});
+
+test('une installation RÉUSSIE ou EN COURS n’est jamais repliée par ce mécanisme', () => {
+  const fait = renderForgeInstaller({ status: 'ready', result: PRET, releveA: '2026-11-19T08:00:00.000Z',
+    execution: { ...ECHEC, status: 'done', error: null } });
+  assert.match(fait, /Forge prête — recette finale mesurée/);
+  const encours = renderForgeInstaller({ status: 'ready', result: PRET, releveA: '2026-11-19T08:00:00.000Z',
+    execution: { ...ECHEC, status: 'running', error: null } });
+  assert.match(encours, /Installation réelle en cours/);
+});

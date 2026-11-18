@@ -1020,6 +1020,10 @@ tbody tr:hover { background: var(--color-hover); }
   gap: var(--space-3); flex-wrap: wrap;
 }
 .installation__execution-entete h3 { margin: 0; }
+/* SPK-68 · §50.4 : le journal d'une tentative que le relevé DÉPASSE — une trace, pas une erreur. Neutre, replié. */
+.installation__execution--depassee h3 { margin: 0 0 var(--space-2); }
+.installation__journal { margin-top: var(--space-3); }
+.installation__journal > summary { cursor: pointer; font-weight: 600; padding: var(--space-2) 0; }
 .installation__phase > div {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--space-3); flex-wrap: wrap;

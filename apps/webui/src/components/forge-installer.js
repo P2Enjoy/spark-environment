@@ -14,6 +14,9 @@ const echapper = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
 export const INSTALLER_VIDE = {
   status: 'idle', result: null, error: null, plan: null, planError: null,
   execution: null, confirmation: '', accepted: false,
+  // SPK-68 · §50.4 : l'instant du DERNIER relevé réussi, posé par la console. Il sert à savoir si le journal d'une
+  // installation échouée est plus ancien que ce que le relevé constate (voir `executionDepassee`).
+  releveA: null,
   values: { poolName: 'spark', bridgeName: 'sparkbr0', cpuReserve: '0.5',
     memoryReserveGib: '2', arcMaxGib: '16' },
 };
@@ -371,7 +374,32 @@ function measured(event) {
   return parts.length ? `<p class="installation__mesure">${echapper(parts.join(' · '))}</p>` : '';
 }
 
-function executionView(execution) {
+/** `2026-11-18T12:05:00.000Z` → `2026-11-18 12:05 UTC` : la même écriture qu'ailleurs dans la console. */
+function horodatage(iso) {
+  const instant = Date.parse(iso);
+  return Number.isFinite(instant) ? `${new Date(instant).toISOString().slice(0, 16).replace('T', ' ')} UTC` : null;
+}
+
+/**
+ * Le journal d'une installation arrêtée est-il DÉPASSÉ par le relevé affiché ? (SPK-68 · §50.4)
+ *
+ * @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.4 · docs/DESIGN_SYSTEM.md §1.5, §14.6
+ *
+ * Oui seulement si TOUT tient : l'exécution s'est arrêtée (échec ou interruption — jamais en cours, jamais
+ * réussie), le relevé constate la Forge **prête** (les contrôles, `/healthz` et `/readyz` mesurés compris), et ce relevé
+ * est **postérieur** à la dernière écriture du journal. Sans date de relevé on ne conclut rien : le rouge reste.
+ * Vu le 2026-11-19 sur spark-experiment : « Installation arrêtée sur un échec » restait en rouge, avec « Reprendre le
+ * diagnostic », sous un relevé qui disait la Forge installée et prête.
+ */
+export function executionDepassee(execution, result, releveA) {
+  if (!['failed', 'interrupted'].includes(execution?.status)) return false;
+  if (result?.conformity?.ready !== true) return false;
+  const releve = Date.parse(releveA);
+  const ecrit = Date.parse(execution.updatedAt ?? execution.startedAt);
+  return Number.isFinite(releve) && Number.isFinite(ecrit) && releve > ecrit;
+}
+
+function executionView(execution, { depassee = false, releveA = null } = {}) {
   if (!execution) return '';
   const byPhase = new Map();
   for (const event of execution.events ?? []) byPhase.set(event.phase, event);
@@ -401,6 +429,23 @@ function executionView(execution) {
         : '<p class="note">Cette phase n’a pas encore produit de mesure.</p>'}
     </li>`;
   }).join('');
+  if (depassee) {
+    // Un échec ANTÉRIEUR n'est pas une erreur courante : ni rouge, ni « Reprendre ». Il reste consultable, replié —
+    // un journal est une trace, on ne l'efface pas (§50.4).
+    const quand = horodatage(execution.updatedAt ?? execution.startedAt);
+    const relevé = horodatage(releveA);
+    return `<section class="installation__execution installation__execution--depassee"
+        aria-labelledby="titre-execution-forge">
+      <h3 id="titre-execution-forge">Dernière tentative d’installation</h3>
+      <p class="note">Elle s’est arrêtée sur ${execution.status === 'interrupted' ? 'une interruption' : 'un échec'}${
+        quand ? ` le ${echapper(quand)}` : ''}. Le relevé${relevé ? ` du ${echapper(relevé)}` : ''} ne trouve plus aucun écart : ce journal est <strong>antérieur</strong>, il n’est plus une erreur courante.</p>
+      <details class="installation__journal">
+        <summary>Voir le journal de cette tentative</summary>
+        <ol>${rows}</ol>
+        ${execution.error ? `<p class="note">${echapper(execution.error)}</p>` : ''}
+      </details>
+    </section>`;
+  }
   const error = execution.error
     ? `<div class="${execution.status === 'failed' ? 'refus' : 'avertissement'}" role="status">${
       echapper(execution.error)}</div>` : '';
@@ -472,6 +517,8 @@ export function renderForgeInstaller(installer = INSTALLER_VIDE, { sparkd = null
       ${running ? 'disabled' : ''}>${running ? 'Diagnostic…' : 'Diagnostiquer la Forge'}</button>
   </div>
   ${diagnostic}
-  ${executionView(installer.execution)}
+  ${executionView(installer.execution, {
+    depassee: executionDepassee(installer.execution, installer.result, installer.releveA),
+    releveA: installer.releveA })}
 </section>`;
 }
