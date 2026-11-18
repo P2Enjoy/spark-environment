@@ -1690,6 +1690,51 @@ Preuves observées le 2026-10-06 (pile jetable, diagnostic au sens du `DAT.md`
 `-compte-rendu`, `-niveau-vide`, `-deux-niveaux-apercu`,
 `-deux-niveaux-compte-rendu`.
 
+### SPK-DS-48 · Le dépôt GitHub d'un Spark : un état relevé, une pastille qui porte sa sortie
+
+**Date** : 2026-11-18 · SPK-178 · `DAT.md` §71.3, §71.4 · `DESIGN_SYSTEM.md` §1.3, §1.4,
+§1.5, §6.8, §6.9, §6.10, §6.13, §6.22, §6.23, §9.7, §9.9, §14.3 · SPK-DS-09, SPK-DS-39
+
+Sous « Identité du Spark », sur la facette *Clés*, une carte **Dépôt GitHub**.
+
+- **Elle n'existe que si l'identité est présente.** Sans clé il n'y a rien à poser, et la
+  carte d'identité guide déjà vers sa création ou vers le démarrage du Spark.
+- **Sans jeton**, elle dit pourquoi, nomme `SPARK_GITHUB_DEPLOY_TOKEN` en monospace
+  droit (l'italique de `.absence` déformait le nom), et ne rend **aucun formulaire** :
+  une commande qui échouerait à coup sûr serait une commande morte (§1.4).
+- **Le formulaire** : un champ « Dépôt (propriétaire/dépôt) » (aide : « Un Spark sert un
+  seul dépôt. »), puis une case **« Autoriser l'écriture » décochée** (SPK-DS-39), son
+  aide liée par `aria-describedby`. Le champ est un `<form>` : *Entrée* vérifie. La
+  frappe ne repeint pas (§14.3).
+- **L'état relevé se date** : « Relevé à HH:MM:SS » à côté du dépôt. Pendant une relecture
+  l'ancien état disparaît au profit de « Lecture chez GitHub… » (§6.13) ; après un geste,
+  l'écran montre l'état **relu**, jamais celui que la réponse annonçait (§1.3).
+- **Quatre états, chacun avec son mot** (§1.5) : *non posée* (`neutral`), *posée · lecture
+  seule* (`success`), *posée · écriture* (`accent`, l'écriture mérite l'attention sans être
+  une panne), *périmée* (`danger`). La pastille *périmée* porte sa sortie sur la même
+  ligne : le bouton primaire devient « Remplacer la clé périmée » (§6.8).
+- **Les commandes suivent l'état** : « Poser la clé en lecture seule » (primaire) tant que
+  la clé n'est pas posée, « Retirer la clé… » (secondaire) quand elle l'est. Pendant un
+  geste elles restent présentes et **désactivées**, avec leur libellé en cours (§9.9).
+- **Retirer se confirme, sans frappe du nom** (§6.23 : réversible). Bloc `.confirmation`
+  **accent** (`confirmation--sensible`) et bouton ordinaire (SPK-DS-09), qui nomme le Spark
+  et le dépôt et dit « Ce Spark ne pourra plus cloner ce dépôt. La clé peut être reposée à
+  tout moment. » Le focus **entre** dans le bloc, *Annuler* le rend au déclencheur
+  (§6.22). **Poser en écriture** suit la même forme, et dit « Le Spark pourra pousser sur
+  ce dépôt ».
+- **Le succès du geste précédent ne se lit pas sous la question suivante** : ouvrir une
+  confirmation efface le message (défaut observé en capture le 2026-11-18).
+- **Un geste refusé** se lit en alerte rouge, avec ce qu'il faut réparer : jeton refusé,
+  permission « Administration » manquante, dépôt introuvable *ou* sans accès (GitHub ne
+  distingue pas), clé déjà posée ailleurs. Un journal que la Forge n'a pas pu tenir est
+  dit en avertissement : le geste, lui, est fait.
+- **Responsive** : la ligne d'état passe à la suivante plutôt que de déborder ; le nom du
+  dépôt se replie (SPK-DS-15). Aucun défilement horizontal à 390 px.
+
+Preuves observées le 2026-11-18 : `e2e/captures/spk178-non-posee`, `-posee`,
+`-posee-mobile`, `-retirer-confirmation`, `-ecriture-confirmation`, `-perimee`,
+`-refus-un-seul-depot`, `-sans-jeton`.
+
 ### SPK-DS-39 · Une option de recette est une case, décochée tant qu'on ne la demande pas
 
 **Date** : 2026-10-06 · SPK-153 · `DAT.md` §38.6.4 · `DESIGN_SYSTEM.md` §1.2,

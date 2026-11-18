@@ -50,6 +50,52 @@ Ensuite :
 Le commentaire de la clé porte le nom du Spark (`spark:mon-spark`) : dans une
 liste de clés de déploiement, vous saurez laquelle retirer le jour venu.
 
+### Poser la clé depuis la console : le dépôt GitHub du Spark
+
+Sous l'identité, la carte **Dépôt GitHub** évite la copie à la main. Elle n'apparaît
+que si l'identité existe, et il faut qu'un jeton GitHub soit posé sur **votre poste**
+(voir plus bas). Sans jeton, la carte le dit et la copie manuelle ci-dessus reste le
+chemin.
+
+**Un Spark sert un seul dépôt.** C'est un choix de ce produit : l'identité d'un Spark est
+une clé unique, et la clé de déploiement d'un dépôt est faite pour ce dépôt seul.
+
+1. Saisissez le dépôt sous la forme `propriétaire/dépôt`, par exemple `p2enjoy/crm`.
+2. **Vérifier** (ou *Entrée* dans le champ) relit ce que GitHub porte, avec l'heure du
+   relevé. La clé est :
+   - *non posée* ;
+   - *posée · lecture seule* ;
+   - *posée · écriture* ;
+   - *périmée* : une clé porte le nom de ce Spark, mais ce n'est plus sa clé — vous
+     avez remplacé l'identité depuis. Le bouton devient **Remplacer la clé périmée**.
+3. **Poser la clé en lecture seule** la met chez GitHub : le Spark peut cloner. Pour
+   qu'il puisse aussi pousser, cochez **Autoriser l'écriture** ; la console vous demande
+   alors de confirmer.
+4. **Retirer la clé…** la supprime du dépôt, après confirmation. Le Spark ne pourra plus
+   cloner ce dépôt ; vous pouvez la reposer à tout moment.
+
+Ce que la console fait, et ne fait pas :
+
+- elle pose **la clé que le Spark présente**, lue dans la cellule — jamais un texte que vous
+  fourniriez ;
+- elle ne touche **que** la clé de ce Spark. Les autres clés du dépôt ne sont ni affichées
+  ni modifiées ;
+- elle ne change pas l'accès d'une clé déjà posée : pour passer de la lecture à l'écriture,
+  retirez-la puis posez-la de nouveau ;
+- chaque pose, remplacement ou retrait entre au **journal** du Spark (dépôt, empreinte,
+  accès), jamais le jeton ni la clé.
+
+Quand GitHub refuse, l'écran dit pourquoi : jeton refusé ou expiré, permission
+« Administration » manquante, dépôt introuvable **ou** jeton sans accès à ce dépôt
+(GitHub ne distingue pas les deux), clé déjà posée ailleurs.
+
+**Le jeton.** Sur GitHub, créez un jeton d'accès personnel *fine-grained*, limité aux
+dépôts de vos Sparks, avec la permission de dépôt **Administration** en lecture et
+écriture — la seule qui ouvre la gestion des clés de déploiement. C'est un pouvoir large
+sur ces dépôts : ne le partagez pas, révoquez-le s'il fuit. Posez-le dans le fichier
+`.env` de la console, sur votre poste, sous le nom `SPARK_GITHUB_DEPLOY_TOKEN`. Il ne va
+jamais sur la Forge.
+
 **Pour quel compte la clé est-elle faite ?** La ligne **Dans la cellule** du panneau
 vous le dit.
 

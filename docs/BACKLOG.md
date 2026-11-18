@@ -10183,7 +10183,7 @@ est porté par `caddy-api.service` et `caddy.service` est **masqué** depuis SPK
     actif » conforme, détail `caddy-api.service : active · caddy.service : inactive`
     (`e2e/forge-reelle/spk171-176-systeme.mjs`).
 
-### [ ] SPK-178 · La console pose la clé du Spark en deploy key sur son dépôt GitHub
+### [~] SPK-178 · La console pose la clé du Spark en deploy key sur son dépôt GitHub
 
 **Demandé le 2026-11-18** par le responsable : un jeton GitHub porté par la console,
 comme le jeton DNS, pour associer l'identité d'un Spark à son dépôt sans copier la clé
@@ -10191,12 +10191,12 @@ comme le jeton DNS, pour associer l'identité d'un Spark à son dépôt sans cop
 
 - Spécification : `docs/DAT.md` §71 (écrite le 2026-11-18) — jeton `SPARK_GITHUB_DEPLOY_TOKEN`
   dans le `.env` du poste, jamais sur la Forge (§71.2) ; gestes *Vérifier*, *Poser*
-  (lecture seule par défaut), *Retirer* par frappe (§71.3) ; réponses de GitHub (§71.4) ·
+  (lecture seule par défaut), *Retirer* confirmé, sans frappe du nom (§71.3) ; réponses de GitHub (§71.4) ·
   `docs/DAT.md` §17.5 (l'identité présentée), §38.1 et §38.5 (le modèle du jeton et de la
   garde) · `docs/DESIGN_SYSTEM_APP.md` (la section, à écrire avec le code) ·
   `docs/manuel/M6-*` (l'identité).
 - Dépend de : SPK-74, SPK-167, SPK-47.
-- Aucune migration, aucun changement de `sparkd` (§71.5).
+- Aucune migration. `sparkd` : la porte d'audit admet trois actions et trois clés de charge à valeurs bornées (§71.5).
 - **Point ouvert à mesurer, pas à supposer** : GitHub refuserait la même clé en deploy key
   sur deux dépôts. Le contrat repose dessus ; la mesure sur deux dépôts jetables est une
   **action humaine** (jeton du responsable), §71.8.
@@ -10209,6 +10209,30 @@ comme le jeton DNS, pour associer l'identité d'un Spark à son dépôt sans cop
 - DoD : tests unitaire, d'API de l'hôte et E2E depuis l'accueil ; captures desktop et
   mobile observées ; README, `.env.example`, manuel M6, design system, changelog ; preuve
   réelle sur deux dépôts jetables. Sans cette dernière, l'unité reste `[~]`.
+- **Codé le 2026-11-18.**
+  - **Hôte** : `host/github.js` (client, garde, états) et quatre routes dans `main.js` ;
+    la clé posée est relue chez `sparkd`, jamais prise de la requête. 27 preuves du
+    module, 24 des routes (dont la requête directe qui contourne l'écran), 1774 tests de
+    l'hôte et des composants verts.
+  - **`sparkd`** : trois actions d'audit et trois clés de charge bornées, 4 preuves
+    (`test_audit_declare.py`) ; suite complète, 1984 verts.
+  - **Variables** : `SPARK_GITHUB_DEPLOY_TOKEN` et le sixième doublon
+    `SPARK_GITHUB_BASE_URL`, au `.env.example` et au README ; la garde des variables lit
+    désormais `env.SPARK_…`.
+  - **Écran** : `spark-depot-cle.js`, 20 preuves.
+  - **E2E** `e2e/depot-cle.test.mjs`, 8 sur 8, depuis l'accueil, contre
+    `e2e/github-doublon.mjs`. **Captures observées** : `spk178-*` ; un défaut vu à
+    l'image (le succès précédent restait sous la confirmation) est corrigé et gardé par
+    une assertion.
+  - **Documentation** : DAT §71 (révisé : retrait sans frappe, journal chez `sparkd`, pas
+    de donnée seedée), §53.3, SPK-DS-48, manuel M6, OP-44, changelog.
+  - **Reste** : la preuve réelle (action humaine, jeton du responsable, deux dépôts
+    jetables), qui mesure l'hypothèse « une clé ne sert qu'un dépôt ». `make e2e` complet
+    non rejoué : seuls les parcours d'identité et le bandeau d'épreuve de `parcours.test.mjs`
+    l'ont été.
+  - **Illustration du manuel non produite** : `e2e/manuel.mjs` efface puis refait toutes
+    les images (DAT §30.1), ce qui mêlerait cette unité à tout le reste. Le texte de M6
+    est à jour ; l'image de la carte reste à produire par ce harnais.
 
 ---
 

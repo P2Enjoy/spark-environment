@@ -340,3 +340,68 @@ def test_la_fermeture_d_un_terminal_de_conteneur_porte_sa_duree(tmp_path):
     charge = json.loads(entree["payload"])
     assert charge["duration_seconds"] == 42
     assert charge["reason"] == "sortie"
+
+
+# --- SPK-178 · les clés de déploiement GitHub --------------------------------
+
+EMPREINTE = "SHA256:abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG"
+
+
+def _cle(client, action="spark.deploykey_add", **payload):
+    charge = {"repository": "p2enjoy/crm", "fingerprint": EMPREINTE,
+              "access": "lecture", **payload}
+    return client.post("/v1/audit", json={
+        "action": action, "target_id": "crm",
+        "message": "Clé de déploiement posée sur « p2enjoy/crm ».",
+        "payload": charge}, headers={"x-spark-actor": "console/local"})
+
+
+def test_poser_remplacer_retirer_une_cle_sont_TROIS_actions_denombrables(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-178 · docs/DAT.md §71.5 (le journal), §37.4.6
+
+    « Combien de clés a-t-on posées chez un tiers ce mois-ci » se répond par un
+    filtre sur l'action, pas en lisant des messages.
+    """
+    client = _client(tmp_path)
+    for action in ("spark.deploykey_add", "spark.deploykey_replace",
+                   "spark.deploykey_remove"):
+        assert _cle(client, action).status_code == 201, action
+    ajouts = client.get("/v1/audit?action=spark.deploykey_add").json()["entries"]
+    assert len(ajouts) == 1
+    charge = json.loads(ajouts[0]["payload"])
+    assert charge == {"repository": "p2enjoy/crm", "fingerprint": EMPREINTE,
+                      "access": "lecture"}
+    assert ajouts[0]["actor"] == "console/local"
+
+
+def test_un_geste_de_cle_REFUSE_se_declare_comme_refuse(tmp_path):
+    client = _client(tmp_path)
+    r = client.post("/v1/audit", json={
+        "action": "spark.deploykey_add", "result": "denied", "target_id": "crm",
+        "message": "Refusé par GitHub.",
+        "payload": {"repository": "p2enjoy/crm", "fingerprint": EMPREINTE,
+                    "reason": "permission"}})
+    assert r.status_code == 201, r.text
+
+
+def test_les_valeurs_d_une_cle_sont_BORNEES_pas_seulement_les_noms(tmp_path):
+    """La charge est un dépôt de texte libre si ses valeurs ne sont pas bornées :
+    un corps de clé, ou un jeton, y passerait sous le nom `repository`."""
+    client = _client(tmp_path)
+    for mauvais in ({"repository": "pas un depot"}, {"repository": "a/b/c"},
+                    {"repository": "p2enjoy/crm?x=1"},
+                    {"repository": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ000000000000"},
+                    {"fingerprint": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ00000000"},
+                    {"fingerprint": "SHA256:court"},
+                    {"access": "tout"}):
+        r = _cle(client, **mauvais)
+        assert r.status_code == 422, mauvais
+        assert r.json()["detail"]["error"] == "payload_refused"
+    assert client.get("/v1/audit?action=spark.deploykey_add").json()["entries"] == []
+
+
+def test_une_cle_ne_porte_pas_d_action_arbitraire_voisine(tmp_path):
+    client = _client(tmp_path)
+    r = _cle(client, "spark.deploykey_delete_everything")
+    assert r.status_code == 422
+    assert "spark.deploykey_add" in r.json()["detail"]["message"]

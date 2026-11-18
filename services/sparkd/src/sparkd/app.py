@@ -15,6 +15,7 @@ Confondre les deux ferait declarer prete une instance incapable de travailler.
 from __future__ import annotations
 
 import base64
+import re
 from contextlib import ExitStack, asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1960,7 +1961,15 @@ def create_app(config: Config) -> FastAPI:
                            #: d'alerter. Sans quoi la garde devrait connaître la
                            #: configuration des canaux, ce qui ferait un second
                            #: endroit où le canal se règle.
-                           "forge.shell_refused")
+                           "forge.shell_refused",
+                           #: SPK-178 · §71.5 : l'hôte console pose, remplace ou
+                           #: retire la clé d'identité d'un Spark en clé de
+                           #: déploiement chez GitHub. `sparkd` ne voit jamais ce
+                           #: geste : seule la console tient le jeton (§38.1).
+                           #: TROIS actions, pour la raison qui sépare les gestes
+                           #: de conteneur : ce qui doit se compter, c'est le geste.
+                           "spark.deploykey_add", "spark.deploykey_replace",
+                           "spark.deploykey_remove")
 
     #: Clés admises dans la charge. Un champ libre deviendrait le dépôt de
     #: secrets en clair que le §37.5 interdit précisément.
@@ -1970,8 +1979,19 @@ def create_app(config: Config) -> FastAPI:
     #: Sans lui, le journal ne distingue plus une session administrative d'une
     #: session applicative — et c'est ce qu'on cherchera le jour où une cellule
     #: aura changé sans qu'on sache par où.
+    #: SPK-178 : `repository`, `fingerprint` et `access` portent un geste de clé
+    #: de déploiement. Leurs VALEURS sont bornées plus bas, comme `account` : un
+    #: corps de clé ou un jeton passerait sinon sous le nom `repository`.
     CLES_DECLARABLES = ("path", "reason", "duration_seconds", "container",
-                        "account", "previous_commit", "target_commit")
+                        "account", "previous_commit", "target_commit",
+                        "repository", "fingerprint", "access")
+
+    #: Formes admises des trois valeurs de SPK-178 (§71.5). Le dépôt est celui que
+    #: la console a déjà validé ; la borne est refaite ici parce que la console
+    #: n'est pas une autorité (§37.4.6).
+    FORME_DEPOT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$")
+    FORME_EMPREINTE = re.compile(r"^SHA256:[A-Za-z0-9+/]{43}$")
+    ACCES_DECLARABLES = ("lecture", "ecriture")
 
     #: Les seules valeurs qu'`account` peut prendre. La console les borne déjà,
     #: mais elle n'est pas une autorité : cette porte est étroite précisément
@@ -2020,6 +2040,14 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(status_code=422, detail={
                 "error": "payload_refused",
                 "message": f"Compte refusé. Admis : {', '.join(COMPTES_DECLARABLES)}."})
+        for cle, valable in (
+                ("repository", lambda v: isinstance(v, str) and FORME_DEPOT.match(v)),
+                ("fingerprint", lambda v: isinstance(v, str) and FORME_EMPREINTE.match(v)),
+                ("access", lambda v: v in ACCES_DECLARABLES)):
+            if cle in brut and not valable(brut[cle]):
+                raise HTTPException(status_code=422, detail={
+                    "error": "payload_refused",
+                    "message": f"La valeur de « {cle} » n'a pas la forme admise."})
         with registry() as connection:
             # L'acteur vient du CONTEXTE — l'en-tête posé par l'hôte console
             # (§21.6.2) —, jamais du corps. Laisser une requête choisir son

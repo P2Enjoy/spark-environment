@@ -45,6 +45,9 @@ import { agir as agirConteneur, GESTES } from './gestes-docker.js';
 import { sonderShell, SHELL_TROUVE } from './shell-conteneur.js';
 import * as signatureService from './signature.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
+// SPK-178 · §71 : le jeton GitHub suit le modèle du jeton DNS (§38.1).
+import { GithubError, corpsDeCle, depotDepuis, fournisseurGithubDepuis }
+  from './github.js';
 // SPK-77 · §38.8 : le verdict est calculé par un module PUR, que la route de
 // suppression rejoue tel quel pour reconstater ses conditions (§38.8.3).
 import { inventorier, nomsARapprocher, refusDeSuppression, fqdn,
@@ -248,6 +251,151 @@ export function createConsoleHost(options = {}) {
   /** Rend le fournisseur, ou `null` avec la raison. Un jeton absent n'est PAS une panne. */
   async function fournisseur() {
     return fournisseurDepuis(await environnement(), { fetch: fetchFn });
+  }
+
+  /**
+   * Le fournisseur GitHub (SPK-178, §71.2). Même règle que le DNS : un jeton
+   * absent n'est PAS une panne.
+   *
+   * La racine de l'API ne se remplace que par le doublon d'épreuve, que
+   * `epreuve.commande` ignore hors de `SPARK_EPREUVE=1` et dit ignorer (§71.6).
+   */
+  async function fournisseurGithub() {
+    return fournisseurGithubDepuis(await environnement(), {
+      fetch: fetchFn, baseUrl: epreuve.commande('SPARK_GITHUB_BASE_URL'),
+    });
+  }
+
+  /**
+   * L'identité du Spark, LUE chez `sparkd` (SPK-178, §71.3).
+   *
+   * La clé posée chez GitHub n'est jamais celle que la requête porte : un champ
+   * `key` envoyé par le navigateur n'est pas lu. Seule la clé que la cellule
+   * présente peut être posée, et c'est ce qui empêche ce geste de poser n'importe
+   * quelle clé, publique ou non, sur un dépôt tiers.
+   *
+   * Rend `{ tunnel, identite, corps }`, ou `{ refus }` : une réponse HTTP déjà
+   * composée, que la route rend telle quelle.
+   */
+  async function identiteDuSpark(serveur, spark) {
+    let tunnel;
+    try {
+      tunnel = tunnels.require(serveur);
+    } catch (erreur) {
+      return { refus: { status: 502, body: { error: 'tunnel_unavailable',
+                                              message: erreur.message } } };
+    }
+    const amont = await fetchFn(
+      `http://127.0.0.1:${tunnel.localPort}/v1/sparks/${encodeURIComponent(spark)}/identity`,
+      { headers: { 'x-spark-actor': tunnel.actorHeader } });
+    if (amont.status === 404) {
+      return { refus: { status: 404, body: { error: 'unknown_spark',
+        message: `Aucun Spark « ${spark} » sur ce serveur.` } } };
+    }
+    if (!amont.ok) {
+      return { refus: { status: 502, body: { error: 'identity_unreadable',
+        message: `La Forge n'a pas pu relire l'identité du Spark (HTTP ${amont.status}).` } } };
+    }
+    const identite = await amont.json();
+    if (identite.state !== 'presente' || !identite.public_key) {
+      // §14.6 : « absente » et « indisponible » sont deux états, et ils appellent
+      // deux gestes — créer l'identité, ou démarrer le Spark.
+      return { refus: { status: 409, body: {
+        error: 'no_identity', state: identite.state,
+        message: identite.state === 'indisponible'
+          ? 'L’identité de ce Spark est illisible : la cellule ne répond pas '
+            + '(Spark arrêté ?). Démarrez-le, puis recommencez.'
+          : 'Aucune identité sur ce Spark : créez-la d’abord, dans la section '
+            + '« Identité du Spark ».' } } };
+    }
+    return { tunnel, identite, corps: corpsDeCle(identite.public_key) };
+  }
+
+  /**
+   * Déclare au journal de `sparkd` une pose, un remplacement ou un retrait de clé
+   * de déploiement (SPK-178, §71.5).
+   *
+   * La charge est construite ici, champ par champ : dépôt, empreinte, accès. Ni le
+   * jeton ni le corps de la clé ne peuvent la traverser. Un échec ne remonte pas,
+   * il se SIGNALE (`journalise: false`) : le geste est déjà parti chez GitHub.
+   */
+  async function declarerCle(tunnel, { action, spark, sparkId = spark, depot,
+                                      empreinte, acces = null, resultat = 'ok',
+                                      raison = null }) {
+    const verbes = { 'spark.deploykey_add': 'posée', 'spark.deploykey_replace': 'remplacée',
+                     'spark.deploykey_remove': 'retirée' };
+    const message = resultat === 'denied'
+      ? `Clé de déploiement refusée par GitHub sur « ${depot} » pour le Spark « ${spark} » `
+        + `(${raison}).`
+      : `Clé de déploiement ${verbes[action]} sur « ${depot} » pour le Spark « ${spark} »`
+        + `${acces ? `, en ${acces === 'lecture' ? 'lecture seule' : 'écriture'}` : ''}.`;
+    try {
+      const reponse = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/audit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json',
+                   'x-spark-actor': tunnel.actorHeader },
+        body: JSON.stringify({
+          action, result: resultat, target_type: 'spark', target_id: sparkId, message,
+          payload: { repository: depot, fingerprint: empreinte,
+                     ...(acces ? { access: acces } : {}),
+                     ...(raison ? { reason: raison } : {}) },
+        }),
+      });
+      return reponse.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Statut HTTP d'une erreur de GitHub : la saisie, le conflit, ou l'amont. */
+  function statutGithub(erreur) {
+    if (['depot_invalide', 'cle_privee', 'cle_illisible'].includes(erreur.code)) return 422;
+    if (['acces_different', 'absente', 'cle_deja_utilisee'].includes(erreur.code)) return 409;
+    return 502;
+  }
+
+  /**
+   * Le tronc commun des trois gestes : fournisseur, dépôt, identité, appel.
+   *
+   * `ecrit` distingue les gestes qui se journalisent même refusés — une tentative
+   * répétée d'écriture chez un tiers est exactement ce qu'un journal doit montrer.
+   */
+  async function gesteGithub(corps, { ecrit, agir, action }) {
+    const bilan = await fournisseurGithub();
+    if (!bilan.configured) {
+      return { status: 409, body: { error: 'github_not_configured', message: bilan.reason } };
+    }
+    let depot;
+    try {
+      depot = depotDepuis(corps?.repository);
+    } catch (erreur) {
+      return { status: 422, body: { error: 'github_refused', code: erreur.code,
+                                    message: erreur.message } };
+    }
+    const spark = String(corps?.spark ?? '');
+    const vu = await identiteDuSpark(String(corps?.server ?? ''), spark);
+    if (vu.refus) return vu.refus;
+    try {
+      const resultat = await agir(bilan.provider, { depot, corps: vu.corps, spark });
+      const journalise = ecrit && resultat.changed !== false && action
+        ? await declarerCle(vu.tunnel, {
+          action: action(resultat), spark, depot: depot.nom,
+          empreinte: vu.identite.fingerprint, acces: resultat.access ?? null })
+        : null;
+      return { status: 200, body: {
+        ...resultat, repository: depot.nom, fingerprint: vu.identite.fingerprint,
+        ...(journalise === null ? {} : { journalise }) } };
+    } catch (erreur) {
+      if (!(erreur instanceof GithubError)) throw erreur;
+      if (ecrit && statutGithub(erreur) === 502) {
+        await declarerCle(vu.tunnel, {
+          action: action({}), spark, depot: depot.nom,
+          empreinte: vu.identite.fingerprint, resultat: 'denied', raison: erreur.code });
+      }
+      return { status: statutGithub(erreur), body: {
+        error: statutGithub(erreur) === 502 ? 'github_unavailable' : 'github_refused',
+        code: erreur.code, message: erreur.message } };
+    }
   }
 
   /**
@@ -1030,6 +1178,41 @@ export function createConsoleHost(options = {}) {
         },
       };
     },
+
+    /**
+     * La fonction est-elle activée sur ce poste ? (SPK-178, §71.2)
+     *
+     * Sans jeton : `200` et `configured: false` avec la raison. Ne pas avoir de
+     * jeton est le cas normal, et l'écran doit pouvoir le DIRE. Jamais le jeton.
+     */
+    'GET /api/github/etat': async () => {
+      const bilan = await fournisseurGithub();
+      return { status: 200, body: { configured: bilan.configured, reason: bilan.reason } };
+    },
+
+    /** Où en est la clé du Spark sur ce dépôt. Lecture SEULE, non journalisée. */
+    'POST /api/github/cle/verifier': async (corps) => gesteGithub(corps, {
+      ecrit: false,
+      agir: (fournisseur, args) => fournisseur.verifier(args),
+    }),
+
+    /**
+     * Pose la clé du Spark sur son dépôt (§71.3). Lecture seule sauf `write: true`.
+     * La clé est celle que la cellule présente, relue chez `sparkd` : rien de ce
+     * que porte la requête n'entre dans l'appel à GitHub.
+     */
+    'POST /api/github/cle/poser': async (corps) => gesteGithub(corps, {
+      ecrit: true,
+      agir: (fournisseur, args) => fournisseur.poser({ ...args, ecriture: corps?.write === true }),
+      action: (r) => (r.replaced ? 'spark.deploykey_replace' : 'spark.deploykey_add'),
+    }),
+
+    /** Retire la clé du Spark de son dépôt, et elle seule (§71.3). */
+    'DELETE /api/github/cle': async (corps) => gesteGithub(corps, {
+      ecrit: true,
+      agir: (fournisseur, args) => fournisseur.retirer(args),
+      action: () => 'spark.deploykey_remove',
+    }),
 
     /**
      * Zones du compte (§38.2). Lecture SEULE.

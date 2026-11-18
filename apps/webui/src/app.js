@@ -18,6 +18,7 @@ import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE, valeursDesQuotas,
   corpsDesQuotas } from './components/spark-detail.js';
 import { IDENTITE_VIDE } from './components/spark-identity.js';
+import { DEPOT_CLE_VIDE } from './components/spark-depot-cle.js';
 import { DOSSIER_VIDE, rebondDuServeur } from './components/spark-dossier.js';
 import { NOTES_VIDE } from './components/spark-notes.js';
 import { PROPOSITIONS_VIDE, comprendre, enAttente as lignesEnAttente,
@@ -180,6 +181,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null, forgeListe
                // SPK-74 · §17.5 : lue par `incus exec`, donc SEULEMENT quand
                // sa facette est ouverte.
                identite: { ...IDENTITE_VIDE },
+               // SPK-178 · §71 : le dépôt GitHub du Spark. Jamais conservé d'un Spark
+               // à l'autre : ce qui est affiché vient d'UN Spark (`spark`).
+               depotCle: { ...DEPOT_CLE_VIDE },
                // SPK-85 · §44.9 : le dossier de déploiement. Il ne coûte qu'une
                // lecture du registre — la route n'entre PAS dans la cellule —,
                // et il est demandé avec le détail pour que la copie parte du
@@ -364,7 +368,8 @@ function peindre() {
                             envUi: etat.envUi, envImport: etat.envImport,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
-                            identite: etat.identite, dossier: etat.dossier,
+                            identite: etat.identite, depotCle: etat.depotCle,
+                            dossier: etat.dossier,
                             notes: etat.notes,
                             propositions: etat.propositions,
                             mesures: etat.mesures,
@@ -2142,6 +2147,64 @@ function brancherPanneaux() {
   }
   for (const bouton of racine.querySelectorAll('[data-identite-copie]')) {
     bouton.addEventListener('click', () => copierIdentite());
+  }
+  // SPK-178 · §71 : le dépôt GitHub de ce Spark.
+  const depot = etat.depotCle;
+  racine.querySelector('[data-depot-form]')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    verifierCle();
+  });
+  // La frappe ne repeint PAS : `innerHTML` arracherait le focus au clavier (§14.3).
+  racine.querySelector('[data-depot-champ]')?.addEventListener('input', (e) => {
+    depot.repository = e.target.value;
+  });
+  racine.querySelector('[data-depot-ecriture]')?.addEventListener('change', (e) => {
+    depot.ecriture = e.target.checked;
+    depot.confirming = null;
+    peindre();
+  });
+  for (const bouton of racine.querySelectorAll('[data-depot-relire]')) {
+    bouton.addEventListener('click', () => releverGithub(true));
+  }
+  for (const bouton of racine.querySelectorAll('[data-depot-poser]')) {
+    bouton.addEventListener('click', () => {
+      // L'écriture élargit ce que la cellule peut faire du dépôt : elle se confirme.
+      if (depot.ecriture) {
+        depot.confirming = 'ecriture';
+        depot.info = null;
+        depot.erreur = null;
+        peindre();
+        focaliserDepot('.depot-cle .confirmation button');
+      } else {
+        poserCle();
+      }
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-depot-poser-confirme]')) {
+    bouton.addEventListener('click', () => poserCle());
+  }
+  for (const bouton of racine.querySelectorAll('[data-depot-retirer]')) {
+    bouton.addEventListener('click', () => {
+      depot.confirming = 'retirer';
+      // Le succès du geste précédent ne se lit pas sous la question suivante.
+      depot.info = null;
+      depot.erreur = null;
+      peindre();
+      // §6.22 : le focus ENTRE dans la confirmation.
+      focaliserDepot('.depot-cle .confirmation button');
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-depot-retire-confirme]')) {
+    bouton.addEventListener('click', () => retirerCle());
+  }
+  for (const bouton of racine.querySelectorAll('[data-depot-annule]')) {
+    bouton.addEventListener('click', () => {
+      const etait = depot.confirming;
+      depot.confirming = null;
+      peindre();
+      // §6.22 : l'annulation rend le focus au déclencheur.
+      focaliserDepot(etait === 'retirer' ? '[data-depot-retirer]' : '[data-depot-poser]');
+    });
   }
   // SPK-85 · §44.9.5 : le dossier de déploiement. Le texte est DÉJÀ chargé —
   // le clic ne déclenche donc aucune requête, et le presse-papier reçoit
@@ -3961,6 +4024,7 @@ async function chargerDetail(nom, facette = '') {
   // écran que personne ne regarde, exactement le motif du §37.6.
   if (etat.facette === 'cles' && etat.status === 'ready') {
     releverIdentite();
+    releverGithub();
   }
 }
 
@@ -4034,6 +4098,153 @@ async function copierIdentite() {
                 + 'sélectionnez le texte de la clé ci-dessus pour la copier.' };
   }
   peindre();
+}
+
+/**
+ * Le dépôt GitHub de ce Spark (SPK-178, docs/DAT.md §71).
+ *
+ * Chaque geste passe par l'HÔTE console, qui tient le jeton : le navigateur ne le
+ * voit jamais, et ne désigne pas la clé — l'hôte la relit chez `sparkd`.
+ *
+ * Ce qui est affiché vient d'UN Spark. Changer de Spark repart d'un état vide :
+ * montrer le dépôt de l'un sur la page de l'autre ferait agir sur le mauvais.
+ */
+function nouveauDepotCle() {
+  etat.depotCle = { ...DEPOT_CLE_VIDE, spark: etat.spark?.name ?? null };
+  return etat.depotCle;
+}
+
+/**
+ * Donne le focus à un contrôle de la section, après la repeinture (§6.22, §14.3).
+ *
+ * `peindre()` reconstruit la section : un contrôle qui disparaît (« Retirer »
+ * après un retrait) laisserait le focus sur le corps de la page. Le geste nomme
+ * donc lui-même où il doit retomber.
+ */
+function focaliserDepot(selecteur) {
+  document.querySelector(selecteur)?.focus();
+}
+
+/** Relève si la fonction est activée sur ce poste. N'appelle jamais GitHub. */
+async function releverGithub(force = false) {
+  let d = etat.depotCle;
+  if (d.spark !== etat.spark?.name) d = nouveauDepotCle();
+  else if (!force && (d.status === 'pret' || d.status === 'chargement')) return;
+  d.status = 'chargement';
+  d.erreur = null;
+  peindre();
+  try {
+    const reponse = await fetch('/api/github/etat');
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? 'La console ne répond pas.');
+    d.configured = corps.configured;
+    d.reason = corps.reason;
+    d.status = 'pret';
+  } catch (erreur) {
+    d.status = 'erreur';
+    d.erreur = erreur?.message ?? String(erreur);
+  }
+  peindre();
+}
+
+/**
+ * Appelle un geste de l'hôte. Rend `{ ok, corps }` : un refus est une réponse,
+ * pas une exception qui renverrait à l'écran d'erreur global.
+ */
+async function gesteGithub(methode, chemin) {
+  const d = etat.depotCle;
+  try {
+    const reponse = await fetch(chemin, {
+      method: methode, headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        server: etat.server, spark: etat.spark.name,
+        repository: d.repository.trim(), write: d.ecriture === true,
+      }),
+    });
+    let corps = null;
+    try { corps = await reponse.json(); } catch { /* corps vide */ }
+    return { ok: reponse.ok, corps };
+  } catch (erreur) {
+    return { ok: false, corps: { message: erreur?.message ?? String(erreur) } };
+  }
+}
+
+/**
+ * Relit la clé chez GitHub et date le relevé (§6.13). Rien n'est déduit de la
+ * réponse du geste qui précède : l'écran montre l'état RELU (§1.3).
+ */
+async function verifierCle() {
+  const d = etat.depotCle;
+  d.busy = 'verifier';
+  d.erreur = null;
+  d.info = null;
+  d.confirming = null;
+  peindre();
+  const { ok, corps } = await gesteGithub('POST', '/api/github/cle/verifier');
+  d.busy = null;
+  if (ok) {
+    d.bilan = corps;
+    d.releveLe = new Date().toISOString();
+  } else {
+    d.bilan = null;
+    d.erreur = corps?.message ?? 'La vérification a échoué.';
+  }
+  peindre();
+}
+
+async function poserCle() {
+  const d = etat.depotCle;
+  d.busy = 'poser';
+  d.erreur = null;
+  d.info = null;
+  d.confirming = null;
+  peindre();
+  const { ok, corps } = await gesteGithub('POST', '/api/github/cle/poser');
+  if (!ok) {
+    d.busy = null;
+    d.erreur = corps?.message ?? 'La pose a échoué.';
+    peindre();
+    return;
+  }
+  const acces = corps.access === 'ecriture' ? 'écriture' : 'lecture seule';
+  const journalise = corps.journalise;
+  const dit = corps.changed === false
+    ? `La clé était déjà posée en ${acces} : rien n'a changé.`
+    : corps.replaced
+      ? `Clé périmée remplacée, posée en ${acces}.`
+      : `Clé posée en ${acces}.`;
+  // §1.3 : le résultat du geste n'est pas l'état — on relit.
+  await verifierCle();
+  if (!d.erreur) {
+    d.info = dit;
+    d.journalise = journalise ?? null;
+  }
+  peindre();
+  focaliserDepot('[data-depot-verifier]');
+}
+
+async function retirerCle() {
+  const d = etat.depotCle;
+  d.busy = 'retirer';
+  d.erreur = null;
+  d.info = null;
+  d.confirming = null;
+  peindre();
+  const { ok, corps } = await gesteGithub('DELETE', '/api/github/cle');
+  if (!ok) {
+    d.busy = null;
+    d.erreur = corps?.message ?? 'Le retrait a échoué.';
+    peindre();
+    return;
+  }
+  const journalise = corps.journalise;
+  await verifierCle();
+  if (!d.erreur) {
+    d.info = 'Clé retirée du dépôt.';
+    d.journalise = journalise ?? null;
+  }
+  peindre();
+  focaliserDepot('[data-depot-verifier]');
 }
 
 /**

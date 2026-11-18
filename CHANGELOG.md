@@ -14,6 +14,21 @@
   à la main sur la Forge le 2026-10-30 (OP-41 étape 1).
 
 ### Ajouté
+- **SPK-178 — la console pose la clé d'un Spark en *deploy key* sur son dépôt GitHub.**
+  Sur la facette *Clés*, sous l'identité du Spark, une carte **Dépôt GitHub** : saisir
+  `propriétaire/dépôt`, *Vérifier* (état daté : non posée, posée en lecture seule, posée
+  en écriture, périmée), *Poser* (lecture seule par défaut ; l'écriture est une case
+  décochée puis une confirmation), *Retirer* (confirmé). **Un Spark, un dépôt**, décision
+  du responsable. Le jeton `SPARK_GITHUB_DEPLOY_TOKEN` vit dans le `.env` du poste, jamais
+  sur la Forge. La clé posée est celle que la cellule présente, relue chez `sparkd` : ce
+  que la requête porte n'est pas lu. Les clés d'un autre usage ne sont ni listées ni
+  touchées. Le geste est journalisé (`spark.deploykey_add`, `_replace`, `_remove`), sans
+  jeton ni corps de clé ; `sparkd` admet ces trois actions et trois clés de charge à valeurs
+  bornées. Sixième doublon d'épreuve, `SPARK_GITHUB_BASE_URL`, sous `SPARK_EPREUVE=1`. La
+  garde des variables lit désormais aussi `env.SPARK_…`. DAT §71, SPK-DS-48, manuel M6,
+  OP-44. **Non éprouvé sur le vrai GitHub** : le refus d'une même clé sur deux dépôts est
+  une hypothèse que le doublon encode, à mesurer avec le jeton du responsable. Aucune
+  migration.
 - **SPK-176 — l'installation de la Forge propose la mise à niveau ZFS, sans l'imposer.**
   Le diagnostic lit `zpool upgrade`, qui ne fait que lister. Quand le pool gardé ou
   adopté a des fonctionnalités à activer, le formulaire du plan porte une case

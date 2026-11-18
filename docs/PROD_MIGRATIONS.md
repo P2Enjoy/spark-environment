@@ -120,6 +120,42 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-44 · La console pose la clé d'un Spark chez GitHub : `sparkd` et la console (SPK-178)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable. Rien n'est
+                déployé. La preuve sur le vrai GitHub n'est pas faite (étape 4).
+Objectif      : - la console pose, vérifie et retire la clé d'identité d'un Spark en
+                  deploy key sur son dépôt GitHub — DAT §71 ;
+                - sparkd admet au journal trois actions de plus
+                  (spark.deploykey_add, _replace, _remove) et trois clés de charge
+                  (repository, fingerprint, access), à valeurs bornées — DAT §71.5.
+                Aucune migration de schéma.
+Dépend de     : OP-42 (l'identité d'un Spark rootless) pour un Spark rootless.
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) : sans lui, la console fait son
+                   geste puis dit que le journal n'a pas pu le noter ;
+                3. relancer la console (`sparkui stop`, puis `sparkui`) ;
+                4. pour l'activer : créer un jeton GitHub fine-grained limité aux
+                   dépôts visés, permission de dépôt « Administration » en écriture,
+                   et le poser dans le `.env` du poste (§4). Sans jeton, la section
+                   dit « Aucun jeton GitHub » et rien d'autre ne change.
+Vérification  : - Sparks → un Spark → Clés : la carte « Dépôt GitHub » sous l'identité ;
+                - sur un dépôt JETABLE : Vérifier (non posée), Poser (posée · lecture
+                  seule), la clé apparaît chez GitHub sous le titre spark:<nom>, puis
+                  Retirer ;
+                - le journal du Spark porte spark.deploykey_add puis _remove ;
+                - poser la même clé sur un SECOND dépôt jetable : noter la réponse de
+                  GitHub — elle mesure l'hypothèse du DAT §71.1.
+Retour arrière: retirer SPARK_GITHUB_DEPLOY_TOKEN du `.env` désactive la fonction.
+                Les clés déjà posées chez GitHub restent : se retirent depuis la carte,
+                ou depuis GitHub (Settings → Deploy keys). Réinstaller la build
+                précédente de sparkd (runbook A.2).
+Risques       : le jeton « Administration » est large : il agit sur les réglages des
+                dépôts qu'il couvre. Le limiter aux dépôts visés, ne pas le partager,
+                le révoquer à la moindre fuite. Il ne quitte jamais le poste.
+```
+
 ### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169 à SPK-172, SPK-175 à SPK-177)
 
 ```
@@ -1960,6 +1996,11 @@ Risques     :
 
 Aucun secret n'est requis à ce stade. Les variables du service `sparkd` sont
 documentées dans le `README.md` ; toutes ont une valeur par défaut sûre.
+
+`SPARK_GITHUB_DEPLOY_TOKEN` (OP-44) est un secret **du poste de l'exploitant**, pas de la
+Forge : il se pose dans le `.env` de la console, jamais dans `servers.json`, jamais sur la
+Forge. Facultatif : son absence désactive la pose des clés chez GitHub (README, variables
+de `apps/webui`).
 
 `SPARKD_ALLOWED_SIGNERS` (OP-09) ne porte que des clés **publiques** : ce n'est
 pas un secret, et le fichier peut être versionné hors de ce dépôt. La clé privée

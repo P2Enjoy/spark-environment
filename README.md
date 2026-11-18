@@ -535,12 +535,14 @@ vigilance de l'exploitant.
 | `SCW_DEFAULT_ORGANIZATION_ID` | organisation dont les zones sont listées | UUID | non | `00000000-0000-0000-0000-000000000000` |
 | `SPARK_DNS_ALLOW_PATTERN` | expression régulière bornant les domaines écrivables depuis ce poste | regex | non | `^test\.[a-z0-9-]+\.exemple\.tech$` |
 | `SPARK_DNS_BASE_URL` | racine de l'API DNS, pour pointer un doublon local | URL | non | `http://127.0.0.1:8099` |
-| `SPARK_EPREUVE` | **interrupteur de la pile d'épreuve** : `1` — et cette valeur seule — autorise les quatre commandes doublées ci-dessous. Sans lui elles sont **ignorées**, et le refus est écrit au démarrage ; avec lui, la console affiche un avertissement permanent qui nomme ce qui est remplacé (`docs/DAT.md` §53.3) | `1` | non | *(absent en exploitation)* |
+| `SPARK_GITHUB_DEPLOY_TOKEN` | jeton GitHub qui pose, vérifie et retire la clé d'un Spark en *deploy key* sur son dépôt (SPK-178, `docs/DAT.md` §71). Jeton *fine-grained* limité aux dépôts visés, permission « Administration » en écriture. **Son absence désactive la fonction, ce n'est pas une panne** ; la clé se copie alors à la main. Lu par la console, jamais par la Forge | jeton | non | *(jamais dans le dépôt)* |
+| `SPARK_EPREUVE` | **interrupteur de la pile d'épreuve** : `1` — et cette valeur seule — autorise les six doublons ci-dessous. Sans lui elles sont **ignorées**, et le refus est écrit au démarrage ; avec lui, la console affiche un avertissement permanent qui nomme ce qui est remplacé (`docs/DAT.md` §53.3) | `1` | non | *(absent en exploitation)* |
 | `SPARK_SIGN_COMMAND` | remplace la **commande** de signature d'un geste, pour éprouver la chaîne sans agent (`docs/DAT.md` §36.10.9) | commande shell | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
-| `SPARK_CONSOLE_IDENTITY` | **doublon d'épreuve** — remplace la clé qu'OpenSSH emploie pour joindre la Forge (`docs/DAT.md` §53.3 bis). Le seul des cinq qui ne remplace pas une commande. Ignoré sans `SPARK_EPREUVE=1` | chemin d'un fichier `.pub` | non | vide |
+| `SPARK_CONSOLE_IDENTITY` | **doublon d'épreuve** — remplace la clé qu'OpenSSH emploie pour joindre la Forge (`docs/DAT.md` §53.3 bis). Remplace un fait, pas une commande. Ignoré sans `SPARK_EPREUVE=1` | chemin d'un fichier `.pub` | non | vide |
 | `SPARK_TERMINAL_COMMAND` | remplace la **commande** du terminal — `ssh` vers un Spark (`docs/DAT.md` §37.4.2 bis) | commande shell ou table JSON | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
 | `SPARK_DOCKER_COMMAND` | remplace la **commande** `docker` interrogée dans un Spark (`docs/DAT.md` §37.6 ter) | table JSON par geste | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
 | `SPARK_REBOOT_COMMAND` | remplace la **commande** de redémarrage de la Forge (`docs/DAT.md` §51.1) | commande shell | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
+| `SPARK_GITHUB_BASE_URL` | **doublon d'épreuve** — remplace l'adresse de l'API GitHub où se posent les clés de déploiement (`docs/DAT.md` §71.6) ; sans lui la pile d'épreuve toucherait un vrai dépôt. Ignoré sans `SPARK_EPREUVE=1` | URL | non | `http://127.0.0.1:8098` |
 
 ### Harnais de preuves (`e2e/`)
 

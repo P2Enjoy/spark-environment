@@ -61,7 +61,7 @@ function lancer(commande, args, env, journal) {
  * son état dans un fichier voisin du registre (docs/DAT.md §28.4), et peupler
  * après coup laisserait le processif servir un registre qu'il n'a pas relu.
  */
-export async function monterPile({ dns = null, notify = null } = {}) {
+export async function monterPile({ dns = null, notify = null, github = null } = {}) {
   // SPK-106 · docs/DAT.md §29.8 : UNE seule pile lourde à la fois sur ce poste.
   //
   // Le verrou est pris ICI, avant la première allocation, parce que c'est le
@@ -150,12 +150,18 @@ export async function monterPile({ dns = null, notify = null } = {}) {
   // poste et un parcours automatique parlerait au VRAI fournisseur, donc à des
   // zones en exploitation (SPK-47, docs/DAT.md §38.1).
   const envConsole = join(dossier, '.env');
-  await writeFile(envConsole, dns
-    ? [`SCW_SECRET_KEY=jeton-de-doublon`,
-       `SCW_DEFAULT_ORGANIZATION_ID=organisation-de-doublon`,
-       `SPARK_DNS_BASE_URL=${dns.baseUrl}`,
-       ...(dns.motif ? [`SPARK_DNS_ALLOW_PATTERN=${dns.motif}`] : [])].join('\n')
-    : '');
+  // SPK-178 · §71.6 : le jeton GitHub d'un parcours est celui du DOUBLON, jamais
+  // un vrai. Sans doublon demandé, aucun jeton n'est posé : la fonction est
+  // désactivée, ce qui est précisément l'état « sans jeton » à éprouver.
+  await writeFile(envConsole, [
+    ...(dns
+      ? [`SCW_SECRET_KEY=jeton-de-doublon`,
+         `SCW_DEFAULT_ORGANIZATION_ID=organisation-de-doublon`,
+         `SPARK_DNS_BASE_URL=${dns.baseUrl}`,
+         ...(dns.motif ? [`SPARK_DNS_ALLOW_PATTERN=${dns.motif}`] : [])]
+      : []),
+    ...(github ? [`SPARK_GITHUB_DEPLOY_TOKEN=${github.jeton}`] : []),
+  ].join('\n'));
 
   // L'environnement de l'hôte console, nommé pour que la console relançable de
   // SPK-117 reçoive EXACTEMENT les mêmes doublons, sur un autre port.
@@ -335,6 +341,10 @@ export async function monterPile({ dns = null, notify = null } = {}) {
     // Le `.env` du poste ne doit pas se réintroduire par l'environnement hérité.
     SCW_SECRET_KEY: '', SCW_DEFAULT_ORGANIZATION_ID: '', SPARK_DNS_ALLOW_PATTERN: '',
     SPARK_DNS_BASE_URL: '',
+    // SPK-178 · §71.6 : le sixième doublon. Vide sans parcours GitHub : le
+    // jeton du poste ne doit pas non plus se réintroduire par l'héritage.
+    SPARK_GITHUB_DEPLOY_TOKEN: '',
+    SPARK_GITHUB_BASE_URL: github ? github.baseUrl : '',
   };
   const consoleHost = lancer('node', [join(RACINE, 'apps', 'webui', 'host', 'main.js')],
                              envHoteConsole, journal);

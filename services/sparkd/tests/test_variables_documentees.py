@@ -39,6 +39,11 @@ LECTURES = (
     # qui est exactement ce que le `CLAUDE.md` §3 dit de ne pas laisser arriver.
     re.compile(r"epreuve\.commande\(['\"](SPARKD?_[A-Z0-9_]+)['\"]\)"),
     re.compile(r"variable:\s*['\"](SPARKD?_[A-Z0-9_]+)['\"]"),
+    # SPK-178 : l'hôte console lit aussi son environnement par l'objet `env`
+    # (`env.SPARK_GITHUB_DEPLOY_TOKEN`), que `process.env` ne révèle pas. La garde
+    # ne le voyait pas : une variable lue ainsi pouvait manquer à la
+    # documentation sans qu'aucune preuve ne rougisse.
+    re.compile(r"\benv\??\.(SPARKD?_[A-Z0-9_]+)"),
 )
 
 #: Où l'on cherche. Les fichiers de test en sont exclus : ils POSENT des

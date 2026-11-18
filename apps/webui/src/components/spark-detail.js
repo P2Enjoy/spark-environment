@@ -35,6 +35,7 @@ import { renderSupervisionSpark, SUPERVISION_VIDE } from './supervision.js';
 import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
 import { IMPORT_VIDE } from './env-import.js';
 import { IDENTITE_VIDE, renderIdentityPanel } from './spark-identity.js';
+import { DEPOT_CLE_VIDE, renderDepotPanel } from './spark-depot-cle.js';
 import { DOSSIER_VIDE, renderDossier } from './spark-dossier.js';
 import { renderConnexionSsh } from './spark-acces.js';
 import { NOTES_VIDE, renderNotes } from './spark-notes.js';
@@ -1009,6 +1010,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     env = [], envUi = ENV_VIDE,
                                     envImport = IMPORT_VIDE,
                                     identite = IDENTITE_VIDE,
+                                    depotCle = DEPOT_CLE_VIDE,
                                     dossier = DOSSIER_VIDE,
                                     notes = NOTES_VIDE,
                                     propositions = PROPOSITIONS_VIDE,
@@ -1059,7 +1061,11 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                   + renderRoutesPanel(spark, routes, admin)
                   + renderPortsPanel(spark, ports, admin, reservedPorts, reseaux),
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin)
-               + renderIdentityPanel(spark, identite),
+               + renderIdentityPanel(spark, identite)
+               // SPK-178 · §71 : le dépôt GitHub de ce Spark, sous l'identité qu'il y présente.
+               + renderDepotPanel(spark,
+                                    depotCle.spark === spark.name ? depotCle : DEPOT_CLE_VIDE,
+                                    identite.releve),
     instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),
     // SPK-93 · §52.11 : la meme lecture que l'ecran de Forge, bornee a CE Spark
     // et comparee a SES quotas.

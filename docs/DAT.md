@@ -13846,7 +13846,7 @@ qui » n'a pas à exister.
 
 ### 53.3 L'interrupteur d'épreuve, et le bandeau qui le dit
 
-**Cinq** doublons sont nécessaires : le harnais lance la console comme un
+**Six** doublons sont nécessaires : le harnais lance la console comme un
 processus séparé, et l'environnement est son seul canal.
 
 | Variable | Ce qu'elle remplace | Contrat |
@@ -13856,9 +13856,10 @@ processus séparé, et l'environnement est son seul canal.
 | `SPARK_REBOOT_COMMAND` | la commande de redémarrage de la Forge | §51.1 |
 | `SPARK_SIGN_COMMAND` | la commande de signature d'un geste | §36.10.9 |
 | `SPARK_CONSOLE_IDENTITY` | **la clé qu'OpenSSH emploie pour joindre la Forge** | §53.3 bis |
+| `SPARK_GITHUB_BASE_URL` | l'adresse de l'API GitHub où se posent les clés de déploiement | §71.6 |
 
 **`SPARK_EPREUVE=1` les autorise, et rien d'autre ne le fait.** Hors de cet
-interrupteur, les cinq sont **ignorées** : la console lance les vraies
+interrupteur, les six sont **ignorées** : la console lance les vraies
 commandes. Ce n'est pas un durcissement théorique — `SPARK_DOCKER_COMMAND`
 exporté dans un shell remplaçait jusqu'ici la commande `docker` que la console
 exécute réellement, sans que rien ne le dise nulle part.
@@ -17727,8 +17728,27 @@ la source de vérité est GitHub, comme la cellule l'est pour la clé (§17.5).
   l'objet de SPK-74, et l'écriture élargit ce que la cellule peut faire du dépôt). Sur une
   clé *périmée*, « Poser » la **remplace** : elle retire cette clé-là, puis pose la
   nouvelle.
-- **Retirer** : supprime la clé du dépôt. Geste destructeur chez un tiers : confirmation
-  par la frappe de `propriétaire/dépôt` (design system §6.23).
+- **Retirer** : supprime la clé du dépôt. Le Spark ne pourra plus cloner, mais la clé se
+  repose à volonté : c'est un geste **réversible** qui réduit l'exposition. Le design
+  system (§6.23) le veut donc **confirmé**, non précédé de la frappe du nom : la
+  confirmation nomme le dépôt et la conséquence, en accent et non en rouge (SPK-DS-09).
+  *Révisé le 2026-11-18 : la première version de ce chapitre exigeait la frappe de
+  `propriétaire/dépôt`, ce que les trois conditions du §6.23 n'autorisent pas.*
+- **Poser en écriture** se confirme aussi, en nommant ce que l'écriture permet : c'est
+  la seule voie vers un accès plus large que la lecture.
+- **Poser est idempotent** : une clé déjà posée avec le même accès ne produit aucune
+  écriture et aucune entrée au journal. Une clé posée en lecture ne devient pas
+  écriture par un second « Poser » : GitHub ne modifie pas l'accès d'une clé, il
+  faudrait la retirer puis la reposer, et entre les deux le Spark perdrait son accès.
+  Le produit refuse (`acces_different`) et dit comment s'y prendre.
+
+**La clé posée est celle que la cellule présente, relue côté serveur.** Les routes de
+l'hôte (`POST /api/github/cle/verifier`, `POST /api/github/cle/poser`,
+`DELETE /api/github/cle`, `GET /api/github/etat`) reçoivent `{ server, spark,
+repository, write }` ; l'hôte interroge `GET /v1/sparks/<nom>/identity` chez `sparkd`
+par le tunnel. Un champ `key` ou `public_key` envoyé par le navigateur n'est **pas
+lu** : sans cela, la route poserait n'importe quelle clé sur un dépôt tiers
+(CLAUDE.md §10). `write` ne vaut accord que s'il est **exactement** `true`.
 
 **La garde, dans le code et éprouvée par un test chacune** (même esprit que le §38.5) :
 
@@ -17754,17 +17774,35 @@ la source de vérité est GitHub, comme la cellule l'est pour la clé (§17.5).
 ### 71.5 Où cela vit, et ce qui n'est pas touché
 
 - Module de l'hôte console `apps/webui/host/github.js`, sur le modèle de `dns.js` :
-  jeton en champ privé, timeout, aucune nouvelle tentative sur une écriture.
-- Écran : une section « Dépôt GitHub » du bloc d'identité du Spark
-  (`spark-identity.js`), sur la facette « Clés ».
-- **Aucune migration, aucune colonne au registre, aucun changement de `sparkd`.** Option
-  écartée : une colonne `dépôt` au registre, qui montrerait l'état *d'un coup d'œil* dans
+  jeton en champ privé, timeout de 15 s, aucune nouvelle tentative sur une écriture.
+  Pagination des clés d'un dépôt, 100 par page, 5 pages au plus.
+- Écran : une section « Dépôt GitHub » (`spark-depot-cle.js`), sous l'identité du Spark,
+  sur la facette « Clés ». Elle ne se rend que si l'identité est **présente**. Sans jeton
+  elle dit pourquoi et ne rend aucun formulaire (§1.4 du design system). Le dépôt saisi et
+  le dernier état relevé ne survivent pas à un changement de Spark.
+- **Aucune migration, aucune colonne au registre.** `sparkd` change **peu** : sa porte
+  d'audit (`POST /v1/audit`, §37.4.6) admet trois actions de plus,
+  `spark.deploykey_add`, `spark.deploykey_replace` et `spark.deploykey_remove`, et trois
+  clés de charge, `repository`, `fingerprint` et `access`, dont les **valeurs** sont
+  bornées (forme d'un dépôt, forme d'une empreinte `SHA256:…`, `lecture` ou `ecriture`).
+  *Révisé le 2026-11-18 : la première version annonçait « aucun changement de `sparkd` »,
+  ce que la liste blanche de la porte d'audit rend faux dès qu'un geste doit se journaliser.*
+  Une console qui parle à une Forge plus ancienne fait son geste, puis **dit** que le
+  journal n'a pas pu le noter (`journalise: false`). Option écartée : une colonne `dépôt` au registre, qui montrerait l'état *d'un coup d'œil* dans
   la liste. Elle exige une migration, le seed et `docs/PROD_MIGRATIONS.md`, pour un
   confort que le geste « Vérifier » rend déjà. À rouvrir si l'exploitant veut l'état sans
   ressaisir le dépôt.
-- Le geste est journalisé : dépôt, empreinte, mode (lecture ou écriture), résultat ;
-  jamais le jeton, jamais le corps de la clé (§17.2). L'emplacement du journal suit celui
-  des écritures DNS ; il est confirmé en lisant leur code au moment d'écrire celui-ci.
+- Le geste est journalisé **chez `sparkd`**, par la porte d'audit, comme les gestes de
+  conteneur (§37.7.4) : dépôt, empreinte, accès (lecture ou écriture), résultat ; jamais
+  le jeton, jamais le corps de la clé (§17.2). *Lu dans le code le 2026-11-18 : les
+  écritures DNS ne sont pas journalisées ; il n'y avait donc pas de journal à suivre, et
+  la porte d'audit est le seul chemin déjà admis.* Une **lecture** ne se journalise pas.
+  Une écriture aboutie **qui change quelque chose** se journalise `ok` (une pose
+  idempotente n'écrit rien, donc ne s'écrit pas). Une écriture refusée **par GitHub**
+  (jeton refusé, permission, dépôt introuvable, clé déjà utilisée côté amont…) se
+  journalise `denied`, avec le code du refus : une tentative répétée d'écriture chez un
+  tiers est ce qu'un journal doit montrer. Un refus de **saisie** (dépôt mal formé, Spark
+  sans identité) ne part nulle part et ne se journalise pas.
 
 ### 71.6 Variables introduites
 
@@ -17779,19 +17817,26 @@ test de garde, dans le même changement que le code.
 
 ### 71.7 Démonstration
 
-Sous pilote factice, la section affiche un dépôt de démonstration et l'état de sa clé,
-sans aucun appel à GitHub : le seed reste un contrat (CLAUDE.md §8), et rien n'est
-fabriqué qui prétende avoir été posé chez un tiers.
+**Aucune donnée seedée, et c'est voulu.** Le seed (CLAUDE.md §8) peuple le registre ; cette
+fonction n'y écrit rien, puisque le dépôt n'y est pas conservé (§71.5). Elle ne se montre
+que si un jeton est posé, et un jeton de démonstration n'existe pas : il faudrait
+**fabriquer** une trace de pose chez un tiers, ce que le §8 interdit. La démonstration est
+le doublon local de l'API GitHub (`e2e/github-doublon.mjs`), qui parle la forme de l'API
+réelle et sert à la fois aux parcours automatiques et à une pile de démonstration. *Révisé
+le 2026-11-18 : la première version promettait un dépôt de démonstration sous pilote
+factice.*
 
 ### 71.8 Vérification
 
-| Niveau | Preuve |
-|---|---|
-| unitaire | module : comparaison de clé, chaque garde du §71.3, chaque ligne du §71.4, jeton jamais dans une erreur ni une trace |
-| API de l'hôte | routes de lecture et d'écriture, refus direct sans jeton, sans identité, avec un corps privé |
-| E2E | depuis l'accueil : connexion, Sparks, le Spark, facette Clés, saisie du dépôt, *Poser*, *Vérifier*, *Retirer* par frappe, refus affiché ; contre un doublon local de l'API GitHub |
-| visuel | captures desktop et mobile des états : sans jeton, non posée, posée, périmée, refusée |
-| réel | **action humaine** : sur deux dépôts jetables avec le jeton du responsable, poser, vérifier, remplacer, retirer, puis tenter la même clé sur le second dépôt. Cela mesure l'hypothèse du §71.1 |
+| Niveau | Preuve | État |
+|---|---|---|
+| unitaire | `github.test.js` : comparaison de clé, chaque garde du §71.3, chaque ligne du §71.4, jeton absent des erreurs et des sérialisations ; `spark-depot-cle.test.js` : les états, les confirmations, l'échappement | joué, vert |
+| API de l'hôte | `github-route.test.js` : routes de lecture et d'écriture, refus **par requête directe** sans jeton, sans identité, avec une clé ou un dépôt forgés ; journal | joué, vert |
+| `sparkd` | `test_audit_declare.py` : les trois actions, les valeurs bornées | joué, vert |
+| garde des variables | `test_variables_documentees.py` voit désormais `env.SPARK_…` : les deux variables sont au `.env.example` et au README | joué, vert |
+| E2E | `e2e/depot-cle.test.mjs` : depuis l'accueil, le Spark, la facette Clés ; vérifier au clavier, poser, retirer, écriture, clé périmée, chaque refus, requête directe, Spark arrêté, poste sans jeton ; contre le doublon local | joué, 8 sur 8 |
+| visuel | captures `spk178-*` (non posée, posée, mobile, retrait, écriture, périmée, refus, sans jeton), observées | fait |
+| réel | **action humaine** : sur deux dépôts jetables avec le jeton du responsable, poser, vérifier, remplacer, retirer, puis tenter la même clé sur le second dépôt. Cela mesure l'hypothèse du §71.1 | **à faire** |
 
 L'unité reste `[~]` tant que la preuve réelle n'est pas faite.
 

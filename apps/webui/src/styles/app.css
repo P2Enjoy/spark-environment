@@ -1518,3 +1518,17 @@ tbody tr:hover { background: var(--color-hover); }
   .comparaison__deux { display: none; }
   .comparaison__une { display: table; }
 }
+
+/* SPK-178 · SPK-DS-48 — le dépôt GitHub d'un Spark. L'état relevé de la clé : la
+   pastille, le dépôt, l'heure du relevé, sur une ligne qui passe à la suivante
+   plutôt que de déborder (§14.2). Le dépôt est une valeur technique : il se
+   replie sur un écran étroit au lieu de défiler (SPK-DS-15). */
+.depot-cle .formulaire { display: grid; gap: var(--space-3); }
+.depot-cle .releve-cle {
+  display: flex; align-items: center; gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap; margin: var(--space-3) 0 0;
+}
+.depot-cle .releve-cle .technique { overflow-wrap: anywhere; }
+/* Les noms de variable d'un message d'absence se lisent droits : l'italique de
+   `.absence` les déformait (observé en capture le 2026-11-18). */
+.depot-cle .absence .technique { font-style: normal; }

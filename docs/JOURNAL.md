@@ -15721,3 +15721,34 @@ sixième doublon d'épreuve (`SPARK_GITHUB_BASE_URL`, sous `SPARK_EPREUVE=1`).
 
 **Reste à faire** : la preuve réelle sur deux dépôts jetables demande le jeton du
 responsable.
+
+## 2026-11-18 · SPK-178 codé : ce que le code a corrigé dans la spec
+
+**Fait.** Module de l'hôte, quatre routes, journal chez `sparkd`, section de l'écran,
+doublon d'épreuve, parcours E2E (8 sur 8) et captures observées. Détail au backlog.
+
+**Trois écarts entre la spec écrite le matin et la réalité, tous corrigés au DAT §71 :**
+
+- **Le retrait ne se confirme pas par la frappe du nom.** Le design system (§6.23) ne
+  l'exige que pour une action irréversible, sur des objets confondables, au nom court.
+  Retirer une clé se repose : confirmation ordinaire, qui nomme le dépôt.
+- **`sparkd` change.** La spec disait « aucun changement de `sparkd` » et renvoyait le
+  journal à celui des écritures DNS. Lu dans le code : les écritures DNS ne sont pas
+  journalisées, et la porte d'audit a une liste blanche d'actions. Trois actions et trois
+  clés de charge (valeurs bornées) y entrent. Conséquence : OP-44 déploie `sparkd`.
+- **Pas de donnée seedée.** La spec promettait un dépôt de démonstration sous pilote
+  factice. Il aurait fallu fabriquer une trace de pose chez un tiers (CLAUDE.md §8). La
+  démonstration est le doublon local de l'API GitHub.
+
+**Observations.**
+
+- Un défaut visible seulement en capture : le message « Clé posée » restait sous la
+  confirmation de retrait. Corrigé, avec une assertion.
+- La garde des variables ne voyait pas `env.SPARK_…` (seulement `process.env`) : une
+  variable lue par l'objet `env` pouvait manquer à la documentation sans rien faire
+  rougir. Le motif est ajouté.
+- Le test « rootless » de `parcours.test.mjs` échoue quand on rejoue seul un sous-ensemble :
+  il exige un parcours antérieur (son message le dit). Sans lien avec cette unité.
+
+**Reste à mesurer, avec le jeton du responsable** : qu'une même clé est refusée sur un
+second dépôt. Le doublon l'encode ; il ne le démontre pas.
