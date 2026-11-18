@@ -15335,3 +15335,36 @@ produit juste après la resync de `md1`, à l'étape où le pool devrait être c
 **Vérifications.** Commandes en lecture seule : `os-release`, `lsblk`, `sgdisk -p`,
 `zpool status`, `/proc/mdstat`, `dpkg.log`, `tune2fs -l`, `journalctl --list-boots`.
 Aucune écriture.
+
+## 2026-11-18 · SPK-158 et SPK-159 : avec le schéma par défaut de l'offre, l'installation aboutit
+
+**Observation.** Le responsable a réinstallé la nouvelle machine en Ubuntu 24.04 avec le
+schéma de partitionnement **par défaut** de l'offre EM-B311X-SATA, sans cloud-init.
+L'installation aboutit. Relevé par SSH, en lecture seule :
+- Ubuntu 24.04.5 LTS, noyau 6.8, module ZFS 2.2.2 disponible (`zfsutils-linux` absent) ;
+- `root` (`sda4`/`sdb4`) prend tout le disque, soit 12 To en `md1` ; il n'y a ni partition
+  `data` ni pool ;
+- **la resync de `md1` se poursuit après le démarrage** (18,7 %, environ 18 h restantes).
+  L'installateur n'attend donc pas la fin de la resync pour terminer.
+- la clé d'hôte SSH a changé par rapport aux tentatives précédentes : l'ancienne était
+  celle de l'installateur.
+
+**Ce que cela établit.** Le matériel, le réseau et l'installateur 24.04 de l'hébergeur
+fonctionnent sur cette machine. Les tentatives qui ont échoué ne différaient de celle-ci que
+par le schéma : `root` bornée à 200 Gio, une partition `data`, et le pool `spark` déclaré dans
+la section `zfs`. Elles se figeaient après la resync de `md1`. Celle-ci n'attend pas cette
+resync.
+
+**Hypothèse, non vérifiée.** C'est la **création du pool déclaré** qui bloque l'installateur
+24.04. Le même schéma a abouti sur `spark-experiment`, installée en 26.04. Une installation
+sans pool déclaré ne s'est pas encore jouée sur cette machine.
+
+**Prochain essai.** Réinstaller avec le schéma de repli (`partitionnement --offre
+EM-B311X-SATA --sans-zfs` : mêmes partitions, `"zfs": null`) et le même cloud-init, dont
+l'amorce crée le pool avec `--pool-source /dev/sda5,/dev/sdb5`. S'il aboutit, le repli devient
+la règle pour les installations en 24.04, sur décision du responsable (DAT §66.8).
+
+**Vérifications.** Commandes en lecture seule : `os-release`, `lsblk`, `/proc/mdstat`,
+`modinfo zfs`, `cloud-init status`, `tune2fs -l`. Aucune écriture sur la machine. La
+nouvelle clé d'hôte est enregistrée dans un fichier temporaire de session : le
+`known_hosts` du poste n'est pas modifié.
