@@ -152,8 +152,9 @@ Risques       : un serveur SMTP muet tient un fil jusqu'à son délai de garde ;
 
 ```
 État          : APPLIQUÉ le 2026-11-18 sur spark-010 (schéma 22 → 24, par « Code déployé »). Sondes script
-                prouvées dans une vraie cellule ; proposition health.? relue et acceptée. RESTE : la sonde
-                HTTPS contre le vrai Caddy, le script sous le compte rootless contre un vrai Docker.
+                prouvées dans une vraie cellule ; proposition health.? relue et acceptée ; sonde HTTPS prouvée
+                contre le vrai Caddy ; script rootless prouvé contre un vrai Docker APRÈS correction d'un défaut
+                (docker_mode lu au mauvais endroit) : spark-010 sert c995f32. Rien ne reste à mesurer.
 État          : EN ATTENTE — à jouer sur instruction du responsable.
 Objectif      : sparkd porte les sondes de santé (DAT §75) : HTTPS vers une route
                 du Spark par la boucle locale (127.0.0.1:443, SNI), ou script dans

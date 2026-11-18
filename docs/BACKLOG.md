@@ -9378,7 +9378,7 @@ instantanés » et la modale qui la règle.
   illustrations `m9-sla`, `m9-sla-apercu` et `m9-restauration-refusee` renouvelées. Sur le
   doublon la taille des instantanés est nulle (« 0 o ») ; sur la Forge réelle elle est mesurée. Décisions du rédacteur à confirmer : DAT §74.11.
 
-### [~] SPK-184 · La santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes
+### [x] SPK-184 · La santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes
 
 **Demandé le 2026-11-18** par le responsable : un onglet « Santé » par Spark, qui exécute soit
 une requête HTTPS soit un script et, **en erreur, passe par l'alerte hors bande**. Débattu avec
@@ -9406,9 +9406,16 @@ l'écran SPK-186.
   n'est pas une route du Spark, joker, Spark protégé, cadence trop rapprochée, seuil hors bornes) ;
   une sonde HTTPS et un script réels contre le doublon ; une alerte réellement émise vers un canal
   d'épreuve ; migration et `docs/PROD_MIGRATIONS.md` à jour.
-- **État au 2026-11-18 : prouvé sur la Forge réelle spark-010 pour les sondes script — reste `[~]` pour la sonde HTTPS
-  et le compte rootless.** **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — deux sondes script exécutées par la **vraie cellule** (`incus exec`) : `true` → Saine,
+- **État au 2026-11-18 : livré et vérifié, `[x]`, sur la Forge réelle spark-010 — où un défaut que les doublons cachaient a été
+  trouvé et corrigé.** **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — deux sondes script exécutées par la **vraie cellule** (`incus exec`) : `true` → Saine,
   `exit 2` → En panne (« code de sortie 2 (attendu 0) »), relevés planifiés toutes les 5 minutes, « Tester » sans écriture.
+  **Sonde HTTPS contre le vrai Caddy et un vrai certificat** : sur une route TLS de `magiline-mcp`, « Tester » rend « HTTP 302 »
+  en 70 ms (certificat vérifié, requête par la boucle locale avec SNI), puis la sonde posée relève sainement trois fois ; elle a
+  ensuite été **retirée** (le Spark du locataire retrouve sa configuration : aucune sonde). **Script sous le compte rootless contre
+  un vrai Docker** (amorçage rootless réel, Docker 29.10, Compose 5.8) : **défaut trouvé** — `docker ps` sortait en code 1, parce que
+  `docker_mode` vit dans l'observation d'amorçage et non sur la ligne du Spark que lisait le runner : un Spark rootless jouait ses
+  scripts sous `root`, sans accès à son socket. Corrigé (deux tests, rouges avant), redéployé (`c995f32`) : « Tester » réussit en
+  174 ms, et le **relevé planifié suivant passe de En panne à Saine** (21:25:27). 
   Prouvé en local : Prouvé : la machine à états (pure, 5 tests) ; la validation (la
   cible ne peut viser que les routes du Spark : adresse IP, localhost, API de Caddy, route d'un autre
   Spark, joker, port, identifiants, route en clair — tous refusés avec leur raison) ; les deux
@@ -9417,9 +9424,8 @@ l'écran SPK-186.
   jamais stockée ni envoyée (un secret injecté n'est retrouvé ni au registre ni sur le réseau) ;
   l'arrêt, puis le rétablissement d'une panne annoncée ; l'historique borné ; le fil à pool borné et sa
   survie à une panne du registre ; l'API (refus par requête directe : Spark protégé 423 sur chaque
-  écriture et sur le test, domaine étranger 422) ; la migration dans les deux sens ; le seed. **Non
-  prouvé** : un script sous le compte rootless contre un vrai Docker, la sonde HTTPS contre le vrai Caddy et
-  un vrai certificat (le Spark d'essai n'avait pas de route TLS). Décisions du rédacteur à confirmer :
+  écriture et sur le test, domaine étranger 422) ; la migration dans les deux sens ; le seed. Les doublons passaient un dictionnaire où `docker_mode` avait été écrit à la main : c'est
+  pourquoi ce défaut n'a été vu que sur une vraie cellule. Décisions du rédacteur à confirmer :
   DAT §75.11.
 
 ### [x] SPK-185 · La paire `health` / `health.?` : l'agent propose une sonde
