@@ -9152,6 +9152,7 @@ plus simple, et l'ajouter à la recette cloud-init.
   - **Reste `[P]`** : OP-41 étapes 2 et 3 (mise à jour de sparkd, qui emporte
     aussi OP-39 et OP-40) sur instruction du responsable, puis la vérification
     d'OP-41 ; étape 4, le noyau corrigé, à sa publication par Ubuntu.
+
 ### [ ] SPK-173 · La liste des Sparks montre Mémoire et Disque en anneau, et un total face à la Forge
 
 **Demandé le 2026-11-18** par le responsable, depuis la liste des Sparks : la mémoire et
@@ -9172,6 +9173,30 @@ ligne des totaux face à ce que la Forge a au total. Arbitrages du jour : la for
   l'accueil (connexion, clic, capture) ; captures observées (desktop, mobile, absence de
   capacité, un Spark arrêté, un Spark au-delà du seuil) ; manuel M3, DAT, design system,
   seed (un Spark près de sa limite) et changelog à jour.
+
+### [ ] SPK-174 · Désigner l'image proposée par défaut à la création
+
+**Demandé le 2026-11-18** par le responsable, en lisant le refus de retrait du catalogue :
+« « images:debian/13 » est l'image proposée par défaut à la création. Le produit n'offre
+pas encore de geste pour en désigner une autre : elle n'est donc pas retirable. » Le DAT
+§33.7 notait cette limite et la laissait ouverte : `is_default` n'est posé que par le
+pré-renseignement, donc l'entrée par défaut n'est retirable par personne.
+
+- Spécification : `docs/DAT.md` **§69** · §33.5 (la présélection à la création), §33.7
+  (les deux refus du retrait) · `docs/DESIGN_SYSTEM.md` §1.3, §1.4, §6.24, §9.9, §14.9 ·
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-45 · manuel M5 · `docs/JOURNAL.md` 2026-11-18.
+- Dépend de : SPK-32 (le catalogue), SPK-92 (le retrait et ses refus).
+- Portée : `PUT /v1/images/{id}/default` désigne l'entrée par défaut, atomiquement ; un
+  bouton « Définir par défaut » par ligne du catalogue, sur les entrées `verified` ; le
+  refus de retrait de l'entrée par défaut **dit comment s'en sortir** ; la « limite
+  connue » du §33.7 disparaît.
+- Hors périmètre : le relevé, l'ajout et le retrait eux-mêmes ; la création d'un Spark ;
+  toute migration (`is_default` existe, son invariant se tient en transaction) ; toute
+  variable d'environnement.
+- DoD : preuve rouge avant correction (le refus actuel) ; tests unitaires (service et
+  composant), API contre le vrai registre — y compris un refus par requête directe —, E2E
+  depuis l'accueil (Forge → Images → désigner → retirer l'ancienne) ; captures observées ;
+  manuel M5, DAT §33.7, README si concerné, seed et changelog à jour.
 
 ---
 

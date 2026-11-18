@@ -15034,7 +15034,7 @@ Deux preuves tiennent la décision : aucun cloud-init pré-compilé n'est versio
 `--offre` contient l'amorce courante octet pour octet. DAT §66.8, README, backlog et
 changelog disent la nouvelle décision ; la première n'y figure plus que dans cet
 erratum.
-\n
+
 ## 2026-11-16 · SPK-158 : Scaleway refuse le user-data embarqué — le cloud-init devient léger
 
 **Problème.** Le responsable colle le cloud-init produit par la commande : « HTTP error
@@ -15491,3 +15491,34 @@ pour lecteurs d'écran (design system §1.5).
 **Conséquences.** SPK-173 ouverte, DAT §68 et SPK-DS-44 écrits avant le code. Aucune
 migration, aucune route, aucune variable d'environnement.
 
+**Observation du doublon, sans correction ici.** Calculé le 2026-11-18 sur les profils du
+pilote factice : `api-plafonnee`, `analytics` et `site-vitrine` (quota mémoire 512 Mio)
+dépassent leur quota au sommet de la période (jusqu'à 181 %), ce qu'un vrai Incus en
+`limits.memory.enforce=hard` ne permet pas — le doublon ment sur ce point (SPK-67). Pour
+SPK-173 c'est utile — le seuil et le bornage de l'anneau sont exercés par le seed — mais
+l'écart n'est pas du périmètre : à arbitrer par le responsable.
+
+**Épreuve.** Un Playwright du dépôt voisin `p2enjoy-crm` occupait le poste ; attendu sans y
+toucher (CLAUDE.md §15 bis) avant de lancer l'épreuve de cette unité.
+
+
+
+## 2026-11-18 · SPK-174 : l'image par défaut du catalogue ne se désigne pas, donc ne se retire pas
+
+**Demande du responsable**, depuis l'écran Forge → Images, sur le message « l'image
+`images:debian/13` est l'image proposée par défaut à la création. Le produit n'offre pas
+encore de geste pour en désigner une autre : elle n'est donc pas retirable. » — « Il faut
+aussi l'adresser. »
+
+**Observation.** Le refus vient de `images.remove` (premier refus du §33.7), et le DAT le
+notait comme limite connue : `is_default` n'est posé que par `seed_defaults()`. Ce n'est
+pas un défaut du refus, qui est juste, mais un geste manquant.
+
+**Décisions de conception** (à confirmer par le responsable si elles ne conviennent pas) :
+seule une entrée `verified` peut devenir par défaut, puisque la création ne propose
+qu'elles ; le geste est de la classe d'`image.add` (réversible, sans destruction), donc
+sans confirmation ni notification ; une seule entrée par défaut, tenue en transaction,
+sans migration.
+
+**Conséquences.** SPK-174 ouverte, DAT §69 écrit avant le code. SPK-173 est terminée côté
+code et reste en attente de son épreuve E2E ; SPK-174 vient après, une tâche à la fois.

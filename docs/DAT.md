@@ -17288,13 +17288,16 @@ le quota du disque racine pour le disque.
 - **Au-delà du seuil**, le remplissage prend la couleur `danger`. Le seuil est **90 %**,
   constante nommée `SEUIL_ALERTE_RESSOURCE` dans `tokens.js` : ce n'est ni une variable
   d'environnement ni un réglage. La couleur ne porte jamais seule l'information
-  (design system §1.5) : au-delà du seuil, les chiffres passent en gras et le nom
-  accessible de la cellule dit « proche de la limite ».
+  (design system §1.5) : au-delà du seuil, les chiffres passent en gras et le texte
+  pour lecteurs d'écran ajoute « proche de la limite ».
 - Usage ou limite inconnus : **pas d'anneau**, la cellule reste ce qu'elle était
   (vide si l'usage manque, chiffres seuls si la limite manque — §14.6).
 - Un Spark arrêté : la mémoire n'est pas mesurée (§20.4), la cellule reste vide ; le
   disque garde sa vraie occupation et son anneau.
-- Nom accessible : « Mémoire : 3,3 Gio sur 8,0 Gio, 41 % » — jamais l'anneau seul.
+- Lecture d'écran : l'anneau est décoratif (`aria-hidden`) ; la cellule porte, en
+  texte réservé aux lecteurs d'écran, « 41 % de la limite » — jamais l'anneau seul.
+  Le pourcentage est **tronqué** (89,6 % se dit 89 %) pour ne jamais contredire
+  l'alerte, qui tient à 90 % exactement.
 
 ### 68.3 La ligne des totaux
 
@@ -17314,7 +17317,9 @@ mémoire de 94 Gio vendue ×1,5 ne s'ouvre pas à 141 Gio d'usage réel.
 - La somme porte sur les Sparks **mesurés** ; la ligne dit « n Sparks sur m mesurés »
   lorsque la somme est partielle (§6.13, résultat partiel). Un Spark arrêté n'ajoute
   rien au CPU ni à la mémoire, et ajoute son disque.
-- Chaque cellule de total porte le même anneau, le même seuil et le même nom accessible.
+- Les cellules Mémoire et Disque du total portent le même anneau, le même seuil et le
+  même texte pour lecteurs d'écran ; le CPU du total garde la **barre** de sa colonne
+  (le seuil y vaut aussi : au-delà de 90 % des cœurs, danger + gras + texte).
 - Capacité non relevée (`/v1/forge` en échec) : la somme reste, la capacité est
   **nommée absente** (« capacité de la Forge non relevée »), pas inventée (§14.6).
 - La capacité est lue avec la liste ; un échec de cette lecture n'empêche pas la liste.
@@ -17323,5 +17328,63 @@ mémoire de 94 Gio vendue ×1,5 ne s'ouvre pas à 141 Gio d'usage réel.
 
 Unitaires : proportion, borne à 100 %, seuil, absence d'usage / de limite, somme
 partielle, absence de capacité, absence de la ligne hors onglet « Tous ». E2E depuis
-l'accueil à la souris : connexion avec un utilisateur seedé, lecture de la liste,
-captures (desktop, mobile), Spark seedé au-delà de 90 %.
+l'accueil à la souris : lecture de la liste, accord entre alerte et pourcentage dit,
+totaux face à `/v1/forge`, absence de la ligne dans l'onglet d'un projet, retour à
+« Tous », captures (desktop, mobile). Le seed n'a pas à être modifié : le doublon fait
+déjà franchir 90 % de leur quota mémoire à plusieurs Sparks seedés, au fil de sa
+période de 15 minutes (voir le journal du 2026-11-18).
+
+
+
+## 69. Désigner l'image proposée par défaut à la création : contrat (SPK-174)
+
+*Contrat écrit le 2026-11-18, avant le code. Aucune migration, aucune variable
+d'environnement.*
+
+### 69.1 Le constat
+
+L'entrée `is_default` du catalogue sert de présélection à l'écran de création (§33.5).
+Elle n'est posée que par le pré-renseignement. Le retrait refuse donc l'entrée par défaut
+(§33.7, premier refus), et rien ne permet d'en désigner une autre : le refus est sans
+issue. Le §33.7 le notait comme limite connue.
+
+### 69.2 Le geste
+
+`PUT /v1/images/{id}/default` — **idempotent**, sans corps.
+
+- L'entrée désignée devient la seule par défaut, **dans une seule transaction** : un
+  instant sans défaut, ou avec deux, ne doit jamais être lisible. L'invariant « une et
+  une seule entrée par défaut » se tient dans le service, sans migration.
+- **Seule une entrée `verified` peut être désignée.** Le défaut est une présélection de
+  création ; une entrée `missing` ou `unknown` n'est pas proposée à la création (§33.3),
+  la désigner présélectionnerait ce que la création refuse. Refus : `422 invalid_image`,
+  qui nomme l'état.
+- Déjà par défaut : `200`, `changed: false`, rien n'est écrit ni journalisé — pas de
+  succès simulé (design system §1.3).
+- Entrée inconnue : `422 invalid_image`, comme le retrait.
+- Journal d'audit : `image.default`, de l'ancienne vers la nouvelle référence. Geste de
+  même classe qu'`image.add` : réversible, ne détruit rien, ne donne aucun accès — **ni
+  confirmation (§6.24) ni notification hors bande** (§47). La règle est appliquée par le
+  serveur ; le bouton n'en est que l'aide.
+
+### 69.3 L'écran
+
+Dans le catalogue (SPK-DS-45) : la ligne par défaut porte une pastille « Par défaut » ;
+chaque autre ligne `verified` porte « Définir par défaut ». Les lignes `missing` et
+`unknown` n'ont pas le bouton : ce n'est pas une commande morte (§1.4), c'est un geste
+dont l'objet n'existe pas pour elles. Après le geste, l'écran montre l'état **relu**
+(§1.3).
+
+### 69.4 Le refus du retrait
+
+Le premier refus du §33.7 reste, et **dit sa sortie** : « « … » est l'image proposée par
+défaut à la création. Désignez-en une autre par défaut, puis retirez celle-ci. » Il ne
+dit plus que le produit n'offre pas de geste.
+
+### 69.5 Preuves attendues
+
+Service : désignation atomique, une seule par défaut, idempotence, refus `missing`,
+`unknown` et inconnue. API contre le vrai registre : refus par requête directe, ligne
+d'audit. Composant : pastille, bouton présent seulement sur `verified` non défaut.
+E2E depuis l'accueil : Forge → Images → désigner une autre → retirer l'ancienne
+(maintenant retirable, sous réserve du second refus).
