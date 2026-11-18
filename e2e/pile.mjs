@@ -421,9 +421,9 @@ export async function monterPile({ dns = null, notify = null, github = null } = 
      * l'interface ». Masquer un bouton n'est qu'une aide ; la requête, elle,
      * reste formable à la main, et c'est cela qu'on éprouve.
      */
-    async ecrireSparkd(chemin, corps = null) {
+    async ecrireSparkd(chemin, corps = null, methode = 'POST') {
       const r = await fetch(`http://127.0.0.1:${portSparkd}${chemin}`, {
-        method: 'POST',
+        method: methode,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(corps ?? {}),
       });

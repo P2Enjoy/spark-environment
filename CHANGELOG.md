@@ -3,6 +3,24 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-62 — le second canal d'alerte hors bande : le courriel (SMTP), et la preuve que les deux sont indépendants.**
+  Un **canal courriel** aux côtés du webhook, réglé depuis **Forge → Alertes** : serveur, port, chiffrement
+  (**STARTTLS**, **TLS implicite**, ou **Aucun** pour un relais interne sans compte), compte facultatif et son mot
+  de passe, adresse d'envoi, une à dix adresses de destination. **Le certificat est toujours vérifié**, sans réglage
+  pour s'en dispenser ; STARTTLS **ne se replie jamais en clair** ; un compte avec « Aucun » est **refusé à
+  l'enregistrement** (422) comme une adresse qui injecterait un en-tête. Le **mot de passe du compte est scellé**
+  (AES-256-GCM, clé de la Forge) dans `smtp_password_secret` — qui porte désormais le chiffré, pas le nom d'une
+  entrée du catalogue, qu'on aurait proposée aux Sparks — et **ne sort jamais** : ni de l'API, ni de l'écran, ni du
+  journal. Le courriel est un texte brut qui porte les **dix champs du §47.4** (jamais le `payload`). **Chaque canal
+  a sa file, son fil et ses compteurs** ; un `Ensemble` les alimente chacun dans son propre `try` : un serveur muet
+  ne retarde ni le geste, ni l'autre canal. **Couper un canal le dit, par lui** — et par l'autre s'il veille :
+  « le canal courriel est désactivé ; le webhook continue de veiller ». `GET /v1/forge` rend l'**agrégat** et le
+  détail `channels` ; `GET /v1/notify/channels` gagne `live_smtp`. L'écran : une carte et un formulaire par canal,
+  chacun avec son état, ses compteurs, son refus ; le détail par canal sur l'écran de la Forge. Un champ inconnu du
+  `PUT /v1/notify/channels` est désormais **refusé** au lieu d'être ignoré. Manuel M11 et une illustration. Aucune
+  migration, **aucune variable d'environnement**. DAT §47.3.2 à §47.3.2 ter, §47.6 ; SPK-DS-52 ; OP-48.
+- **Corrigé — un parcours E2E laissait le webhook désactivé** : « l'onglet Alertes se règle » finissait par un envoi
+  qui gardait la case décochée par le refus précédent, et le parcours suivant ne recevait plus aucune alerte.
 - **SPK-186 — l'onglet « Santé » de la console.** Facette **Santé** de la fenêtre d'un Spark : par sonde, l'état
   (**Saine / Instable / En panne / Arrêtée**, en pastille **et** en texte), le dernier relevé, sa latence, depuis
   quand, « N échecs sur S » ou « N échecs consécutifs · seuil S », une **frise** des derniers résultats (rond

@@ -3054,6 +3054,17 @@ avant la première ligne de code.
   journalisé ; refus directs par l'API (mot de passe du garde, compte sans TLS, adresse injectant
   un en-tête) ; parcours E2E depuis l'accueil, à la souris et au clavier, jusqu'à un courriel reçu
   par un serveur SMTP local ; captures observées (desktop, mobile) ; manuel et changelog à jour.
+- **État (2026-11-18) : construit, `[~]`.** Prouvé : 19 tests du canal (`test_canal_smtp.py`) contre un **vrai
+  serveur SMTP local** — STARTTLS et TLS implicite avec un vrai certificat, mot de passe qui ne part qu'après la
+  montée en TLS, absence de repli en clair, certificat toujours vérifié, mauvais mot de passe, serveur muet qui ne
+  retarde pas le geste, message sans `payload`, aucun en-tête injectable — dont l'**indépendance** : webhook
+  injoignable → le courriel part, SMTP muet → le webhook part sans attendre, exception d'un canal → l'autre part ;
+  24 tests d'API (`test_canal_smtp_api.py`) dont les refus par requêtes directes, le mot de passe ni rendu ni au
+  registre en clair ni au journal, la reprise au démarrage, le mot de passe illisible, l'avis de coupure par les deux
+  canaux ; 14 tests de composant ; parcours E2E depuis l'accueil (souris et clavier) jusqu'à un courriel reçu par un
+  serveur SMTP, le refus affiché dans son formulaire, la coupure dite par les deux canaux ; captures desktop et
+  mobile observées ; manuel M11. **Non prouvé** : un vrai fournisseur ; la modale TLS par l'écran (le serveur de
+  parcours est sans TLS — les modes TLS sont prouvés par l'API Python).
 - **Ne pourra pas être prouvé ici** : l'acceptation par un vrai fournisseur (Scaleway TEM, Gmail,
   un relais d'entreprise) — authentification, limites, anti-spam. L'unité reste `[~]` tant
   qu'un courriel n'a pas été reçu d'une vraie Forge par un vrai destinataire.

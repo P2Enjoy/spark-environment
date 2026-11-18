@@ -509,6 +509,8 @@ défaut, pas une commodité.
 | `SPARKD_SECRET_KEY_FILE` | clé de chiffrement des **secrets d'environnement** — 32 octets, `0600`, créée si absente et jamais remplacée (`docs/DAT.md` §43.9.2) | chemin absolu | non | `secret.key` **à côté du registre** |
 | `SPARKD_NOTIFY_URL` | **REPLI seulement** — le canal d'alerte se règle désormais au registre, depuis l'onglet de la Forge (`docs/DAT.md` §47.3). Cette variable ne sert plus qu'aux Forges dont la configuration n'a pas encore été reprise, et le **registre l'emporte** dès qu'un canal y est posé | URL | non | vide |
 | `SPARKD_NOTIFY_TEMPLATE` | **REPLI seulement**, même règle que ci-dessus | JSON avec des `{champ}` | non | vide |
+
+_Le canal **courriel (SMTP)** n'a **aucune** variable d'environnement : il ne se règle qu'au registre, depuis Forge → Alertes (`docs/DAT.md` §47.3.2). Son mot de passe est scellé avec la clé de `SPARKD_SECRET_KEY_FILE`._
 | `SPARKD_FORGE_PUBLIC_ADDRESS` | adresse ou nom public de la Forge, rendu dans le briefing d'un Spark (`docs/DAT.md` §44.8) | IPv4, IPv6 ou nom sans schéma | non | vide : l'adresse est inconnue du plan de contrôle |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
 | `SPARKD_NETWORK_CAPACITY_MBIT` | débit du lien **déclaré**, retenu seulement quand aucune carte n'annonce le sien (carte `virtio`) ; un débit mesuré l'emporte toujours ; posé par l'exécuteur (`networkCapacityMbit`, `--net-mbit` de l'amorce) ou à la main (`docs/DAT.md` §5.3 bis) | entier > 0, Mbit/s | non — absent, le débit est mesuré | `1000` |

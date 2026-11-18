@@ -54,6 +54,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { monterPile } from './pile.mjs';
+import { monterSmtpDoublon } from './smtp-doublon.mjs';
 import { monterDoublonDns } from './dns-doublon.mjs';
 import { monterCanalNotify } from './notify-doublon.mjs';
 // Le motif du SERVEUR, employé tel quel : une seconde heuristique écrite
@@ -69,6 +70,7 @@ const CAPTURES = new URL('./captures/', import.meta.url).pathname;
 let pile;
 let dns;
 let canal;
+let smtp;
 let navigateur;
 let page;
 /** Messages écrits par l'APPLICATION. Le journal réseau de Chromium est à part. */
@@ -87,6 +89,8 @@ before(async () => {
   // configurée. Les autres parcours y envoient donc leurs gestes sensibles — et
   // c'est voulu : si le canal cassait un geste, TOUTE la série le dirait.
   canal = await monterCanalNotify();
+  // SPK-62 · §47.3.2 : un destinataire SMTP jetable — un VRAI serveur sur une socket.
+  smtp = await monterSmtpDoublon();
   pile = await monterPile({ dns, notify: canal.baseUrl });
   // SPK-118 · §63.1 : un nom piégé qui résout vers la boucle locale, comme sous
   // DNS rebinding. Il ne concerne que ce nom : les autres parcours ne le voient
@@ -106,6 +110,7 @@ after(async () => {
   await pile?.demonter();
   await dns?.demonter();
   await canal?.demonter();
+  await smtp?.demonter();
 });
 
 beforeEach(async () => {
@@ -1710,7 +1715,10 @@ test('l’onglet Alertes se règle, et le REFUS vient du serveur', async () => {
     // registre ; le suivant éprouve le corps par défaut du §47.4 et ne le
     // reconnaîtrait plus. Un parcours qui laisse une trace rend le verdict des
     // suivants dépendant de l'ordre — le défaut corrigé trois fois déjà.
+    // Le refus de l'étape 4 a gardé la case DÉCOCHÉE (SPK-140) : sans la recocher, ce parcours
+    // laissait le canal désactivé, et le suivant ne recevait plus aucune alerte.
     await page.fill('#alerte-gabarit', '');
+    await page.check('#alerte-actif');
     await page.fill('#alerte-mot', 'le-garde');
     await page.click('#formulaire-alertes button[type="submit"]');
     await page.waitForFunction(
@@ -1792,6 +1800,152 @@ test('un geste sensible envoie une alerte hors bande, un geste ordinaire non', a
       () => document.body.innerText.includes('Armée'), { timeout: 15000 });
     assert.equal((await pile.lireSparkd('/v1/sparks/analytics/protection'))
       .corps.protected, true, 'la pile est rendue dans l’état du seed');
+  });
+});
+
+// --- SPK-62 · §47.3.2 : le canal COURRIEL, de bout en bout ------------------------------------
+
+test('le canal courriel : réglé depuis l’onglet, un geste réel produit un courriel, le couper le dit', async () => {
+  await parcours('alertes-courriel', async () => {
+    // @verifies docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3.2 (le canal SMTP), §47.3.2 bis (deux
+    //           témoins indépendants), §47.3.2 ter (couper un canal le dit, par lui), §47.3.3 (le
+    //           mot de passe à chaque écriture) · docs/DESIGN_SYSTEM_APP.md SPK-DS-52
+    //
+    // Le destinataire est un VRAI serveur SMTP (`smtp-doublon.mjs`) ; l'autre canal est le webhook
+    // de la pile. On les règle TOUS DEUX par l'écran, pour connaître l'état de départ.
+    smtp.oublier();
+    canal.oublier();
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.click('.onglets a[href="#/forge/alertes"]');
+    await page.waitForSelector('#formulaire-smtp', { timeout: 20000 });
+
+    // --- le webhook d'abord : l'état de départ est CONNU (même adresse que la pile) --------------
+    await page.fill('#alerte-url', canal.baseUrl);
+    await page.check('#alerte-actif');
+    await page.fill('#alerte-mot', 'le-garde');
+    await page.click('#formulaire-alertes button[type="submit"]');
+    await page.waitForFunction(
+      () => /Configuration enregistrée/.test(document.querySelector('#formulaire-alertes')?.innerText ?? ''),
+      null, { timeout: 15000 });
+
+    // --- le courriel, AU CLAVIER : on tape, on passe au champ suivant par Tab -------------------------
+    await page.focus('#smtp-hote');
+    await page.keyboard.type('127.0.0.1');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'smtp-port', 'Tab mène au port');
+    await page.keyboard.type(String(smtp.port));
+    await page.selectOption('#smtp-tls', 'none');
+    await page.fill('#smtp-de', 'forge@exemple.fr');
+    await page.fill('#smtp-a', 'admin@exemple.fr, astreinte@exemple.fr');
+
+    // 1. Un compte avec « Aucun » chiffrement : le serveur REFUSE, mot pour mot, dans SON formulaire.
+    await page.fill('#smtp-compte', 'alerte');
+    await page.fill('#smtp-secret', 'un-mot-de-passe');
+    await page.check('#smtp-actif');
+    await page.fill('#smtp-mot', 'le-garde');
+    await page.click('#formulaire-smtp button[type="submit"]');
+    await page.waitForSelector('#formulaire-smtp .refus[role="alert"]', { timeout: 15000 });
+    assert.match(await page.textContent('#formulaire-smtp .refus'), /Un mot de passe ne part pas en clair/);
+    assert.equal(await page.inputValue('#smtp-hote'), '127.0.0.1', 'un refus garde la saisie');
+    assert.equal(await page.inputValue('#smtp-secret'), '', 'le mot de passe du compte n’est jamais réécrit');
+    assert.equal(await page.inputValue('#smtp-mot'), '', 'ni celui du garde');
+    assert.equal(await page.locator('#formulaire-alertes .refus').count(), 0,
+      'le refus du courriel ne s’affiche pas dans le formulaire du webhook');
+    await capturer('spk62-smtp-refus', { hauteur: 1500 });
+    assert.equal((await pile.lireSparkd('/v1/notify/channels')).corps.smtp.enabled, false,
+      'un refus laisse la configuration où elle était');
+
+    // 2. Sans compte, c'est valide. La soumission se fait AU CLAVIER : Entrée dans le champ du garde.
+    await page.fill('#smtp-compte', '');
+    await page.fill('#smtp-mot', 'le-garde');
+    await page.focus('#smtp-mot');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => /canal courriel enregistrée/.test(document.querySelector('#formulaire-smtp')?.innerText ?? ''),
+      null, { timeout: 15000 });
+    assert.equal(await page.getAttribute('#formulaire-smtp [data-etat-canal]', 'data-etat-canal'), 'actif');
+    const vu = (await pile.lireSparkd('/v1/notify/channels')).corps;
+    assert.equal(vu.smtp.enabled, true);
+    assert.equal(vu.smtp.password_set, false, 'vider le compte n’a rien gardé');
+    assert.equal(vu.live_smtp.configured, true);
+    await capturer('spk62-smtp-actif', { hauteur: 1500 });
+    await capturer('spk62-smtp-actif-mobile', { largeur: 390, hauteur: 2600 });
+
+    // --- un geste RÉEL : lever la protection d'« analytics » ------------------------------------------
+    smtp.oublier();
+    canal.oublier();
+    await ouvrir('analytics');
+    await page.waitForSelector('#titre-protection', { timeout: 10000 });
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', MOT_DE_PASSE);
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(() => document.body.innerText.includes('Désarmée'), { timeout: 15000 });
+
+    const courriels = await smtp.attendre(1);
+    assert.equal(courriels.length, 1, 'un courriel pour la levée de protection');
+    const courriel = courriels[0];
+    assert.equal(courriel.de, 'forge@exemple.fr');
+    assert.deepEqual(courriel.a.sort(), ['admin@exemple.fr', 'astreinte@exemple.fr']);
+    assert.match(courriel.brut, /Subject: .*spark\.unprotect/);
+    const texte = smtp.texte(courriel);
+    assert.match(texte, /action : spark\.unprotect/);
+    assert.match(texte, /actor : console\/local/);
+    assert.match(texte, /target_type : spark/);
+    assert.match(texte, /message : Protection levée sur « analytics »/, 'le message NOMME l’objet');
+    assert.ok(!courriel.brut.includes(MOT_DE_PASSE) && !texte.includes(MOT_DE_PASSE),
+      'le mot de passe de protection ne sort PAS par le courriel (§47.4)');
+    assert.ok(!/payload/i.test(courriel.brut), 'le payload n’est pas envoyé');
+    // L'AUTRE témoin a reçu le même geste, de son côté.
+    const recusWebhook = await canal.attendre(1);
+    assert.ok(recusWebhook.some((r) => r.action === 'spark.unprotect'), 'le webhook a reçu le même geste');
+
+    // L'écran de la Forge nomme les DEUX canaux : un agrégat qui dirait « tout est parti » mentirait.
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-notify', { timeout: 10000 });
+    await page.waitForFunction(
+      () => /Courriel \(SMTP\)/.test(document.querySelector('#titre-notify')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 15000 });
+    const detail = await page.innerText('#titre-notify ~ ul');
+    assert.match(detail, /Webhook — veille/);
+    assert.match(detail, /Courriel \(SMTP\) — veille · envoyées 1/);
+    await page.evaluate(() => document.querySelector('#titre-notify')?.closest('section')?.scrollIntoView({ block: 'start' }));
+    await capturer('spk62-smtp-forge-detail', { hauteur: 700 });
+
+    // On REMET la protection (§29.2).
+    await ouvrir('analytics');
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', MOT_DE_PASSE);
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(() => document.body.innerText.includes('Armée'), { timeout: 15000 });
+
+    // --- couper le courriel LE DIT, par lui — et l'autre canal sait qu'il reste seul ------------------
+    smtp.oublier();
+    canal.oublier();
+    await page.click('nav a[href="#/forge"]');
+    await page.click('.onglets a[href="#/forge/alertes"]');
+    await page.waitForSelector('#formulaire-smtp', { timeout: 20000 });
+    await page.uncheck('#smtp-actif');
+    await page.fill('#smtp-mot', 'le-garde');
+    await page.click('#formulaire-smtp button[type="submit"]');
+    await page.waitForFunction(
+      () => /canal courriel enregistrée/.test(document.querySelector('#formulaire-smtp')?.innerText ?? ''),
+      null, { timeout: 15000 });
+    const avis = await smtp.attendre(1);
+    assert.equal(avis.length, 1, 'le canal qu’on coupe dit qu’il se tait, PAR LUI');
+    assert.match(smtp.texte(avis[0]), /canal courriel \(SMTP\) est DÉSACTIVÉ/);
+    const avisWebhook = await canal.attendre(1);
+    assert.ok(avisWebhook.some((r) => /continue de veiller/.test(r.message ?? '')),
+      'le webhook apprend qu’il reste seul');
+    assert.equal(await page.getAttribute('#formulaire-smtp [data-etat-canal]', 'data-etat-canal'), 'desactive');
+    await capturer('spk62-smtp-desactive', { hauteur: 1500 });
+
+    // --- le refus du garde, par la requête DIRECTE (CLAUDE.md §10) : rien ne change ------------------
+    const direct = await pile.ecrireSparkd('/v1/notify/channels', { password: 'FAUX', smtp_enabled: 1 }, 'PUT');
+    assert.equal(direct.status, 403);
+    assert.equal((await pile.lireSparkd('/v1/notify/channels')).corps.smtp.enabled, false);
   });
 });
 

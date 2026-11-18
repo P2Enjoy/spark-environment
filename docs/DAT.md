@@ -12650,8 +12650,8 @@ destination. **SMTP est une dépendance sortante qui peut pendre** : un serveur 
 accepte la connexion puis ne répond plus tient la socket ouverte. C'est le cas que
 le §47.5 traite — délai borné, échec avalé, jamais de geste bloqué.
 
-**Contrat posé le 2026-11-18, avant le code (SPK-62, dernier chunk).** Décisions du
-rédacteur, à confirmer par le responsable (§47.3.2.8) :
+**Contrat posé le 2026-11-18, avant le code (SPK-62, dernier chunk), puis construit le même jour.** Décisions
+du rédacteur, à confirmer par le responsable (point 8) :
 
 1. **Mode TLS : `starttls`, `tls` ou `none`.** `starttls` (port 587 d'ordinaire) ouvre
    en clair puis exige la montée en TLS — un serveur qui ne l'annonce pas **fait échouer**

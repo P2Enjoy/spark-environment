@@ -487,6 +487,28 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.locator('[data-proposition="health"] [data-sugg-ouvrir="health"]').click();
     await page.waitForFunction(() => document.querySelectorAll('[data-proposition="health"] .badge--danger').length > 0, null, { timeout: 15000 });
     await capturer('m14-sante-proposition', { hauteur: 1500 });
+    // --- M11 · Les deux canaux d'alerte, dont le courriel (SPK-62, §47.3.2) -------------------
+    // Par l'écran, depuis l'accueil : Forge, Alertes, puis le formulaire du canal courriel rempli
+    // comme le lecteur le fera — STARTTLS, un compte, son mot de passe, deux destinataires.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.click('.onglets a[href="#/forge/alertes"]');
+    await page.waitForSelector('#formulaire-smtp', { timeout: 20000 });
+    await page.fill('#smtp-hote', 'smtp.exemple.fr');
+    await page.fill('#smtp-port', '587');
+    await page.fill('#smtp-compte', 'alertes-forge');
+    await page.fill('#smtp-secret', 'mot-de-passe-du-compte');
+    await page.fill('#smtp-de', 'forge@exemple.fr');
+    await page.fill('#smtp-a', 'admin@exemple.fr, astreinte@exemple.fr');
+    await page.check('#smtp-actif');
+    await page.fill('#smtp-mot', 'mot-des-canaux');
+    await page.click('#formulaire-smtp button[type="submit"]');
+    await page.waitForFunction(
+      () => /canal courriel enregistrée/.test(document.querySelector('#formulaire-smtp')?.innerText ?? ''),
+      null, { timeout: 15000 });
+    await page.evaluate(() => document.querySelector('#titre-smtp')?.scrollIntoView({ block: 'start' }));
+    await capturer('m11-courriel', { hauteur: 1300 });
+
     // --- M12 · Le journal de tous les Sparks (SPK-39) ------------------------
     // On y va par la navigation : Forge, puis l'onglet Journal. Le relevé de la
     // chaîne est déclenché, sinon l'illustration montrerait « pas encore

@@ -730,13 +730,19 @@ export function renderNotify(notify) {
   // `role="alert"`, jamais par la seule couleur (`DESIGN_SYSTEM.md` §1.5).
   if (notify.misconfigured) {
     const champs = (notify.unknown_fields ?? []).map(echapper).join(', ');
+    // SPK-62 · §47.6 : à deux canaux, on dit LEQUEL est muet — l'agrégat ne ment pas.
+    const smtpMuet = Boolean(notify.channels?.smtp?.misconfigured);
+    const webhookMuet = notify.channels ? Boolean(notify.channels.webhook?.misconfigured) : true;
     return `
 <section class="carte bloc" aria-labelledby="titre-notify">
-  ${entete}
+  ${entete}${webhookMuet ? `
   <p class="avertissement" role="alert"><strong>Le canal est configuré mais n’envoie
   rien.</strong> Son gabarit nomme ${champs ? `un champ qui n’existe pas :
   <code>${champs}</code>` : 'un champ qui n’existe pas'}. Aucune alerte n’a été
-  tentée — le défaut est vu <strong>avant</strong> l’incident, et non pendant.</p>
+  tentée — le défaut est vu <strong>avant</strong> l’incident, et non pendant.</p>` : ''}${smtpMuet ? `
+  <p class="avertissement" role="alert"><strong>Le canal courriel est configuré mais
+  n’envoie rien.</strong> Son mot de passe enregistré ne se déchiffre pas : ressaisissez-le
+  depuis l’onglet Alertes. Aucun courriel n’a été tenté.</p>` : ''}
   <p class="note">Un gabarit ne peut nommer que les champs de l’alerte.
   <a href="#/manuel/M11">Manuel M11 — Sécurité et limites</a></p>
 </section>`;
@@ -750,10 +756,20 @@ export function renderNotify(notify) {
          ? `Dernier motif : ${echapper(notify.last_error)}.` : ''}</p>`
     : `<p class="succes">Toutes les alertes sont parties.</p>`;
 
+  // SPK-62 · §47.6 : le détail par canal, dès que deux veillent — un agrégat qui dirait « tout
+  // est parti » quand l'un des deux est muet mentirait (§14.6).
+  const libelles = { webhook: 'Webhook', smtp: 'Courriel (SMTP)' };
+  const actifs = Object.entries(notify.channels ?? {}).filter(([, c]) => c.configured);
+  const detail = actifs.length > 1
+    ? `<ul class="detail-canaux" aria-label="Détail par canal">${actifs.map(([nom, c]) => `
+    <li><strong>${echapper(libelles[nom] ?? nom)}</strong> — ${
+      Number(c.failed ?? 0) + Number(c.dropped ?? 0) > 0 ? 'des alertes ne sont pas parties' : 'veille'
+    } · envoyées ${echapper(String(c.sent ?? 0))} · en échec ${echapper(String(c.failed ?? 0))}${
+      c.last_error ? ` · dernier motif : ${echapper(c.last_error)}` : ''}</li>`).join('')}</ul>` : '';
   return `
 <section class="carte bloc" aria-labelledby="titre-notify">
   ${entete}
-  ${bilan}
+  ${bilan}${detail}
   <div class="definitions">
     <div class="def"><dt>Envoyées</dt><dd>${echapper(String(notify.sent ?? 0))}</dd></div>
     <div class="def"><dt>En échec</dt><dd>${echapper(String(notify.failed ?? 0))}</dd></div>

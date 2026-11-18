@@ -15974,3 +15974,22 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   L'avis de coupure se précise à deux canaux (§47.3.2 ter) : il part par tous les canaux vivants avant.
 - **Reste à faire** : le code, les preuves (serveur SMTP local réel, STARTTLS compris), l'écran, le manuel.
 
+**SPK-62, canal SMTP : livraison, le 2026-11-18.**
+
+- **Trouvé en écrivant le test, pas à la relecture** : `PUT /v1/notify/channels` filtrait le corps sur la liste des
+  champs connus, donc le refus « champs inconnus » de `regler` n'était **jamais atteint** — un champ mal écrit était
+  ignoré en silence, ce que le module dit précisément vouloir éviter. Le corps entier (sauf le mot de passe du garde)
+  est désormais transmis.
+- **Trouvé par le parcours** : « l'onglet Alertes se règle » laissait le webhook désactivé (la case décochée par le
+  refus précédent est retenue, puis soumise) ; le parcours suivant ne recevait plus rien. Un défaut d'ordre déjà
+  présent, vu seulement parce que j'ai enchaîné les trois parcours.
+- **Une conséquence de l'agrégat** : `GET /v1/forge` rendait l'état du seul webhook ; avec deux canaux, un agrégat
+  qui ne montrerait que la somme dirait « tout est parti » quand l'un est muet. Il rend donc aussi `channels`, et
+  l'écran liste une ligne par canal dès que deux veillent.
+- **Piège d'encodage** : `EmailMessage` choisit seul entre quoted-printable et base64 selon le contenu ; un message
+  dont l'encodage change d'une alerte à l'autre est pénible à lire. Quoted-printable est forcé.
+- **Une limite de ce que le parcours peut prouver** : le serveur SMTP de la pile n'a pas de TLS ; les modes
+  STARTTLS et TLS implicite sont prouvés contre un serveur Python qui les parle vraiment, pas par l'écran.
+- **Reste** : un courriel reçu d'une vraie Forge par un vrai destinataire — d'où `[~]`. Décisions à confirmer :
+  DAT §47.3.2 point 8.
+

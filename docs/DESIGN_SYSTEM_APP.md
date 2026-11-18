@@ -387,6 +387,32 @@ montre **avec sa commande exacte** et le compte qui l'exécutera, jamais résum�
 **Accessibilité.** Tout est au clavier ; un changement d'état affiché est annoncé en `role="status"` ;
 l'état n'est jamais porté par la couleur seule.
 
+### SPK-DS-52 · Deux canaux d'alerte : une carte par canal, un refus qui reste chez lui
+
+Date : 2026-11-18 · `docs/DAT.md` §47.3.2, §47.3.2 bis, §47.6 · `docs/DESIGN_SYSTEM.md` §6.11, §6.13, §14.6.
+
+**Une carte et un formulaire par canal.** L'onglet Alertes porte une carte d'introduction, puis **Webhook**,
+puis **Courriel (SMTP)**. Chaque carte a **son état** (les mêmes quatre états, dits pour *ce* canal : « Le
+canal courriel veille… »), **ses compteurs** (envoyées, en échec, abandonnées), **son formulaire**, **son
+refus** et **son message de succès**. Un refus du courriel ne s'affiche jamais dans le formulaire du webhook :
+deux témoins indépendants, rien de partagé à l'écran non plus.
+
+**« Aucun canal » ne se dit que si aucun des deux n'est posé.** Un canal absent dit seulement « Ce canal n'est
+pas configuré. » : l'afficher en alerte quand l'autre veille ferait croire que rien n'est surveillé.
+
+**Le secret ne s'affiche jamais, et on le dit.** Le mot de passe du compte reste vide ; l'aide dit qu'un mot de
+passe est enregistré et que laisser le champ vide le conserve (`placeholder="inchangé"`). Après un refus, la
+saisie reste — serveur, port, mode, compte, adresses, case — **sauf les deux mots de passe**.
+
+**Ce que l'écran affirme sans option pour l'infirmer** : « le certificat du serveur est toujours vérifié » et
+« un mot de passe ne part jamais en clair ». Pas de case pour s'en dispenser (DAT §47.3.2 points 2 et 3).
+Comme pour le webhook, **aucun bouton n'envoie de message d'épreuve** (§47.3.0 bis).
+
+**Le détail par canal sur l'écran de la Forge.** Dès que **deux** canaux veillent, le bloc « Alerte hors bande »
+liste une ligne par canal — `Webhook — veille · envoyées N · en échec M`, `Courriel (SMTP) — des alertes ne
+sont pas parties · … · dernier motif : …` (classe `.detail-canaux`) — et l'agrégat préfixe le motif de son
+canal. Un agrégat qui dirait « tout est parti » quand l'un des deux est muet mentirait (§14.6).
+
 ### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
 
 Les mesures d'un Spark viennent du runtime et se comparent à ses quotas

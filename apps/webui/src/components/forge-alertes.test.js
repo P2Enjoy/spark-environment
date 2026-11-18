@@ -255,3 +255,111 @@ test('le calcul en cours et l’échec se disent', () => {
                /class="refus"[^>]*>tunnel fermé/);
   assert.equal(renderApercu(null), '');
 });
+
+
+// --- SPK-62 · §47.3.2 : le canal COURRIEL, sa carte et son formulaire ----------
+
+import { saisieSmtp } from './forge-alertes.js';
+
+const SMTP = (extra = {}) => ({ enabled: true, configured: true, host: 'smtp.exemple.fr', port: 587,
+  tls: 'starttls', username: 'alerte', from: 'forge@exemple.fr', to: 'admin@exemple.fr',
+  password_set: true, ...extra });
+const pretSmtp = (smtp, liveSmtp = {}, extra = {}) => renderAlertes({
+  ...ALERTES_VIDE, status: 'ready', live: {}, liveSmtp,
+  config: { guard_set: true, webhook: { enabled: false, configured: false }, smtp }, ...extra });
+
+test('la carte courriel porte son formulaire, ses champs étiquetés et son mot de passe du garde', () => {
+  const html = pretSmtp(SMTP());
+  const f = html.slice(html.indexOf('id="formulaire-smtp"'));
+  for (const id of ['smtp-hote', 'smtp-port', 'smtp-tls', 'smtp-compte', 'smtp-secret', 'smtp-de', 'smtp-a',
+    'smtp-actif', 'smtp-mot']) {
+    assert.match(f, new RegExp(`id="${id}"`), id);
+    assert.match(f, id === 'smtp-actif' ? /for="smtp-actif"/ : new RegExp(`for="${id}"`), `label de ${id}`);
+  }
+  assert.match(f, /type="password"[^>]*name="password"|name="password"[^>]*type="password"|id="smtp-mot"/);
+});
+
+test('le formulaire courriel montre la configuration RELUE, sans le mot de passe du compte', () => {
+  const html = pretSmtp(SMTP({ password_set: true }));
+  assert.match(html, /id="smtp-hote"[^>]*value="smtp\.exemple\.fr"/);
+  assert.match(html, /id="smtp-port"[^>]*value="587"/);
+  assert.match(html, /<option value="starttls" selected>/);
+  assert.match(html, /id="smtp-compte"[^>]*value="alerte"/);
+  assert.match(html, /Un mot de passe est enregistré<\/strong> ; il ne s’affiche pas/);
+  assert.match(html, /id="smtp-secret"[^>]*placeholder="inchangé"/);
+  assert.doesNotMatch(html, /id="smtp-secret"[^>]*value=/);
+  assert.match(html, /id="smtp-actif"[^>]*checked/);
+});
+
+test('l’écran dit que le certificat est TOUJOURS vérifié, et qu’un mot de passe ne part pas en clair', () => {
+  const html = pretSmtp(SMTP());
+  assert.match(html, /toujours vérifié/);
+  assert.match(html, /ne part jamais en clair/);
+});
+
+test('aucun bouton n’envoie un courriel d’épreuve : la seule épreuve est un vrai geste', () => {
+  const html = pretSmtp(SMTP());
+  assert.ok(!/essayer|tester|\btest\b/i.test(html.slice(html.indexOf('id="formulaire-smtp"'))));
+});
+
+test('un canal courriel non configuré le dit, sans parler d’une panne', () => {
+  const html = pretSmtp({ enabled: false, configured: false, password_set: false });
+  const carte = html.slice(html.indexOf('id="formulaire-smtp"'));
+  assert.match(carte, /Ce canal n’est pas configuré/);
+  assert.match(carte, /Aucun mot de passe n’est enregistré/);
+});
+
+test('les états du canal courriel sont distincts et dits pour LUI', () => {
+  const sur = (smtp, live) => pretSmtp(smtp, live).slice(pretSmtp(smtp, live).indexOf('id="formulaire-smtp"'));
+  assert.match(sur(SMTP({ enabled: false }), {}), /canal courriel est configuré mais désactivé/);
+  assert.match(sur(SMTP(), { failed: 2, last_error: 'timed out' }), /Des courriels ne sont pas partis[\s\S]*ont abouti/);
+  assert.match(sur(SMTP(), { failed: 2, last_error: 'timed out' }), /timed out/);
+  assert.match(sur(SMTP(), { misconfigured: true }), /role="alert"[\s\S]*ressaisissez-le/);
+  assert.match(sur(SMTP(), {}), /Le canal courriel veille/);
+});
+
+test('« aucun canal » ne se dit PAS quand le courriel veille, même sans webhook', () => {
+  const html = pretSmtp(SMTP(), {});
+  assert.doesNotMatch(html, /Aucun canal n’est configuré/);
+  assert.doesNotMatch(html, /rien\s+n’est surveillé/);
+});
+
+test('les compteurs sont PAR canal : le courriel ne montre pas ceux du webhook', () => {
+  const html = renderAlertes({
+    ...ALERTES_VIDE, status: 'ready', live: { sent: 7, failed: 0 }, liveSmtp: { sent: 1, failed: 4 },
+    config: { guard_set: true, webhook: { enabled: true, configured: true }, smtp: SMTP() } });
+  const webhook = html.slice(html.indexOf('id="titre-webhook"'), html.indexOf('id="formulaire-smtp"'));
+  const courriel = html.slice(html.indexOf('id="formulaire-smtp"'));
+  assert.match(webhook, /Envoyées<\/dt><dd>7<\/dd>/);
+  assert.match(courriel, /Envoyées<\/dt><dd>1<\/dd>/);
+  assert.match(courriel, /En échec<\/dt><dd>4<\/dd>/);
+});
+
+test('un refus du courriel s’affiche DANS son formulaire et garde la saisie, sans aucun mot de passe', () => {
+  const html = renderAlertes({
+    ...ALERTES_VIDE, status: 'ready', live: {}, liveSmtp: {},
+    config: { guard_set: true, webhook: { enabled: false, configured: false }, smtp: SMTP({ host: 'ancien.fr' }) },
+    smtp: { refus: 'Un mot de passe ne part pas en clair : un compte exige le mode starttls ou tls.',
+            enregistre: null,
+            saisie: { host: 'nouveau.fr', port: '25', tls: 'none', username: 'alerte', from: 'a@x.fr',
+                      to: 'b@x.fr', enabled: false, password: 'NE-DOIT-PAS-REVENIR' } } });
+  const carte = html.slice(html.indexOf('id="formulaire-smtp"'));
+  assert.match(carte, /class="refus" role="alert">Un mot de passe ne part pas en clair/);
+  assert.match(carte, /id="smtp-hote"[^>]*value="nouveau\.fr"/, 'la saisie l’emporte sur le registre');
+  assert.match(carte, /<option value="none" selected>/);
+  assert.doesNotMatch(carte, /id="smtp-actif"[^>]*checked/);
+  assert.ok(!html.includes('NE-DOIT-PAS-REVENIR'));
+  // Le refus du courriel ne s'affiche pas dans le formulaire du webhook.
+  assert.doesNotMatch(html.slice(0, html.indexOf('id="formulaire-smtp"')), /ne part pas en clair/);
+});
+
+test('la saisie retenue du courriel ne garde aucun mot de passe', () => {
+  const d = new FormData();
+  d.set('smtp_host', ' smtp.exemple.fr '); d.set('smtp_port', '587'); d.set('smtp_tls', 'tls');
+  d.set('smtp_username', 'alerte'); d.set('smtp_from', 'a@x.fr'); d.set('smtp_to', 'b@x.fr');
+  d.set('smtp_password', 'secret'); d.set('password', 'garde');
+  const s = saisieSmtp(d);
+  assert.deepEqual(s, { host: 'smtp.exemple.fr', port: '587', tls: 'tls', username: 'alerte',
+    from: 'a@x.fr', to: 'b@x.fr', enabled: false });
+  assert.ok(!JSON.stringify(s).includes('secret') && !JSON.stringify(s).includes('garde'));
+});

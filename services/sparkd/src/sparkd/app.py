@@ -263,6 +263,18 @@ def create_app(config: Config) -> FastAPI:
     app.state.notify = notification_service.Canal(
         url=config.notify_url, forge=_nom_de_la_forge(config),
         gabarit=config.notify_template)
+    # SPK-62 · §47.3.2 bis : le canal COURRIEL est un second témoin, avec sa file et ses
+    # compteurs. `notify_all` les alimente chacun dans son propre `try` ; c'est lui que
+    # l'audit appelle, et c'est son agrégat que `GET /v1/forge` rend.
+    app.state.notify_smtp = notification_service.CanalSmtp(forge=_nom_de_la_forge(config))
+    app.state.notify_all = notification_service.Ensemble(
+        webhook=app.state.notify, smtp=app.state.notify_smtp)
+
+    def _cle_ou_rien():
+        try:
+            return env_service.charger_cle(config.secret_key_file)
+        except env_service.CleError:
+            return None
 
     def _canal_depuis_le_registre() -> None:
         """Le REGISTRE prime sur l'environnement (SPK-62, §47.3).
@@ -276,13 +288,15 @@ def create_app(config: Config) -> FastAPI:
         connection = connect(config.database)
         try:
             url, gabarit = canaux_service.webhook_actif(connection)
+            reglage, illisible = canaux_service.smtp_actif(connection, _cle_ou_rien)
         finally:
             connection.close()
+        app.state.notify_smtp.reregler(reglage, illisible=illisible)
         if url:
             app.state.notify.reregler(url, gabarit, source="registre")
 
     _canal_depuis_le_registre()
-    audit_service.set_canal(app.state.notify)
+    audit_service.set_canal(app.state.notify_all)
     app.state.caddy = (
         ingress_service.FakeCaddy() if config.driver == "fake"
         else ingress_service.Caddy(config.caddy_admin)
@@ -667,7 +681,7 @@ def create_app(config: Config) -> FastAPI:
             # `configured: false` ne veut PAS dire « tout va bien » : les
             # compteurs valent alors zéro parce que rien n'est surveillé, et
             # l'écran doit le dire autrement (§14.6).
-            "notify": app.state.notify.etat(),
+            "notify": app.state.notify_all.etat(),
             # docs/DAT.md §7.3 bis, §32.2 : la reservation est un PLANCHER
             # depuis l'arbitrage du 2026-08-21. Ni « garantie absolue », ni
             # « non garantie » — les deux seraient faux.
@@ -2963,7 +2977,8 @@ def create_app(config: Config) -> FastAPI:
         """
         with registry() as connection:
             return {**canaux_service.etat(connection),
-                    "live": app.state.notify.etat()}
+                    "live": app.state.notify.etat(),
+                    "live_smtp": app.state.notify_smtp.etat()}
 
     @app.post("/v1/notify/preview", tags=["alertes"])
     def preview_channel_message(body: dict = Body(...)) -> dict:
@@ -2987,21 +3002,26 @@ def create_app(config: Config) -> FastAPI:
     def set_channels(body: dict = Body(...)) -> dict:
         """Règle les canaux. Exige le mot de passe du §47.3.3.
 
-        **La désactivation NOTIFIE par le canal qu'elle coupe**, et pendant qu'il
-        fonctionne encore (§47.3.3) : sans quoi la coupure serait le seul geste
-        dont personne n'entendrait parler — et c'est le premier qu'un attaquant
-        tenterait.
+        **La coupure d'un canal le DIT, par lui**, et pendant qu'il fonctionne encore
+        (§47.3.3, §47.3.2 ter) : sans quoi elle serait le seul geste dont personne
+        n'entendrait parler — et c'est le premier qu'un attaquant tenterait.
         """
         mot = str(body.get("password") or "")
-        changements = {c: body[c] for c in canaux_service.CHAMPS if c in body}
+        # Tout ce qui n'est pas le mot de passe du garde est un changement : un champ inconnu
+        # est REFUSÉ par `regler` (422) au lieu d'être ignoré en silence — ignorer ferait croire
+        # qu'il a été pris.
+        changements = {c: v for c, v in body.items() if c != "password"}
+        # La clé de la Forge ne se charge que s'il y a un mot de passe SMTP à sceller : la
+        # charger CRÉE le fichier au premier usage, et la plupart des écritures n'en ont pas besoin.
+        cle = _cle_de_forge() if changements.get(canaux_service.CHAMP_SECRET) else None
         with registry() as connection:
             # Ce qui veille MAINTENANT, quelle que soit la source de son adresse
             # — registre ou repli par `SPARKD_NOTIFY_URL`. C'est cela qu'une
             # coupure coupe, et le §47.3.3 ne distingue pas les deux.
-            veillait = bool(app.state.notify.etat()["configured"])
+            vivants_avant = set(app.state.notify_all.vivants())
             try:
                 etat = canaux_service.regler(connection, mot, changements,
-                                             audit_service.current_actor()[0])
+                                             audit_service.current_actor()[0], cle=cle)
             except canaux_service.MotDePasseRefuse as erreur:
                 raise HTTPException(status_code=403, detail={
                     "error": "notify_password", "message": str(erreur)}) from erreur
@@ -3009,33 +3029,45 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=422, detail={
                     "error": "notify_refused", "message": str(erreur)}) from erreur
             url, gabarit = canaux_service.webhook_actif(connection)
+            reglage, illisible = canaux_service.smtp_actif(connection, _cle_ou_rien)
 
-        # I-02, arbitré le 2026-09-14 : l'avis part si QUELQUE CHOSE veillait et
-        # que plus rien ne veillera — et non plus seulement si le canal du
-        # REGISTRE était actif. Sur une Forge encore sur son repli par
-        # environnement, la première écriture débranchait la surveillance sans
-        # un mot ; c'est exactement le geste que le §47.3.3 veut rendre
-        # impossible à faire en silence.
+        # I-02, arbitré le 2026-09-14, précisé à deux canaux (DAT §47.3.2 ter) : l'avis part si
+        # un canal qui veillait ne veillera plus — et non plus seulement si le canal du REGISTRE
+        # était actif. Sur une Forge encore sur son repli par environnement, la première
+        # écriture débranchait la surveillance sans un mot.
         #
-        # Il part APRÈS l'écriture du registre et AVANT `reregler` : le registre
-        # écrit ne change rien au canal vivant, qui fonctionne donc encore pour
-        # porter son propre avis de décès. L'envoyer avant l'écriture — ce qu'on
-        # faisait — annonçait une coupure qui n'avait pas lieu quand le mot de
-        # passe était ensuite refusé.
-        if veillait and not url:
-            app.state.notify.poster({
+        # Il part sur TOUS les canaux qui veillaient, y compris ceux qui continueront : celui
+        # qu'on coupe dit qu'il se tait, l'autre sait qu'il reste seul. Il part APRÈS
+        # l'écriture du registre et AVANT `reregler` : le registre écrit ne change rien aux
+        # canaux vivants, qui fonctionnent donc encore pour porter l'avis. L'envoyer avant
+        # l'écriture annonçait une coupure qui n'avait pas lieu quand le mot de passe était
+        # ensuite refusé.
+        vivants_apres = {"webhook"} if url else set()
+        if reglage is not None and not illisible:
+            vivants_apres.add("smtp")
+        coupes = sorted(vivants_avant - vivants_apres)
+        if coupes:
+            noms = {"webhook": "webhook", "smtp": "courriel (SMTP)"}
+            restent = sorted(vivants_apres)
+            if restent:
+                phrase = (f"Le canal {' et '.join(noms[c] for c in coupes)} est DÉSACTIVÉ ; "
+                          f"le canal {' et '.join(noms[c] for c in restent)} continue de veiller.")
+            else:
+                phrase = ("Le canal d'alerte hors bande est DÉSACTIVÉ : plus rien ne veille sur "
+                          "cette Forge. C'est le dernier message qu'il porte.")
+            app.state.notify_all.poster_a(sorted(vivants_avant), {
                 "action": "spark.unprotect", "result": "ok",
                 "actor_class": "human",
                 "actor": audit_service.current_actor()[0],
                 "target_type": "forge", "target_id": "notify",
                 "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                "message": "Le canal d'alerte hors bande est DÉSACTIVÉ : plus "
-                           "rien ne veille sur cette Forge. C'est le dernier "
-                           "message qu'il porte.",
+                "message": phrase,
             })
-            app.state.notify.vider(3.0)
+            app.state.notify_all.vider(3.0)
         app.state.notify.reregler(url, gabarit, source="registre")
-        return {**etat, "live": app.state.notify.etat()}
+        app.state.notify_smtp.reregler(reglage, illisible=illisible)
+        return {**etat, "live": app.state.notify.etat(),
+                "live_smtp": app.state.notify_smtp.etat()}
 
     @app.get("/v1/ssh-keys", tags=["cles"])
     def list_keys() -> dict:

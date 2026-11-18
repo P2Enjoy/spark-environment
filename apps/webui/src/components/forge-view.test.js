@@ -1012,3 +1012,38 @@ test('SPK-135 : une capacité mesurée n’appelle aucun mot', () => {
   // Une Forge d'avant la migration 021 ne rend pas la source : rien n'est inventé.
   assert.equal(describeNetworkSource({}), '');
 });
+
+
+// --- SPK-62 · §47.6 : le détail PAR CANAL, un agrégat ne ment pas -------------------------------
+
+const CANAUX = (webhook, smtp) => ({
+  configured: true, misconfigured: false, unknown_fields: [], sent: 0, failed: 0, dropped: 0,
+  channels: { webhook: { configured: true, misconfigured: false, sent: 0, failed: 0, dropped: 0, ...webhook },
+              smtp: { configured: true, misconfigured: false, sent: 0, failed: 0, dropped: 0, ...smtp } } });
+
+test('deux canaux qui veillent : le détail nomme chacun, avec ses compteurs', () => {
+  const html = renderNotify({ ...CANAUX({ sent: 5 }, { sent: 2 }), sent: 7 });
+  assert.match(html, /aria-label="Détail par canal"/);
+  assert.match(html, /<strong>Webhook<\/strong> — veille · envoyées 5 · en échec 0/);
+  assert.match(html, /<strong>Courriel \(SMTP\)<\/strong> — veille · envoyées 2 · en échec 0/);
+});
+
+test('un canal muet est NOMMÉ dans le détail, même si l’autre a tout envoyé', () => {
+  const html = renderNotify({ ...CANAUX({ sent: 5 }, { failed: 3, last_error: 'timed out' }),
+    sent: 5, failed: 3, last_error: 'SMTP : timed out' });
+  assert.match(html, /<strong>Courriel \(SMTP\)<\/strong> — des alertes ne sont pas parties · envoyées 0 · en échec 3 · dernier motif : timed out/);
+  assert.match(html, /<strong>Webhook<\/strong> — veille/);
+  assert.match(html, /SMTP : timed out/, 'l’agrégat dit lequel est muet');
+});
+
+test('un seul canal qui veille : pas de détail superflu', () => {
+  const html = renderNotify({ ...CANAUX({ sent: 5 }, { configured: false }), sent: 5 });
+  assert.doesNotMatch(html, /Détail par canal/);
+});
+
+test('un mot de passe SMTP illisible est dit pour le courriel, sans accuser le gabarit', () => {
+  const html = renderNotify({ ...CANAUX({}, { misconfigured: true }), misconfigured: true });
+  assert.match(html, /canal courriel est configuré mais\s+n’envoie rien/);
+  assert.match(html, /ressaisissez-le/);
+  assert.doesNotMatch(html, /Son gabarit nomme/);
+});

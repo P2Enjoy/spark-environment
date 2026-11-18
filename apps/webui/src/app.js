@@ -48,7 +48,7 @@ import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE,
 import { DEPOT_VIDE, libelleEngagement, libelleIndication }
   from './components/forge-depot.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
-import { ALERTES_VIDE, renderAlertes, renderApercu, saisieAlertes } from './components/forge-alertes.js';
+import { ALERTES_VIDE, renderAlertes, renderApercu, saisieAlertes, saisieSmtp } from './components/forge-alertes.js';
 import { PROPOSITIONS_FORGE_VIDE, renderPropositionsForge }
   from './components/forge-propositions.js';
 import { ongletsSparks, renderProjetsGestion, PROJETS_UI_VIDE, ADRESSE_GESTION,
@@ -594,6 +594,14 @@ function brancher() {
     // SPK-151 · SPK-DS-40 : l'aperçu du message, sans soumettre ni repeindre.
     formulaireAlertes.querySelector('[data-alertes-apercu]')
       ?.addEventListener('click', () => apercuAlertes(formulaireAlertes));
+  }
+  // SPK-62 · §47.3.2 : le formulaire du canal COURRIEL — le sien, avec son propre refus.
+  const formulaireSmtp = racine.querySelector('#formulaire-smtp');
+  if (formulaireSmtp) {
+    formulaireSmtp.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      enregistrerAlertesSmtp(formulaireSmtp);
+    });
   }
   const acceptationInstallation = racine.querySelector('[data-installation-accepted]');
   const confirmationInstallation = racine.querySelector('#confirmation-stockage-forge');
@@ -4294,7 +4302,7 @@ async function chargerDetail(nom, facette = '') {
       // SPK-186 · §75.10 : les sondes, et si un canal d'alerte est configuré. `null` dans les deux
       // cas = « illisible », que l'écran DIT : ne pas avoir pu lire n'est pas « aucune sonde ».
       api(`/v1/sparks/${encodeURIComponent(nom)}/health`).catch(() => null),
-      api('/v1/notify/channels').then((c) => Boolean(c?.live?.configured)).catch(() => null),
+      api('/v1/notify/channels').then((c) => Boolean(c?.live?.configured || c?.live_smtp?.configured)).catch(() => null),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
                     snapshots, audit, isolation, reseaux, projets, sla, health, canalAlerte,
@@ -5720,7 +5728,7 @@ async function chargerAlertes() {
   try {
     const corps = await api('/v1/notify/channels');
     etat.alertes = { ...ALERTES_VIDE, status: 'ready',
-                     config: corps, live: corps.live ?? null };
+                     config: corps, live: corps.live ?? null, liveSmtp: corps.live_smtp ?? null };
   } catch (erreur) {
     etat.alertes = { ...ALERTES_VIDE, status: 'error', error: erreur.message };
   }
@@ -5783,7 +5791,42 @@ async function enregistrerAlertes(formulaire) {
     return;
   }
   etat.alertes = { ...etat.alertes, config: corps, live: corps.live ?? null,
+                   liveSmtp: corps.live_smtp ?? null,
                    refus: null, enregistre: 'Configuration enregistrée.', saisie: null };
+  peindre();
+}
+
+/**
+ * Enregistre le canal COURRIEL. Le mot de passe du garde part à CHAQUE écriture (§47.3.3).
+ *
+ * @spec docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3.2, §47.3.3 · docs/DESIGN_SYSTEM.md §6.11
+ *
+ * Le mot de passe du COMPTE ne part que s'il est tapé : vide, il CONSERVE celui du registre, qui
+ * ne s'affiche jamais. Le refus du serveur s'affiche mot pour mot, et la saisie reste — sauf les deux
+ * mots de passe, qu'on ne recopie pas dans la page (SPK-140).
+ */
+async function enregistrerAlertesSmtp(formulaire) {
+  const donnees = new FormData(formulaire);
+  const lire = (nom) => String(donnees.get(nom) ?? '').trim();
+  const secret = String(donnees.get('smtp_password') ?? '');
+  const changements = {
+    smtp_enabled: donnees.get('smtp_enabled') ? 1 : 0,
+    smtp_host: lire('smtp_host'), smtp_port: lire('smtp_port'), smtp_tls: lire('smtp_tls'),
+    smtp_username: lire('smtp_username'), smtp_from: lire('smtp_from'), smtp_to: lire('smtp_to'),
+    ...(secret ? { smtp_password: secret } : {}),
+  };
+  const { ok, corps } = await appel('PUT', '/v1/notify/channels',
+    { password: String(donnees.get('password') ?? ''), ...changements });
+  if (!ok) {
+    etat.alertes = { ...etat.alertes, smtp: {
+      refus: corps?.detail?.message ?? corps?.message ?? 'La Forge a refusé cette configuration.',
+      enregistre: null, saisie: saisieSmtp(donnees) } };
+    peindre();
+    return;
+  }
+  etat.alertes = { ...etat.alertes, config: corps, live: corps.live ?? null,
+                   liveSmtp: corps.live_smtp ?? null,
+                   smtp: { refus: null, enregistre: 'Configuration du canal courriel enregistrée.', saisie: null } };
   peindre();
 }
 

@@ -112,8 +112,9 @@ de la recopier.
 
 ## Être prévenu quand quelque chose de grave arrive
 
-La Forge peut envoyer une **alerte hors bande** — vers Slack, Discord, `ntfy` ou
-un script à vous — chaque fois qu'un geste sensible aboutit :
+La Forge peut envoyer une **alerte hors bande** — vers Slack, Discord, `ntfy`, un
+script à vous, ou par **courriel** — chaque fois qu'un geste sensible aboutit (ou
+qu'une sonde de santé [M14](M14-sante.md) tombe en panne ou revient) :
 
 - un Spark est supprimé ;
 - une **protection est levée** ;
@@ -149,6 +150,38 @@ exigé à chaque fois : il n'y a pas de session déverrouillée. Le motif tient 
 une phrase — qui peut couper le témoin en silence peut agir sans témoin, et
 c'est le premier geste qu'on tenterait. **Désactiver un canal envoie d'ailleurs
 une dernière alerte par ce canal**, pendant qu'il fonctionne encore.
+
+### Les deux canaux : webhook et courriel
+
+Vous pouvez en activer **un seul, ou les deux**. Ils sont **indépendants** : chacun
+a sa propre file, ses propres compteurs, et l'échec de l'un — un serveur de courrier
+qui ne répond plus, un salon supprimé — **n'empêche pas l'autre de partir**.
+L'écran *Forge* nomme chacun quand les deux veillent.
+
+![Les deux canaux d'alerte](images/m11-courriel.png)
+
+Le canal **courriel** demande un serveur SMTP, un port, un chiffrement, un compte
+(facultatif), une adresse d'envoi et une à dix adresses de destination, séparées par
+des virgules :
+
+- **STARTTLS** (port 587 d'ordinaire) ou **TLS implicite** (port 465) : le **certificat
+  du serveur est toujours vérifié**, sans réglage pour s'en dispenser. Avec STARTTLS,
+  un serveur qui ne propose pas le chiffrement fait **échouer** l'envoi : il ne se
+  replie jamais en clair ;
+- **Aucun** chiffrement n'existe que pour un relais interne **sans compte** : un mot
+  de passe ne part jamais en clair, la Forge refuse d'enregistrer un compte avec ce mode ;
+- le **mot de passe du compte** est chiffré avec la clé de la Forge. Il ne s'affiche
+  jamais, ni à vous ni dans le journal ; laisser le champ vide le conserve, et vider
+  le compte l'efface ;
+- le courriel est un **texte brut** : il porte les dix champs de l'alerte, jamais le
+  détail du geste. Le sujet est `[forge] action — cible` ;
+- **aucun réessai** : un serveur qui ne répond pas perd ce message, et le compteur
+  « en échec » de ce canal le dit.
+
+**Couper un canal le dit, par lui.** Désactiver le courriel envoie un dernier message
+par le courriel, et un autre par le webhook s'il veille — « le canal courriel est
+désactivé ; le webhook continue de veiller ». Désactiver les deux dit que plus rien ne
+veille. Tout cela se passe avant que le canal ne se taise.
 
 **L'adresse du canal ne s'affiche jamais**, pas même à vous : qui la détient peut
 écrire à votre place. L'écran en montre l'hôte — assez pour reconnaître le canal,

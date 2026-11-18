@@ -15,18 +15,21 @@ tout envoi, et il a fallu provoquer un geste sensible réel pour l'apprendre.
 
 **Ce que ce module ne fait PAS.** Il ne poste rien : l'envoi reste dans
 `notification.py`. Il ne chiffre rien : un secret ne vit qu'au coffre du §43.3,
-et la colonne `smtp_password_secret` n'en porte que le NOM.
+et la colonne `smtp_password_secret` porte le mot de passe SMTP SCELLÉ (AES-256-GCM,
+clé de la Forge) — jamais en clair, et jamais dans le catalogue du §43, dont les
+entrées de portée Forge sont proposées aux Sparks (DAT §47.3.2 point 4).
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from datetime import datetime, timezone
 from hashlib import scrypt
 from secrets import compare_digest, token_hex
 
-from . import audit, notification
+from . import audit, environnement, notification
 from .db import transaction
 
 #: Les mêmes paramètres que la protection d'un Spark (§35.3). Les réemployer et
@@ -108,6 +111,55 @@ def webhook_actif(connection: sqlite3.Connection) -> tuple[str, str]:
     return ((l["webhook_url"] or "").strip(), (l["webhook_template"] or "").strip())
 
 
+#: Le nom lié au chiffré comme donnée associée (§47.3.2 point 4) : un chiffré déplacé
+#: vers une autre colonne ne se déchiffrerait pas.
+NOM_SECRET_SMTP = "notify.smtp.password"
+
+
+def sceller(cle: bytes, mot_de_passe: str) -> str:
+    """Le mot de passe SMTP, scellé avec la clé de la Forge."""
+    return environnement.chiffrer(cle, NOM_SECRET_SMTP, mot_de_passe)
+
+
+def smtp_actif(connection: sqlite3.Connection,
+               cle: "bytes | Callable[[], bytes] | None") -> tuple["notification.ReglageSmtp | None", bool]:
+    """Le réglage à employer, et si son mot de passe est ILLISIBLE.
+
+    `(None, False)` si le canal est désactivé ou incomplet : même chose qu'absent, comme
+    pour le webhook. `illisible` vaut vrai quand un mot de passe est au registre mais ne
+    se déchiffre pas (clé indisponible ou changée) : le canal se dit alors mal configuré,
+    plutôt que d'essayer sans compte et d'échouer sans dire pourquoi (§14.6).
+    """
+    l = _ligne(connection)
+    if not l["smtp_enabled"]:
+        return (None, False)
+    hote = (l["smtp_host"] or "").strip()
+    if not (hote and l["smtp_port"] and l["smtp_from"] and l["smtp_to"]):
+        return (None, False)
+    try:
+        destinataires = notification.adresses_valides(l["smtp_to"])
+    except ValueError:
+        return (None, False)
+    compte = (l["smtp_username"] or "").strip() or None
+    mot, illisible = None, False
+    if compte and l["smtp_password_secret"]:
+        try:
+            # La clé ne se charge que s'il y a un secret à ouvrir : charger la clé CRÉE le fichier
+            # au premier usage, et une Forge sans SMTP n'a pas à en acquérir une au démarrage.
+            valeur_cle = cle() if callable(cle) else cle
+            if valeur_cle is None:
+                raise environnement.CleError("clé indisponible")
+            mot = environnement.dechiffrer(valeur_cle, NOM_SECRET_SMTP, l["smtp_password_secret"])
+        except (environnement.CleError, ValueError):
+            illisible = True
+    elif compte:
+        illisible = True
+    return (notification.ReglageSmtp(
+        host=hote, port=int(l["smtp_port"]), tls=l["smtp_tls"] or "starttls",
+        sender=l["smtp_from"], recipients=destinataires, username=compte, password=mot,
+    ), illisible)
+
+
 # --- le garde du §47.3.3 -----------------------------------------------------
 
 
@@ -146,20 +198,24 @@ CHAMPS = ("webhook_enabled", "webhook_url", "webhook_template",
           "smtp_enabled", "smtp_host", "smtp_port", "smtp_tls",
           "smtp_username", "smtp_from", "smtp_to")
 
+#: SPK-62 · §47.3.2 point 4 : le mot de passe SMTP se POSE par ce champ, mais ne se LIT jamais.
+#: Il n'est pas une colonne : il est scellé, puis rangé dans `smtp_password_secret`.
+CHAMP_SECRET = "smtp_password"
+
 
 def regler(connection: sqlite3.Connection, mot: str, changements: dict,
-           actor: str | None = None) -> dict:
+           actor: str | None = None, *, cle: bytes | None = None) -> dict:
     """Modifie la configuration. Exige le mot de passe du §47.3.3.
 
     **Le gabarit est vérifié À L'ENREGISTREMENT**, jamais à l'envoi : c'est la
     première des trois règles non négociables du §47.3.1, et c'est elle qui
     évite que la panne se découvre le jour de l'incident.
     """
-    inconnus = [c for c in changements if c not in CHAMPS]
+    inconnus = [c for c in changements if c not in CHAMPS and c != CHAMP_SECRET]
     if inconnus:
         raise CanalError(
             f"Champs inconnus, refusés : {', '.join(sorted(inconnus))}. "
-            f"Les champs réglables sont : {', '.join(CHAMPS)}.")
+            f"Les champs réglables sont : {', '.join(CHAMPS)}, {CHAMP_SECRET}.")
 
     gabarit = changements.get("webhook_template")
     if gabarit:
@@ -169,6 +225,9 @@ def regler(connection: sqlite3.Connection, mot: str, changements: dict,
                 f"Le gabarit nomme un champ que l'alerte ne publie pas : "
                 f"{', '.join(mauvais)}. Champs disponibles : "
                 f"{', '.join(notification.CHAMPS)}.")
+
+    # SPK-62 · §47.3.2 : le SMTP est validé EN ENTIER, à l'enregistrement — jamais le jour de l'incident.
+    changements = _valider_smtp(connection, changements, cle)
 
     avant = etat(connection)
     # Le mot de passe est vérifié DANS la transaction qui écrit : sans cela, le
@@ -187,8 +246,104 @@ def regler(connection: sqlite3.Connection, mot: str, changements: dict,
             target_type="forge", target_id="notify",
             # §47.4 : ni l'URL, ni un mot de passe n'entrent dans la charge.
             # Un champ qu'on n'écrit pas au journal ne fuit pas par le journal.
-            payload={"champs": sorted(changements)})
+            payload={"champs": sorted(
+                CHAMP_SECRET if c == "smtp_password_secret" else c for c in changements)})
     return etat(connection)
+
+
+def _valider_smtp(connection: sqlite3.Connection, changements: dict,
+                  cle: bytes | None) -> dict:
+    """Normalise les champs SMTP et valide la configuration RÉSULTANTE (§47.3.2).
+
+    Rend les `changements` prêts à écrire : `smtp_password` y devient la colonne
+    `smtp_password_secret`, scellée. Lève `CanalError` en disant quoi corriger.
+    """
+    if not any(c.startswith("smtp_") for c in changements):
+        return dict(changements)
+    sortie = dict(changements)
+    courant = _ligne(connection)
+
+    def valeur(nom: str):
+        return sortie[nom] if nom in sortie else courant[nom]
+
+    # --- chaque champ posé est vérifié en lui-même, activé ou non -----------------------
+    if "smtp_host" in sortie:
+        hote = str(sortie["smtp_host"] or "").strip()
+        if hote and not notification.HOTE.match(hote):
+            raise CanalError(f"« {hote} » n'est pas un nom d'hôte : ni schéma, ni chemin, ni port ici.")
+        sortie["smtp_host"] = hote or None
+    if "smtp_port" in sortie:
+        brut = sortie["smtp_port"]
+        if brut in (None, ""):
+            sortie["smtp_port"] = None
+        else:
+            try:
+                port = int(brut)
+            except (TypeError, ValueError):
+                raise CanalError(f"Le port « {brut} » n'est pas un nombre.") from None
+            if not 1 <= port <= 65535:
+                raise CanalError(f"Le port {port} n'existe pas : il va de 1 à 65535.")
+            sortie["smtp_port"] = port
+    if "smtp_tls" in sortie:
+        mode = str(sortie["smtp_tls"] or "").strip()
+        if mode and mode not in notification.MODES_TLS:
+            raise CanalError(f"Le mode TLS « {mode} » est inconnu : "
+                             f"{', '.join(notification.MODES_TLS)}.")
+        sortie["smtp_tls"] = mode or None
+    if "smtp_username" in sortie:
+        sortie["smtp_username"] = str(sortie["smtp_username"] or "").strip() or None
+    if "smtp_from" in sortie:
+        expediteur = str(sortie["smtp_from"] or "").strip()
+        if expediteur:
+            try:
+                if len(notification.adresses_valides(expediteur)) != 1:
+                    raise ValueError("une seule adresse d'envoi")
+            except ValueError as erreur:
+                raise CanalError(f"Adresse d'envoi refusée : {erreur}.") from None
+        sortie["smtp_from"] = expediteur or None
+    if "smtp_to" in sortie:
+        destinataires = str(sortie["smtp_to"] or "").strip()
+        if destinataires:
+            try:
+                notification.adresses_valides(destinataires)
+            except ValueError as erreur:
+                raise CanalError(f"Destinataires refusés : {erreur}.") from None
+        sortie["smtp_to"] = destinataires or None
+    if "smtp_enabled" in sortie:
+        sortie["smtp_enabled"] = 1 if sortie["smtp_enabled"] else 0
+
+    # --- le mot de passe : posé, conservé, ou effacé avec le compte ---------------------
+    nouveau = str(changements.get(CHAMP_SECRET) or "")
+    sortie.pop(CHAMP_SECRET, None)
+    compte = valeur("smtp_username")
+    if "smtp_username" in sortie and not sortie["smtp_username"]:
+        # Pas de compte : pas d'authentification, donc rien à garder (§47.3.2 point 3).
+        sortie["smtp_password_secret"] = None
+    elif nouveau:
+        if cle is None:
+            raise CanalError("La clé de chiffrement de la Forge est indisponible : le mot de "
+                             "passe SMTP ne peut pas être enregistré.")
+        sortie["smtp_password_secret"] = sceller(cle, nouveau)
+
+    # --- la configuration résultante ----------------------------------------------------
+    mode = valeur("smtp_tls")
+    compte = valeur("smtp_username")
+    secret = sortie["smtp_password_secret"] if "smtp_password_secret" in sortie \
+        else courant["smtp_password_secret"]
+    if compte and mode == "none":
+        raise CanalError("Un mot de passe ne part pas en clair : un compte exige le mode "
+                         "starttls ou tls. Retirez le compte, ou choisissez un mode chiffré.")
+    if valeur("smtp_enabled"):
+        manque = [libelle for nom, libelle in (
+            ("smtp_host", "le serveur"), ("smtp_port", "le port"), ("smtp_tls", "le mode TLS"),
+            ("smtp_from", "l'adresse d'envoi"), ("smtp_to", "la ou les adresses de destination"))
+            if not valeur(nom)]
+        if manque:
+            raise CanalError(f"Le canal SMTP ne peut pas veiller : il manque {', '.join(manque)}.")
+        if compte and not secret:
+            raise CanalError("Un compte est renseigné sans mot de passe : saisissez-le, ou "
+                             "retirez le compte.")
+    return sortie
 
 
 def _resume(avant: dict, changements: dict) -> str:
