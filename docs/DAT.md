@@ -17631,3 +17631,23 @@ plan qui demande la mise à niveau n'est donc pas « terminée » d'avance.
 | SPK-175 | bloc de l'environnement Python de l'amorce, versions égales et différentes | — | `spark-010` : rejeu de l'amorce sans effet sur un environnement juste |
 | SPK-171 | lecteur des sources et rendu de l'onglet | API sous pilote factice ; E2E depuis l'accueil | onglet relu sur `spark-010` |
 | SPK-176 | relevé `zpool upgrade`, plan refusé sans relevé, phase `storage` | E2E de l'installation (case présente, décochée) | — : la mise à niveau est irréversible, elle n'est pas lancée sans décision |
+
+### 70.8 Le diagnostic de l'installation lit l'unité de Caddy que le produit emploie (SPK-177)
+
+**Le défaut.** Constaté le 2026-11-18 sur `spark-010`, pendant la preuve de SPK-176 :
+la conformité de l'installation disait « Caddy actif : inactive — à faire » sur une
+Forge saine, et la phase *Dépendances* restait à faire. Le script fermé du diagnostic
+lisait `caddy.service`, or depuis SPK-129 Caddy est porté par `caddy-api.service`, et
+`caddy.service` est masqué (§51.5). Le préflight, lui, lisait juste (`ING-UNITE`).
+
+**La règle.** Le diagnostic relève les **deux** unités, chacune sous sa clé
+(`caddy_api_actif`, `caddy_actif`). Le contrôle « Caddy actif » est conforme quand
+`caddy-api.service` est actif, et seulement dans ce cas. Son détail nomme les deux
+états : `caddy-api.service : active · caddy.service : inactive`. Une Forge d'avant
+SPK-129, où seul `caddy.service` tourne, reste « à faire », et le détail dit
+pourquoi : c'est la phase *Socle* de l'installation qui la fait passer à
+`caddy-api.service`.
+
+**Vérification.** Le relevé de `spark-010` sert de jeu d'essai : le test échoue avant
+correction et passe après. Le diagnostic rejoué sur `spark-010` depuis l'écran rend
+« Caddy actif » conforme.

@@ -10151,7 +10151,9 @@ la phase *Dépendances* reste « à faire ». Le script fermé du diagnostic lit
 est porté par `caddy-api.service` et `caddy.service` est **masqué** depuis SPK-129
 (DAT §51.5). Le préflight, lui, dit juste (`ING-UNITE`).
 
-- Spécification : **à écrire** — DAT §50.2 bis (ce que le relevé lit) aligné sur §51.5.
+- Spécification : `docs/DAT.md` §70.8 (écrite le 2026-11-18) — le diagnostic relève
+  `caddy-api.service` et `caddy.service` ; « Caddy actif » est conforme sur le premier
+  seul, et le détail nomme les deux · §50.2 bis · §51.5.
 - Dépend de : SPK-129.
 - DoD : relevé réel de `spark-010` en jeu d'essai, rouge avant correction ; écran
   d'installation « conforme » sur une Forge saine.
