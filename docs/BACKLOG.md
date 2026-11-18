@@ -10654,7 +10654,7 @@ quelle, y compris celle d'un Spark que la nouvelle Forge n'a pas.
     `#/sparks` ; depuis *Forge → Mises à jour*, la section est gardée.
   - **Capture observée** : `spk180-apres-changement`.
 
-### [~] SPK-181 · Appliquer les mises à jour du système depuis l'onglet Mises à jour
+### [x] SPK-181 · Appliquer les mises à jour du système depuis l'onglet Mises à jour
 
 **Demandé par le responsable le 2026-11-18** : « lister les mises à jour sans pouvoir les
 exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
@@ -10686,3 +10686,15 @@ exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
     en code 100 (`seteuid failed`, système en lecture seule). C'est le durcissement
     de son unité, voulu. Le geste passe désormais par la console, en SSH (DAT §73.2
     révisé) ; la route de sparkd est retirée.
+- **Prouvé sur `spark-010` le 2026-11-18** (`e2e/forge-reelle/spk181-appliquer.mjs`,
+  console à part).
+  - **Préparation** : sparkd mis à jour par le bloc *Code déployé*, puis `nano`
+    ramené à sa version d'origine (8.7.1-1) pour qu'une mise à jour soit en attente.
+  - **Geste** : dans l'onglet, la case de `nano`, *Appliquer*, la confirmation.
+    L'onglet dit « Mises à jour appliquées : nano », et `nano` sort de la liste
+    relue.
+  - **Sur la machine** : `nano` est en 8.7.1-1ubuntu0.1, `apt` ne le voit plus en
+    attente. Le journal porte la demande puis l'issue, toutes deux **signées** par
+    `console/spark-010`.
+  - **Suites** : sparkd 1 989, webui 1 806. L'E2E de la pile est vert avec le
+    doublon `SPARK_UPGRADE_COMMAND`.
