@@ -46,7 +46,7 @@ import { ALERTES_VIDE, renderAlertes, renderApercu, saisieAlertes } from './comp
 import { PROPOSITIONS_FORGE_VIDE, renderPropositionsForge }
   from './components/forge-propositions.js';
 import { ongletsSparks, renderProjetsGestion, PROJETS_UI_VIDE, ADRESSE_GESTION,
-         adresseProjet, filtrerParProjet, projetsCoches }
+         adresseProjet, filtrerParProjet, projetsCoches, adresseApresChangementDeServeur }
   from './components/sparks-projets.js';
 import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
   from './components/forge-dns.js';
@@ -6186,6 +6186,13 @@ async function changerDeServeur(nom) {
     body: JSON.stringify({ name: nom }),
   }).catch(() => null);
   await ouvrirTunnel(nom);
+  // SPK-180 · §22.4.5 : une adresse qui nomme un Spark ou un projet de l'ANCIENNE
+  // Forge mène à la liste ; changer le hash relance le routeur de lui-même.
+  const adresse = adresseApresChangementDeServeur(location.hash);
+  if (adresse !== location.hash) {
+    location.hash = adresse;
+    return undefined;
+  }
   // Tout ce qui était affiché appartenait à l'AUTRE serveur : on relit plutôt
   // que de laisser des données d'un serveur sous le nom d'un autre.
   return router();

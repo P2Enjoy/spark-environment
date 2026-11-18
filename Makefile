@@ -108,7 +108,7 @@ gestes:
 PLAFOND := systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0
 
 e2e:
-	$(PLAFOND) node --test --test-concurrency=1 e2e/parcours.test.mjs e2e/mises-a-jour.test.mjs e2e/depot-cle.test.mjs
+	$(PLAFOND) node --test --test-concurrency=1 e2e/parcours.test.mjs e2e/mises-a-jour.test.mjs e2e/depot-cle.test.mjs e2e/changement-serveur.test.mjs
 
 # Un seul parcours, par son nom : make e2e-un NOM="isoler le parc"
 e2e-un:

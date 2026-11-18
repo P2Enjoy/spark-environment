@@ -134,3 +134,22 @@ test('rien de ce qui vient du serveur n’est injecté sans échappement', () =>
     + renderProjetsSpark({ name: 'crm', projects: [piege] }, [piege], { open: 'projets', values: {} });
   assert.doesNotMatch(rendu, /<img|<b>/);
 });
+
+// --- SPK-180 · §22.4.5 : l'adresse après un changement de serveur ------------
+// @verifies docs/BACKLOG.md#SPK-180 · docs/DAT.md §22.4.5
+
+import { adresseApresChangementDeServeur as apres } from './sparks-projets.js';
+
+test('la fenêtre d’un Spark de l’ancienne Forge devient la liste des Sparks', () => {
+  // Le cas rapporté : #/sparks/gram/routes après un passage à spark-010.
+  assert.equal(apres('#/sparks/gram/routes'), '#/sparks');
+  assert.equal(apres('#/sparks/gram'), '#/sparks');
+  assert.equal(apres('#/sparks/~projet/p-1'), '#/sparks', 'un projet de l’ancienne Forge');
+});
+
+test('la liste, la gestion des projets et les sections de la Forge sont gardées', () => {
+  for (const adresse of ['#/sparks', '#/sparks/~projets', '#/forge', '#/forge/mises-a-jour',
+                         '#/forge/supervision?fenetre=24h', '#/serveurs', '#/manuel/M8', '']) {
+    assert.equal(apres(adresse), adresse, adresse);
+  }
+});

@@ -10627,7 +10627,7 @@ puis le retrait de l'option — il reste `s1 s2`, avec les données d'avant la r
   (il se bâtirait sur le lot 9).
 - Quotas d'E/S disque par Spark au-delà de la priorité.
 
-### [ ] SPK-180 · Changer de serveur ne laisse pas la fenêtre d'un Spark de l'autre Forge
+### [x] SPK-180 · Changer de serveur ne laisse pas la fenêtre d'un Spark de l'autre Forge
 
 **Rapporté par le responsable le 2026-11-18** : « j'ai switch de forge et il a essayé de
 rester sur le spark de l'autre (`#/sparks/gram/routes` alors que je venais de
@@ -10640,3 +10640,10 @@ quelle, y compris celle d'un Spark que la nouvelle Forge n'a pas.
 - Dépend de : SPK-41.
 - DoD : test unitaire de la règle d'adresse ; E2E au sélecteur depuis la fenêtre d'un
   Spark ; vérification visuelle.
+- **Fait le 2026-11-18.**
+  - **Règle** : `adresseApresChangementDeServeur`, deux preuves unitaires, rouges avant
+    le code (la fonction n'existait pas).
+  - **E2E** `e2e/changement-serveur.test.mjs`, vert. Un second serveur est déclaré par
+    l'écran *Serveurs*. Depuis l'onglet *Routes* d'un Spark, changer de serveur mène à
+    `#/sparks` ; depuis *Forge → Mises à jour*, la section est gardée.
+  - **Capture observée** : `spk180-apres-changement`.

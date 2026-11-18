@@ -3,6 +3,11 @@
 ## [Non publié]
 
 ### Corrigé
+- **SPK-180 — changer de serveur depuis un Spark mène à la liste des Sparks.** La
+  console gardait l'adresse de la fenêtre d'un Spark de l'ancienne Forge
+  (`#/sparks/gram/routes` sur `spark-010`). Une adresse qui nomme un Spark ou un projet
+  devient désormais `#/sparks`. Les sections de la Forge sont gardées et relues pour le
+  nouveau serveur. DAT §22.4.5.
 - **SPK-176 — une mise à niveau ZFS réussie n'est plus déclarée en échec.** Sur la Forge
   de test, `zpool upgrade` a activé 11 fonctionnalités sur 12. L'installation s'est
   pourtant arrêtée en « le zpool a encore des fonctionnalités à activer » : la

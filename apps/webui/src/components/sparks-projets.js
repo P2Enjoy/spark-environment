@@ -22,6 +22,22 @@ const echapper = (v) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 export const ADRESSE_GESTION = '#/sparks/~projets';
+
+/**
+ * L'adresse à afficher après un changement de serveur.
+ *
+ * @spec docs/BACKLOG.md#SPK-180 · docs/DAT.md §22.4.5
+ *
+ * Une adresse qui NOMME un objet de l'ancienne Forge — la fenêtre d'un Spark,
+ * l'onglet d'un projet — n'a pas de sens sur la nouvelle : elle devient la liste
+ * des Sparks. La liste, la gestion des projets et les sections de la Forge
+ * existent partout : elles sont gardées, et relues pour le nouveau serveur.
+ */
+export function adresseApresChangementDeServeur(adresse) {
+  const hash = String(adresse ?? '');
+  if (hash === '#/sparks' || hash === ADRESSE_GESTION) return hash;
+  return /^#\/sparks\/[^?]/.test(hash) ? '#/sparks' : hash;
+}
 export const adresseProjet = (id) => `#/sparks/~projet/${encodeURIComponent(id)}`;
 
 /** Longueur du nom, la même que le serveur (§61.2) : une aide, pas l'autorité. */
