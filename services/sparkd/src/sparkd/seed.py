@@ -30,7 +30,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from . import historian, metrics, sla
+from . import health, historian, metrics, sla
 from .app import create_app
 from .config import Config, load
 from .translate import CLES_ISOLATION
@@ -991,6 +991,76 @@ def _verifier_sla(client: TestClient) -> None:
         raise SeedError(f"le SLA d'« orphelin » devait être en échec, avec sa raison : {echec}")
 
 
+def _declarer_sante(app, config: Config) -> dict[str, int]:
+    """Les sondes de santé de démonstration (SPK-184, docs/DAT.md §75), par le VRAI chemin.
+
+    @spec docs/BACKLOG.md#SPK-184 · docs/DAT.md §75.12 (le seed pose les états que l'écran
+          doit montrer par le même fil, jamais par une écriture directe) · CLAUDE.md §8
+
+    Les sondes sont posées par `health.poser` et relevées par le fil lui-même — `un_pas`,
+    horloge injectée sur l'heure écoulée —, contre les doublons que le seed déclare (la
+    sonde HTTPS d'un nom, le script d'une cellule). Les états sont donc ceux de la Forge :
+
+    - **sain** : `api`, `donnees` ;
+    - **instable** : `vitrine`, deux échecs sur un seuil de VINGT. Le seuil est haut pour que
+      l'état tienne : le fil continue de relever, et un seuil de 3 ferait basculer la sonde
+      en panne cinq minutes après le démarrage de la pile ;
+    - **en panne** : `sauvegarde`, un script qui rend 2 — seuil 1 ;
+    - **arrêté** : `stock`, sur « boutique », qui est arrêté.
+    """
+    maintenant = datetime.now(timezone.utc).replace(microsecond=0)
+    sante = app.state.sante
+    sondes = app.state.sondes
+    connection = connect(config.database)
+
+    def spark(nom: str) -> dict:
+        return dict(connection.execute("SELECT * FROM spark WHERE name = ?", (nom,)).fetchone())
+
+    def sonde(nom_spark: str, nom: str, **definition) -> None:
+        health.poser(connection, spark(nom_spark),
+                     {"name": nom, "schedule": "*/5 * * * *", **definition},
+                     now=maintenant - timedelta(minutes=60))
+        connection.commit()
+
+    try:
+        sonde("crm-production", "api", kind="http", target="https://crm.example.com/healthz",
+              expected=200, threshold=3)
+        sonde("crm-production", "donnees", kind="script", target="true", expected=0, threshold=2)
+        sonde("crm-production", "vitrine", kind="http",
+              target="https://vip.boutique.example.com/", expected=200, threshold=20)
+        sonde("crm-production", "sauvegarde", kind="script", target="exit 2", expected=0,
+              threshold=1)
+        sonde("boutique", "stock", kind="script", target="true", expected=0, threshold=3)
+
+        # Douze relevés, un toutes les cinq minutes, sur l'heure écoulée. `vitrine` répond
+        # jusqu'au dixième, puis échoue deux fois.
+        for rang in range(12):
+            if rang == 10:
+                sondes.poser("vip.boutique.example.com", sante={"status": 503})
+            instant = maintenant - timedelta(minutes=60) + timedelta(minutes=5 * rang)
+            if sante.un_pas(instant) is None:
+                raise SeedError(f"le fil de santé a échoué à {instant.isoformat()}")
+        return {"sante": 5}
+    finally:
+        connection.close()
+
+
+def _verifier_sante(client: TestClient) -> None:
+    """Les cinq sondes sont dans l'état que l'écran doit montrer (SPK-184)."""
+    crm = {c["name"]: c for c in _attendu(
+        client.get("/v1/sparks/crm-production/health"), 200, quoi="santé de « crm-production »"
+    ).json()["checks"]}
+    attendus = {"api": "healthy", "donnees": "healthy", "vitrine": "unstable", "sauvegarde": "down"}
+    obtenus = {nom: crm[nom]["state"] for nom in attendus if nom in crm}
+    if obtenus != attendus:
+        raise SeedError(f"états de santé de « crm-production » : attendu {attendus}, obtenu {obtenus}")
+    if crm["vitrine"]["consecutive_failures"] != 2 or len(crm["api"]["results"]) < 10:
+        raise SeedError("« vitrine » devait compter 2 échecs, et « api » une frise d'au moins 10 relevés")
+    stock = _attendu(client.get("/v1/sparks/boutique/health"), 200, quoi="santé de « boutique »").json()
+    if [c["state"] for c in stock["checks"]] != ["stopped"]:
+        raise SeedError(f"la sonde de « boutique » devait être arrêtée : {stock}")
+
+
 def _declarer_sla(app, config: Config) -> dict[str, int]:
     """Les SLA de démonstration (SPK-182, docs/DAT.md §74), produits par le VRAI chemin.
 
@@ -1083,6 +1153,9 @@ def run(config: Config | None = None) -> dict[str, int]:
     # ce sont les Sparks qui font le seed, la politique les décrit.
     compte.update(_declarer_sla(app, config))
     _verifier_sla(client)
+    # SPK-184 · §75.12 : les sondes de santé, par le même fil que la Forge.
+    compte.update(_declarer_sante(app, config))
+    _verifier_sante(client)
     # SPK-93 · §52.9 : l'historien ne remplit jamais le passé. Sans cet
     # historique, tout écran de supervision démarre vide pendant des minutes et
     # aucune capture n'est possible. Il vient APRÈS la vérification : ce sont

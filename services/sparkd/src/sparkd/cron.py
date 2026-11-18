@@ -180,8 +180,15 @@ def _champ(texte: str, champ: tuple) -> frozenset[int]:
     return frozenset(valeurs)
 
 
-def analyser(texte: str) -> Horaire:
-    """Analyse une chaîne crontab ; lève `ErreurCron` avec la raison du refus."""
+def analyser(texte: str, ecart_minimal: int = ECART_MINIMAL_MINUTES) -> Horaire:
+    """Analyse une chaîne crontab ; lève `ErreurCron` avec la raison du refus.
+
+    `ecart_minimal` est l'écart, en minutes, que deux occurrences consécutives
+    doivent respecter. Le SLA des instantanés garde les 15 minutes du §74.3 ; la
+    santé d'un Spark descend à 5 (DAT §75.4) : un relevé coûte une requête, un
+    instantané coûte du quota. Chaque appelant dit son écart, aucun ne l'impose
+    aux autres.
+    """
     if not isinstance(texte, str) or not texte.strip():
         raise ErreurCron("La fréquence est vide.")
     source = " ".join(texte.split())
@@ -205,10 +212,10 @@ def analyser(texte: str) -> Horaire:
     )
     horaire.prochaine(datetime(2024, 1, 1, tzinfo=timezone.utc))  # une date existe-t-elle ?
     ecart = horaire.ecart_minimal()
-    if ecart < ECART_MINIMAL_MINUTES:
+    if ecart < ecart_minimal:
         raise ErreurCron(
-            f"Deux prises ne peuvent pas être espacées de moins de "
-            f"{ECART_MINIMAL_MINUTES} minutes (celle-ci : {ecart}).")
+            f"Deux occurrences ne peuvent pas être espacées de moins de "
+            f"{ecart_minimal} minutes (celle-ci : {ecart}).")
     return horaire
 
 

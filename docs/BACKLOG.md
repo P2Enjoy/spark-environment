@@ -9307,7 +9307,7 @@ instantanés » et la modale qui la règle.
   captures observées (desktop, mobile, états : sans SLA, actif, suspendu, en échec, aperçu de
   suppression) ; manuel M9, seed et changelog à jour.
 
-### [ ] SPK-184 · La santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes
+### [~] SPK-184 · La santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes
 
 **Demandé le 2026-11-18** par le responsable : un onglet « Santé » par Spark, qui exécute soit
 une requête HTTPS soit un script et, **en erreur, passe par l'alerte hors bande**. Débattu avec
@@ -9335,6 +9335,19 @@ l'écran SPK-186.
   n'est pas une route du Spark, joker, Spark protégé, cadence trop rapprochée, seuil hors bornes) ;
   une sonde HTTPS et un script réels contre le doublon ; une alerte réellement émise vers un canal
   d'épreuve ; migration et `docs/PROD_MIGRATIONS.md` à jour.
+- **État au 2026-11-18 : implémenté et vérifié contre les doublons et un récepteur HTTP réel, pas sur
+  une Forge réelle — reste `[~]`.** Prouvé : la machine à états (pure, 5 tests) ; la validation (la
+  cible ne peut viser que les routes du Spark : adresse IP, localhost, API de Caddy, route d'un autre
+  Spark, joker, port, identifiants, route en clair — tous refusés avec leur raison) ; les deux
+  exécuteurs ; l'alerte **réellement reçue par un serveur HTTP local** — deux messages pour sept
+  relevés, jamais un par relevé ; un canal muet qui ne fait pas échouer le relevé ; la sortie d'un script
+  jamais stockée ni envoyée (un secret injecté n'est retrouvé ni au registre ni sur le réseau) ;
+  l'arrêt, puis le rétablissement d'une panne annoncée ; l'historique borné ; le fil à pool borné et sa
+  survie à une panne du registre ; l'API (refus par requête directe : Spark protégé 423 sur chaque
+  écriture et sur le test, domaine étranger 422) ; la migration dans les deux sens ; le seed. **Non
+  prouvé** : un script sous le compte rootless contre un vrai Docker, la sonde contre le vrai Caddy et
+  un vrai certificat, une alerte vers un vrai destinataire (SPK-62). Décisions du rédacteur à confirmer :
+  DAT §75.11.
 
 ### [ ] SPK-185 · La paire `health` / `health.?` : l'agent propose une sonde
 

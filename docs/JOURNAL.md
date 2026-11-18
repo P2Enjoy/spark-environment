@@ -15892,3 +15892,19 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 **Conséquences.** SPK-184 (service), SPK-185 (`health.?`) et SPK-186 (écran) ouvertes ; DAT §75, SCHEMA
 §8 quater et SPK-DS-51 écrits avant le code. Aucun code, aucune variable d'environnement.
 
+**SPK-184 : livraison du service, le 2026-11-18.** Implémenté contre les doublons et un récepteur HTTP réel.
+
+- **Deux écarts de contrat trouvés en écrivant le code, corrigés au DAT** : (1) une route servie **en
+  clair** ne peut pas répondre à une sonde HTTPS — le schéma d'`ingress_route` porte `tls` ; la validation
+  la refuse avec sa raison ; (2) une sonde **arrêtée alors qu'elle était en panne** doit garder son
+  compteur, sinon le rétablissement n'enverrait jamais `health.up` et la panne annoncée ne serait jamais
+  levée.
+- **Défaut trouvé par un test d'API** : « Tester » reçoit une définition sans nom, que la validation
+  refusait. L'essai prend un nom par défaut et passe la MÊME validation que `PUT`.
+- **Le doublon apprend trois scripts** (`true`, `false`, `exit N`) : de quoi rendre chaque état éprouvable.
+  Il ne prétend pas interpréter un shell ; la preuve d'une vraie exécution est celle de la VM.
+- **Choix du seed** : `vitrine` est instable avec un seuil de VINGT. Le fil continue de relever ; un seuil
+  de 3 la ferait basculer en panne cinq minutes après le démarrage de la pile, et l'écran ne pourrait plus
+  montrer « instable ».
+- **Reste** : SPK-185 (`health.?`), SPK-186 (l'écran).
+

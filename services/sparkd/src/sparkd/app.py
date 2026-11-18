@@ -53,6 +53,7 @@ from . import historian as historian_service
 from . import veilleur as veilleur_service
 from . import snapshots as snapshot_service
 from . import sla as sla_service
+from . import health as health_service
 from . import protection as protection_service
 from . import isolation as isolation_service
 from . import systeme as systeme_service
@@ -150,12 +151,17 @@ def create_app(config: Config) -> FastAPI:
         planificateur = application.state.planificateur_sla
         if not planificateur.is_alive():
             planificateur.start()
+        # SPK-184 · docs/DAT.md §75.8 : les relevés de santé, sur leur propre fil.
+        sante = application.state.sante
+        if not sante.is_alive():
+            sante.start()
         try:
             yield
         finally:
             historien.arreter()
             veilleur.arreter()
             planificateur.arreter()
+            sante.arreter()
 
     app = FastAPI(
         title="sparkd",
@@ -288,6 +294,13 @@ def create_app(config: Config) -> FastAPI:
             state_path=None if config.database == ":memory:"
             else Path(f"{config.database}.sondes.json"))
         if config.driver == "fake" else ingress_diagnostic.SondesReelles()
+    )
+    # SPK-184 · docs/DAT.md §75.8 : le fil des sondes de santé. Il ouvre SA connexion,
+    # comme les autres fils, et son pas n'est pas un réglage.
+    app.state.sante = health_service.Sante(
+        ouvrir=lambda: connect(config.database),
+        incus=app.state.incus,
+        sondes=app.state.sondes,
     )
 
     def _reconcile_at_startup() -> list[dict]:
@@ -1933,6 +1946,79 @@ def create_app(config: Config) -> FastAPI:
                 return sla_service.retirer(connection, spark)
             except (service.NotFound, sla_service.SlaError) as erreur:
                 raise _erreurs_sla(erreur) from erreur
+
+    # --- SPK-184 · la santé d'un Spark (docs/DAT.md §75) -------------------------
+
+    def _erreurs_sante(erreur: Exception) -> HTTPException:
+        if isinstance(erreur, service.NotFound):
+            return HTTPException(status_code=404, detail={
+                "error": "not_found", "message": str(erreur)})
+        return HTTPException(status_code=422, detail={
+            "error": "invalid_health", "message": str(erreur)})
+
+    @app.get("/v1/sparks/{name}/health", tags=["sante"])
+    def get_health(name: str) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise _erreurs_sante(erreur) from erreur
+            return health_service.lister(connection, spark)
+
+    @app.post("/v1/sparks/{name}/health/test", tags=["sante"])
+    def test_health(name: str, body: dict = Body(...)) -> dict:
+        """Exécute une définition UNE fois, sans rien écrire (§75.8).
+
+        Exécuter un script est un GESTE, pas une lecture : sur un Spark protégé, il est
+        refusé comme toute écriture. Les relevés planifiés, eux, continuent (§75.8).
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "sante")
+                # Un essai n'a pas de nom : il n'est pas posé. Celui-ci ne sert qu'à passer
+                # la même validation que `PUT`, qui ne doit pas se simplifier pour un essai.
+                return health_service.tester(connection, app.state.incus,
+                                             app.state.sondes, spark,
+                                             {"name": "essai", **body})
+            except (service.NotFound, health_service.SanteError) as erreur:
+                raise _erreurs_sante(erreur) from erreur
+
+    @app.put("/v1/sparks/{name}/health/{sonde}", tags=["sante"])
+    def put_health(name: str, sonde: str, body: dict = Body(...)) -> dict:
+        definition = {**body, "name": sonde}
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                # §75.8 : poser une sonde est une ÉCRITURE ; la protection s'applique avant tout.
+                protection_service.ensure_writable(connection, name, "sante")
+                return health_service.poser(connection, spark, definition)
+            except (service.NotFound, health_service.SanteError) as erreur:
+                raise _erreurs_sante(erreur) from erreur
+
+    @app.post("/v1/sparks/{name}/health/{sonde}/{geste}", tags=["sante"])
+    def basculer_health(name: str, sonde: str, geste: str) -> dict:
+        if geste not in ("suspend", "resume"):
+            raise HTTPException(status_code=404, detail={
+                "error": "not_found", "message": f"Geste « {geste} » inconnu."})
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "sante")
+                return health_service.basculer(connection, spark, sonde,
+                                               enabled=(geste == "resume"))
+            except (service.NotFound, health_service.SanteError) as erreur:
+                raise _erreurs_sante(erreur) from erreur
+
+    @app.delete("/v1/sparks/{name}/health/{sonde}", tags=["sante"])
+    def delete_health(name: str, sonde: str) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "sante")
+                return health_service.retirer(connection, spark, sonde)
+            except (service.NotFound, health_service.SanteError) as erreur:
+                raise _erreurs_sante(erreur) from erreur
 
     # --- la protection (SPK-34, docs/DAT.md §35.5) --------------------------
 

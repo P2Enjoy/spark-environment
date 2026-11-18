@@ -18279,6 +18279,8 @@ rediriger. Les règles qui en découlent :
 
 - le **domaine doit être celui d'une route non joker du Spark**, lue au registre à chaque relevé ;
   un domaine qui n'en est pas — ou une route retirée depuis — est un refus, pas un relevé ;
+- **une route servie en clair (sans TLS) est refusée** : une sonde HTTPS ne peut pas lui répondre.
+  Le refus le dit et propose d'activer le TLS de la route, ou de la sonder par un script ;
 - **un joker est refusé** : le nom visé pourrait être capté par la route plus spécifique d'un autre
   Spark (§18.3 bis), et la sonde jugerait le mauvais Spark ;
 - méthode **`GET`**, port 443, **aucune redirection suivie** (une redirection est un échec, sauf si
@@ -18328,7 +18330,10 @@ Par sonde : `unknown` → `healthy` | `unstable` | `down` | `stopped`.
 - **Un échec** l'incrémente. Tant qu'il est **inférieur au seuil**, l'état est **`unstable`** (« 2 échecs
   sur 3 ») : visible, **sans alerte**. À **seuil atteint**, l'état devient **`down`**.
 - **Un Spark arrêté** met la sonde en **`stopped`** : une cellule arrêtée volontairement n'est pas
-  malade, et **rien n'est alerté**. Au redémarrage le compteur repart de zéro.
+  malade, et **rien n'est alerté**. La sonde garde son compteur : arrêtée **alors qu'elle était en
+  panne** (alerte déjà partie), son premier succès après le redémarrage envoie `health.up` — sans cela,
+  la panne annoncée ne serait jamais levée. Arrêtée alors qu'elle n'était qu'**instable**, elle repart
+  de zéro au redémarrage.
 - **Une sonde suspendue** (`enabled = 0`) ne relève rien et garde son dernier état, daté.
 - Le premier relevé d'une sonde neuve n'alerte pas : `unknown` → `down` n'existe qu'après le seuil
   d'échecs.

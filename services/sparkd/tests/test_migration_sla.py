@@ -17,6 +17,12 @@ from sparkd.db import connect
 GIO = 1024**3
 
 
+def _revenir_a(connection, version):
+    """Défait les migrations POSTÉRIEURES à `version`, pour éprouver la sienne (la 023 n'est plus la dernière)."""
+    while max(migrations.applied(connection)) > version:
+        migrations.downgrade(connection)
+
+
 @pytest.fixture
 def db(tmp_path):
     connection = connect(tmp_path / "m.db")
@@ -43,7 +49,7 @@ def test_les_instantanes_existants_deviennent_manuels(tmp_path):
         "'shared',0.5,?,10000000,?,'crm','x','x')", (GIO, GIO))
     connection.execute("INSERT INTO snapshot (id, spark_id, incus_name, created_at, stateful)"
                        " VALUES ('N1', 'S1', 'avant-deploiement', 'x', 0)")
-    assert migrations.upgrade(connection) == [23]
+    assert migrations.upgrade(connection)[0] == 23           # la 023 d'abord, les suivantes après
     assert connection.execute("SELECT origin FROM snapshot WHERE id='N1'").fetchone()[0] == "manual"
     connection.close()
 
@@ -98,9 +104,10 @@ def test_le_retour_arriere_supprime_la_politique_jamais_un_instantane(db):
                " VALUES ('S1','0 2 * * *',7,'x','x')")
     db.execute("INSERT INTO snapshot (id, spark_id, incus_name, created_at, origin)"
                " VALUES ('N1','S1','SLA_20261118-020000','x','sla')")
+    _revenir_a(db, 23)
     assert migrations.downgrade(db) == [23]
     assert db.execute("SELECT COUNT(*) FROM snapshot").fetchone()[0] == 1
     with pytest.raises(sqlite3.OperationalError, match="no such table"):
         db.execute("SELECT * FROM sla")
     assert "origin" not in [c[1] for c in db.execute("PRAGMA table_info(snapshot)")]
-    assert migrations.upgrade(db) == [23]                      # et il remonte
+    assert migrations.upgrade(db)[0] == 23                     # et il remonte

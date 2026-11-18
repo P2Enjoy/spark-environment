@@ -32,6 +32,7 @@ import re
 import socket
 import sqlite3
 import ssl
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -281,6 +282,60 @@ class SondesReelles:
             return {"status": None, "error": f"réponse illisible : {ligne[:80]!r}"}
         return {"status": int(trouve.group(1)), "error": None}
 
+    def sante(self, domaine: str, chemin: str, delai: float = 10.0) -> dict:
+        """Un relevé de santé : `GET <chemin>` sur la boucle locale, nom en SNI et `Host`.
+
+        @spec docs/BACKLOG.md#SPK-184 · docs/DAT.md §75.3 (l'adresse est fixe, seul
+              le nom varie)
+
+        **La connexion va TOUJOURS à `127.0.0.1:443`.** Seuls le nom TLS et l'en-tête
+        `Host` varient : le DNS n'est jamais résolu, il ne peut donc rien rediriger. Une
+        entrée écrite par un agent et exécutée par la Forge ne peut ainsi viser que ce
+        que l'ingress sert pour ce nom — jamais l'API de Caddy, la Forge, ni l'intérieur
+        d'un autre Spark.
+
+        Le certificat est vérifié COMME UN NAVIGATEUR : un certificat invalide est une
+        panne, et le motif est celui de la vérification. Aucune redirection n'est
+        suivie, aucun corps n'est envoyé, et SEULE la ligne de statut est lue — jamais
+        le corps de la réponse (§75.3).
+
+        Rend `{status, error, latency_ms}` ; `status` vaut `None` quand rien n'a répondu.
+        """
+        debut = time.monotonic()
+
+        def rendu(status, erreur):
+            return {"status": status, "error": erreur,
+                    "latency_ms": int((time.monotonic() - debut) * 1000)}
+
+        try:
+            brut = socket.create_connection((self.hote, self.port_https), timeout=delai)
+        except OSError as erreur:
+            return rendu(None, "connexion refusée : " + (str(erreur) or type(erreur).__name__))
+        try:
+            flux = self.contexte_verifie().wrap_socket(brut, server_hostname=domaine)
+        except ssl.SSLCertVerificationError as erreur:
+            brut.close()
+            return rendu(None, "certificat invalide : " + (erreur.verify_message or str(erreur)))
+        except (OSError, ssl.SSLError) as erreur:
+            brut.close()
+            return rendu(None, "poignée de main TLS refusée : "
+                         + (getattr(erreur, "reason", None) or str(erreur)))
+        try:
+            with flux:
+                flux.sendall(
+                    f"GET {chemin} HTTP/1.1\r\nHost: {domaine}\r\nUser-Agent: {USER_AGENT}\r\n"
+                    "Connection: close\r\n\r\n".encode("ascii"))
+                with flux.makefile("rb") as lecture:
+                    ligne = lecture.readline(256).decode("latin-1").strip()
+        except socket.timeout:
+            return rendu(None, "délai dépassé")
+        except (OSError, ssl.SSLError) as erreur:
+            return rendu(None, str(erreur) or type(erreur).__name__)
+        trouve = re.match(r"HTTP/\d(?:\.\d)? (\d{3})", ligne)
+        if not trouve:
+            return rendu(None, "réponse illisible")
+        return rendu(int(trouve.group(1)), None)
+
     def certificat(self, domaine: str) -> dict:
         """Ce qu'un navigateur penserait du certificat servi pour ce nom."""
         try:
@@ -333,7 +388,8 @@ class SondesFactices:
 
     def poser(self, domaine: str, *, http: dict | None = None,
               certificat: dict | None = None,
-              emission: list[dict] | None = None) -> None:
+              emission: list[dict] | None = None,
+              sante: dict | None = None) -> None:
         """Déclare ce que les sondes rendront pour ce nom.
 
         SPK-156 · §18.9.3 : `emission` est une suite d'ÉVÉNEMENTS de Caddy, à la
@@ -348,6 +404,10 @@ class SondesFactices:
             scenario["certificat"] = certificat
         if emission is not None:
             scenario["emission"] = emission
+        if sante is not None:
+            # SPK-184 : ce que la sonde de SANTÉ rendra pour ce nom. Distinct de
+            # `http`, qui est ce que le diagnostic des routes lit.
+            scenario["sante"] = sante
         if self.state_path:
             self.state_path.write_text(json.dumps(self.scenarios, indent=2) + "\n",
                                        encoding="utf-8")
@@ -355,6 +415,12 @@ class SondesFactices:
     def http(self, domaine: str, tls: bool) -> dict:
         return dict(self.scenarios.get(domaine, {}).get(
             "http", {"status": 200, "error": None}))
+
+    def sante(self, domaine: str, chemin: str, delai: float = 10.0) -> dict:
+        """Le doublon de la sonde de santé (SPK-184) : un nom répond `200` sans scénario."""
+        scenario = self.scenarios.get(domaine, {}).get("sante", {})
+        return {"status": scenario.get("status", 200), "error": scenario.get("error"),
+                "latency_ms": scenario.get("latency_ms", 12)}
 
     def emission(self) -> ReleveEmission:
         """Les événements déclarés, datés par rapport à cette lecture."""

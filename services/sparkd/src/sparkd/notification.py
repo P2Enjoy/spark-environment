@@ -58,7 +58,18 @@ ACTIONS = frozenset({
     # droit de faire. C'est le SEUL refus de la liste, et l'exception est
     # nommée dans `notifiable()` juste en dessous.
     "forge.shell_refused",
+    # SPK-184 · §75.7 : une sonde de santé a CHANGÉ D'ÉTAT. Deux actions, une par
+    # transition — jamais une par relevé. Ce sont des lignes du RUNTIME ; leur
+    # exception est nommée dans `RUNTIME_NOTIFIABLES`, pas déduite.
+    "health.down",        # une sonde a atteint son seuil d'échecs
+    "health.up",          # une sonde en panne est rétablie
 })
+
+#: SPK-184 · docs/DAT.md §75.7 : les SEULES actions du runtime qui notifient. Un
+#: propriétaire a configuré la sonde et demandé à être prévenu : ce n'est pas un
+#: événement dont « personne n'a voulu » (§36.4). L'exception est une liste, pas
+#: une condition : le jour où l'on en ajoutera une, il faudra le décider.
+RUNTIME_NOTIFIABLES = frozenset({"health.down", "health.up"})
 
 #: Les actions dont un REFUS mérite l'alerte. La règle générale les écarte —
 #: « rien n'a eu lieu » —, et cette exception doit rester une liste, pas une
@@ -72,7 +83,8 @@ def notifiable(action: str, result: str, actor_class: str) -> bool:
     Trois refus, et chacun a son motif :
 
     - une action hors liste — la liste est fermée, jamais déduite ;
-    - une ligne du RUNTIME : personne ne l'a demandée (§36.4), et les notifier
+    - une ligne du RUNTIME : personne ne l'a demandée (§36.4) — sauf les deux
+      transitions de santé de `RUNTIME_NOTIFIABLES` (§75.7) — et les notifier
       noierait les neuf actions sous des dizaines d'autres. Un canal qui crie
       tout le temps n'est plus lu, et c'est la panne la plus probable de ce
       dispositif ;
@@ -84,6 +96,8 @@ def notifiable(action: str, result: str, actor_class: str) -> bool:
         # essaie la clé qu'il vient de voler — et c'est exactement ce qu'une
         # alerte hors bande existe pour porter.
         return actor_class != "runtime"
+    if action in RUNTIME_NOTIFIABLES:
+        return result == "ok"
     return (action in ACTIONS
             and result == "ok"
             and actor_class != "runtime")

@@ -371,3 +371,33 @@ def test_les_prises_du_seed_sont_celles_du_planificateur_pas_des_lignes_inventee
     for s in sla_pris:
         horodatage = s["created_at"][:19].replace("-", "").replace(":", "").replace("T", "-")
         assert s["incus_name"] == f"SLA_{horodatage}"
+
+
+# --- SPK-184 : les cinq sondes de santé, produites par le vrai fil ------------------------------------
+
+def test_les_sondes_de_demonstration_couvrent_sain_instable_panne_et_arret(seede):
+    """§75.12 — sans elles, l'onglet Santé ne pourrait montrer aucun de ses états."""
+    crm = {c["name"]: c for c in seede.get("/v1/sparks/crm-production/health").json()["checks"]}
+    assert {n: c["state"] for n, c in crm.items()} == {
+        "api": "healthy", "donnees": "healthy", "vitrine": "unstable", "sauvegarde": "down"}
+    assert crm["vitrine"]["consecutive_failures"] == 2 and crm["vitrine"]["threshold"] == 20
+    assert crm["sauvegarde"]["last_detail"] == "code de sortie 2 (attendu 0)"
+    assert len(crm["api"]["results"]) == 12 and all(r["ok"] for r in crm["api"]["results"])
+    assert [r["ok"] for r in crm["vitrine"]["results"]][-3:] == [True, False, False]
+    stock = seede.get("/v1/sparks/boutique/health").json()["checks"]
+    assert [c["state"] for c in stock] == ["stopped"] and stock[0]["results"] == []
+
+
+def test_la_panne_du_seed_a_ete_journalisee_par_le_fil_comme_une_transition_runtime(seede, config):
+    """§75.7 : une ligne `health.down`, une seule, d'acteur `sante` de classe runtime — et pas une
+    par relevé : douze relevés ont eu lieu, une seule transition."""
+    from sparkd.db import connect
+    connection = connect(config.database)
+    try:
+        lignes = connection.execute(
+            "SELECT actor, actor_class, result FROM audit_log WHERE action = 'health.down'"
+        ).fetchall()
+    finally:
+        connection.close()
+    assert [(l["actor"], l["actor_class"], l["result"]) for l in lignes] == [("sante", "runtime", "ok")]
+

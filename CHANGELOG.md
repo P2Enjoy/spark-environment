@@ -3,6 +3,21 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-184 — la santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes.** Un Spark
+  peut porter jusqu'à vingt sondes. Une sonde **HTTPS** part de la Forge **par la boucle locale**
+  (127.0.0.1:443, le nom en SNI) : elle ne peut viser qu'un **domaine non joker, servi en TLS, que le
+  Spark déclare** — jamais une adresse choisie par un locataire — et vérifie le certificat comme un
+  navigateur. Un **script** s'exécute **dans la cellule**, sous le compte de la pile (`root`, ou le compte
+  rootless pour atteindre Docker), avec un délai de 60 s ; **sa sortie n'est jamais stockée ni envoyée**.
+  Chaque sonde a sa **cadence en chaîne crontab** (5 minutes au plus serré) et son **seuil d'échecs**.
+  États : sain, instable (sous le seuil, sans alerte), en panne, arrêté (un Spark arrêté n'est pas
+  malade), jamais relevé. **L'alerte part à la transition, jamais au relevé** : `health.down` une fois
+  au seuil, `health.up` une fois au rétablissement, par le canal hors bande — ajoutées à sa liste fermée,
+  avec une exception nommée pour la classe `runtime`. Historique borné à 100 relevés ; un « test » exécute
+  une définition sans rien écrire ; un Spark protégé refuse toute écriture, mais ses relevés continuent.
+  Migration 024, cinq routes, cinq sondes au seed (sain, instable, en panne, arrêté). **L'écran (SPK-186) et
+  la paire `health.?` (SPK-185) ne sont pas livrés** : les sondes se règlent par l'API. DAT §75 ; SCHEMA §8
+  quater ; `docs/PROD_MIGRATIONS.md` OP-47.
 - **SPK-182 — le SLA des instantanés dans `sparkd` : prise automatique et rétention.** Un Spark
   peut porter une politique : une fréquence en **chaîne crontab à cinq champs** (UTC, écart minimal
   de 15 minutes, analyseur écrit dans le dépôt), une **rétention par âge et/ou par nombre**

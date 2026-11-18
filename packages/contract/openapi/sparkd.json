@@ -2638,6 +2638,285 @@
         ]
       }
     },
+    "/v1/sparks/{name}/health": {
+      "get": {
+        "operationId": "get_health_v1_sparks__name__health_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Health V1 Sparks  Name  Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Health",
+        "tags": [
+          "sante"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/health/test": {
+      "post": {
+        "description": "Exécute une définition UNE fois, sans rien écrire (§75.8).\n\nExécuter un script est un GESTE, pas une lecture : sur un Spark protégé, il est\nrefusé comme toute écriture. Les relevés planifiés, eux, continuent (§75.8).",
+        "operationId": "test_health_v1_sparks__name__health_test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Test Health V1 Sparks  Name  Health Test Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Health",
+        "tags": [
+          "sante"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/health/{sonde}": {
+      "delete": {
+        "operationId": "delete_health_v1_sparks__name__health__sonde__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sonde",
+            "required": true,
+            "schema": {
+              "title": "Sonde",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Health V1 Sparks  Name  Health  Sonde  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Health",
+        "tags": [
+          "sante"
+        ]
+      },
+      "put": {
+        "operationId": "put_health_v1_sparks__name__health__sonde__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sonde",
+            "required": true,
+            "schema": {
+              "title": "Sonde",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Health V1 Sparks  Name  Health  Sonde  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Health",
+        "tags": [
+          "sante"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/health/{sonde}/{geste}": {
+      "post": {
+        "operationId": "basculer_health_v1_sparks__name__health__sonde___geste__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sonde",
+            "required": true,
+            "schema": {
+              "title": "Sonde",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "geste",
+            "required": true,
+            "schema": {
+              "title": "Geste",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Basculer Health V1 Sparks  Name  Health  Sonde   Geste  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Basculer Health",
+        "tags": [
+          "sante"
+        ]
+      }
+    },
     "/v1/sparks/{name}/identity": {
       "get": {
         "description": "La clé PUBLIQUE que le Spark présente. N'écrit rien (§17.5).\n\n@spec docs/BACKLOG.md#SPK-74 · docs/BACKLOG.md#SPK-167 · docs/DAT.md §17.5,\n      §17.6, §14.6\n\nLire ne refuse PAS sur un Spark arrêté, contrairement à créer : on doit\npouvoir regarder l'écran des clés d'un Spark éteint sans tomber sur une\nerreur. L'état rendu est alors « indisponible », jamais « absente » —\nles fondre ferait créer une seconde identité en croyant réparer la\npremière, et invaliderait la clé déjà posée chez le tiers.",

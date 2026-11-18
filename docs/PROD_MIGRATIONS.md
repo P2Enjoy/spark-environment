@@ -124,6 +124,47 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-47 · La santé d'un Spark dans `sparkd` : migration 024, relevés et alertes (SPK-184)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable.
+Objectif      : sparkd porte les sondes de santé (DAT §75) : HTTPS vers une route
+                du Spark par la boucle locale (127.0.0.1:443, SNI), ou script dans
+                la cellule sous le compte de la pile. Migration 024 : health_check
+                et health_result (au plus 100 relevés par sonde). Un fil,
+                « sparkd-sante », à pool de quatre, relève les sondes échues.
+                Cinq routes : GET .../health, POST .../health/test,
+                PUT|DELETE .../health/{sonde}, POST .../health/{sonde}/
+                {suspend|resume}. health.down et health.up entrent dans la liste
+                fermée de la notification (DAT §47.2), avec leur exception
+                `runtime` nommée. Aucune variable d'environnement.
+Dépend de     : OP-46 (la migration 023 précède la 024) ; SPK-62 pour que
+                l'alerte PARTE — sans canal configuré, l'état et le journal
+                portent la panne, rien ne part hors bande.
+Ordre         : 1. sauvegarder le registre (§ 2 bis) ; 2. mettre à jour sparkd
+                (bloc « Code déployé » de la console) — la migration 024
+                s'applique au démarrage ; 3. relancer la console.
+Vérification  : GET /v1/sparks/<nom>/health rend {"checks": [], "limit": 20} ;
+                une sonde HTTPS posée sur une route du Spark passe `healthy` au
+                premier relevé (≤ 30 s) ; un domaine qui n'est pas une route du
+                Spark est refusé en 422 ; sur un canal configuré, une panne
+                (seuil atteint) envoie UN message health.down, puis UN message
+                health.up au rétablissement.
+À MESURER     : le script sous le compte rootless contre un vrai Docker
+                (`runuser -u spark-docker … docker ps`) ; la sonde HTTPS contre
+                le vrai Caddy et un vrai certificat. Rien n'a été mesuré ici que
+                contre les doublons.
+Retour arrière: réinstaller la build précédente ; la migration 024 se défait
+                (sparkd rollback) : les sondes et leur historique disparaissent,
+                JAMAIS un Spark ni un instantané.
+Risques       : un script s'exécute dans la cellule sans qu'une personne regarde,
+                sous le compte de la pile : il consomme le quota du Spark. La
+                sortie d'un script n'est ni stockée ni envoyée. Si la Forge
+                tombe, plus aucune sonde ni alerte ne part (DAT §75.7). L'écran
+                (SPK-186) et la paire health.? (SPK-185) ne sont PAS livrés :
+                sans eux les sondes se règlent par l'API seulement.
+```
+
 ### OP-46 · Le SLA des instantanés dans `sparkd` : migration 023 et planificateur (SPK-182)
 
 ```

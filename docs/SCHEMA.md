@@ -398,10 +398,10 @@ ALTER TABLE snapshot ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'
   `origin = 'sla'`. Les lignes existantes valent `manual`, et rien ne les réécrit.
 - Aucun secret, aucune valeur métier en dur : les bornes de rétention sont celles du `CHECK`.
 
-## 8 quater. `health_check` et `health_result` : la santé d'un Spark (contrat, SPK-184 — non livré)
+## 8 quater. `health_check` et `health_result` : la santé d'un Spark (SPK-184, migration 024)
 
-*Contrat écrit le 2026-11-18, avant le code. La migration prend le numéro suivant au moment de
-l'écrire.*
+*Contrat écrit le 2026-11-18, avant le code ; livré par la migration `024_sante.sql`, dont le
+`down` supprime les deux tables, jamais un Spark ni un instantané.*
 
 ```sql
 CREATE TABLE health_check (

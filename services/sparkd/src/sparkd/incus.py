@@ -1194,6 +1194,14 @@ class FakeIncus:
         self._maybe_fail("exec_capture")
         self._vivante(name).setdefault("commands", []).append(command)
         script = command[-1] if command else ""
+        # SPK-184 · §75.5 : un script de SANTÉ s'exécute dans la cellule, et le doublon
+        # en connaît trois formes — `true`, `false`, `exit N` — qui suffisent à rendre
+        # chaque état éprouvable. Il ne prétend pas interpréter un shell : la preuve
+        # d'une vraie exécution est celle de la VM (README §28.7).
+        forme = re.fullmatch(r"\s*(true|false|exit\s+(\d{1,3}))\s*", script)
+        if forme:
+            code = {"true": 0, "false": 1}.get(forme.group(1), int(forme.group(2) or 0))
+            return (code, "", "")
         runtime = self.created[name].setdefault("runtime", {})
         runtime.update(_os_de_alias(self.created[name].get("alias", "")))
         # SPK-94 · §42.2 quater : une image de distribution ARRIVE avec ses
