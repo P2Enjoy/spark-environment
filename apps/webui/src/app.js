@@ -587,6 +587,12 @@ function brancher() {
   // celui du navigateur (§1.5 bis).
   const formulaireAlertes = racine.querySelector('#formulaire-alertes');
   if (formulaireAlertes) {
+    // La saisie en cours est RETENUE dans l'état, sans repeindre : un chargement tardif d'un autre écran
+    // (lent sur une vraie Forge, vu le 2026-11-18 sur spark-010) repeint la vue courante, et sans cela il
+    // effaçait ce qu'on venait de taper. Les mots de passe, eux, ne sont jamais retenus.
+    formulaireAlertes.addEventListener('input', () => {
+      etat.alertes.saisie = saisieAlertes(new FormData(formulaireAlertes));
+    });
     formulaireAlertes.addEventListener('submit', (evenement) => {
       evenement.preventDefault();
       enregistrerAlertes(formulaireAlertes);
@@ -598,6 +604,9 @@ function brancher() {
   // SPK-62 · §47.3.2 : le formulaire du canal COURRIEL — le sien, avec son propre refus.
   const formulaireSmtp = racine.querySelector('#formulaire-smtp');
   if (formulaireSmtp) {
+    formulaireSmtp.addEventListener('input', () => {
+      etat.alertes.smtp = { ...etat.alertes.smtp, saisie: saisieSmtp(new FormData(formulaireSmtp)) };
+    });
     formulaireSmtp.addEventListener('submit', (evenement) => {
       evenement.preventDefault();
       enregistrerAlertesSmtp(formulaireSmtp);
@@ -4676,6 +4685,10 @@ async function chargerHote() {
     etat.forge.error = erreur;
     etat.forge.status = erreur.code === 'forge_not_synced' ? 'not-synced' : 'error';
   }
+  // Un chargement TARDIF ne repeint pas un autre écran : sur une vraie Forge, ces lectures prennent
+  // plusieurs secondes, et le résultat arrivait par-dessus l'onglet Alertes — effaçant ce qu'on y tapait
+  // (vu le 2026-11-18 sur spark-010). L'état est à jour ; la vue Forge le montrera à son retour.
+  if (etat.route !== 'forge') return;
   peindre();
   // SPK-53 · §40.3 : la comparaison suit l'écran, sans le retenir. Elle ne coûte
   // qu'une lecture de `/v1/forge` et un `git` sur CE poste — rien n'est exécuté
@@ -4715,7 +4728,8 @@ async function comparerBuild({ silencieux = false, conserverEnEchec = false } = 
                   detail: erreur?.message ?? String(erreur) };
     }
   }
-  peindre();
+  // La comparaison suit l'écran de la Forge, elle ne repeint pas un autre (voir `chargerHote`).
+  if (etat.route === 'forge') peindre();
 }
 
 /** Ouvre dans le flux la confirmation sensible du geste choisi. */

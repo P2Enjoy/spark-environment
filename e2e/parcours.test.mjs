@@ -1816,9 +1816,22 @@ test('le canal courriel : réglé depuis l’onglet, un geste réel produit un c
     smtp.oublier();
     canal.oublier();
     await accueil();
+    // --- une lecture LENTE de la Forge ne doit pas effacer ce qu'on tape dans l'onglet Alertes ----------
+    // Sur une vraie Forge, le chargement de l'écran Forge prend plusieurs secondes ; il arrivait par-dessus
+    // l'onglet Alertes et repeignait le formulaire (vu le 2026-11-18 sur spark-010). On retarde donc la
+    // lecture, on passe à l'onglet Alertes, on tape, et on laisse la réponse tardive arriver.
+    await page.route(/\/api\/v1\/forge\?server/, async (route) => {
+      await new Promise((r) => setTimeout(r, 2500));
+      await route.continue();
+    });
     await page.click('nav a[href="#/forge"]');
     await page.click('.onglets a[href="#/forge/alertes"]');
     await page.waitForSelector('#formulaire-smtp', { timeout: 20000 });
+    await page.fill('#smtp-hote', 'tape-avant-la-reponse.exemple.fr');
+    await page.waitForTimeout(3500);
+    assert.equal(await page.inputValue('#smtp-hote'), 'tape-avant-la-reponse.exemple.fr',
+      'une réponse tardive d\'un autre écran n\'efface pas la saisie');
+    await page.unroute(/\/api\/v1\/forge\?server/);
 
     // --- le webhook d'abord : l'état de départ est CONNU (même adresse que la pile) --------------
     await page.fill('#alerte-url', canal.baseUrl);
@@ -1830,6 +1843,7 @@ test('le canal courriel : réglé depuis l’onglet, un geste réel produit un c
       null, { timeout: 15000 });
 
     // --- le courriel, AU CLAVIER : on tape, on passe au champ suivant par Tab -------------------------
+    await page.fill('#smtp-hote', '');
     await page.focus('#smtp-hote');
     await page.keyboard.type('127.0.0.1');
     await page.keyboard.press('Tab');

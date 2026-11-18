@@ -16007,3 +16007,33 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   La seule chose encore ouverte du catalogue était SPK-174, qui lève la limite que le §33.7 laissait ouverte — c'est
   ce que j'ai livré sous ces numéros, faute d'une autre lecture qui tienne.
 
+
+
+**Preuves sur FORGE RÉELLE (spark-010), le 2026-11-18, sur instruction du responsable (« Oui, sur spark-010 »).**
+
+- **Déploiement** par le bloc « Code déployé » de la console (e2e/forge-reelle/op43-mise-a-jour.mjs) : spark-010 sert
+  `d65998b`, migrations **023 et 024 appliquées** (schéma 22 → 24), « Mise à jour prouvée ». Un seul Spark préexistant
+  (`magiline-mcp`) : **jamais touché**. Tout le reste s'est joué sur un Spark d'essai `essai-spk`, créé par le produit.
+- **SPK-174** : « Définir par défaut » depuis l'écran, **une seule** entrée par défaut côté Forge réelle, puis l'état
+  d'avant rétabli.
+- **SPK-183 / 182** : SLA `*/15` programmé depuis l'onglet Instantanés ; **le planificateur réel a pris
+  `SLA_20261118-203029`** à 20:30:29 sur le vrai Incus, statut `ok`, taille mesurée (192 512 o). **Incertitude levée** :
+  Incus accepte le nom `SLA_…` (majuscules, souligné), vérifié aussi à la main (`incus snapshot create` puis suppression).
+- **SPK-184 / 186** : deux sondes script exécutées par la **vraie cellule** (`incus exec`) : `true` → Saine, `exit 2` →
+  En panne (« code de sortie 2 (attendu 0) »), « Tester » vu sans rien écrire. Relevés planifiés à 20:20 et 20:25 UTC.
+- **SPK-185 / 186** : sparkd a lui-même écrit `/etc/spark/health` et `/etc/spark/health.?` dans la cellule ; une ligne
+  écrite dans `health.?` apparaît dans l'onglet avec le verdict du serveur, **ne pose rien**, et l'acceptation pose la sonde.
+- **SPK-62** : le canal courriel réglé depuis l'écran avec le relais de l'**autre Forge** (Scaleway TEM, TLS implicite
+  2465, identifiants **lus dans la cellule qui les porte et jamais affichés** ni capturés), mot de passe enregistré
+  scellé, absent de l'API. Un **vrai geste** (créer puis supprimer un instantané) : **le relais a accepté le courriel**
+  (compteur « envoyées 1, en échec 0 », certificat vérifié). **La réception dans une boîte reste à confirmer** par un humain.
+- **Défaut trouvé sur la vraie Forge, que les doublons ne montraient pas** : un chargement tardif de l'écran Forge
+  repeignait l'onglet Alertes et effaçait la saisie (voir CHANGELOG). Les doublons répondent en quelques ms ; la vraie
+  Forge en plusieurs secondes. Un parcours qui **retarde** la lecture reproduit désormais le défaut.
+- **Constat d'ergonomie, non corrigé** : sur un Spark sans route TLS, la modale d'une sonde ouvre sur le type HTTPS avec
+  l'erreur « Aucun domaine dans l'adresse » avant toute saisie ; le message est exact mais prématuré.
+- **Non prouvé** : la sonde HTTPS contre le vrai Caddy (le Spark d'essai n'a pas de route), le script sous le compte
+  rootless contre un vrai Docker, et le webhook sur spark-010 (non configuré ; prouvé en local, et sur l'autre Forge).
+- **Le mot de passe des canaux de spark-010** a été fixé au premier usage et vit dans `~/.config/spark/op48-garde-spark-010`
+  (0600) sur le poste. Il n'est écrit nulle part dans le dépôt.
+

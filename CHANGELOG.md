@@ -28,6 +28,13 @@
   chacun avec son état, ses compteurs, son refus ; le détail par canal sur l'écran de la Forge. Un champ inconnu du
   `PUT /v1/notify/channels` est désormais **refusé** au lieu d'être ignoré. Manuel M11 et une illustration. Aucune
   migration, **aucune variable d'environnement**. DAT §47.3.2 à §47.3.2 ter, §47.6 ; SPK-DS-52 ; OP-48.
+- **Corrigé, trouvé sur une vraie Forge (spark-010) — un chargement tardif effaçait la saisie.** Sur une vraie
+  Forge, les lectures de l'écran Forge prennent plusieurs secondes ; leur réponse **repeignait la vue courante**,
+  donc l'onglet Alertes si l'on y était passé entre-temps, et effaçait serveur, port, compte… tapés. Deux
+  remèdes : un chargement tardif ne repeint plus un autre écran (`chargerHote`, `comparerBuild`), et les deux
+  formulaires d'Alertes **retiennent leur saisie** à chaque frappe (jamais les mots de passe). Preuve : un parcours
+  qui retarde la lecture de la Forge de 2,5 s, passe à l'onglet Alertes, tape, et constate que la saisie survit —
+  rouge sans les deux remèdes, vert avec.
 - **Corrigé — un parcours E2E laissait le webhook désactivé** : « l'onglet Alertes se règle » finissait par un envoi
   qui gardait la case décochée par le refus précédent, et le parcours suivant ne recevait plus aucune alerte.
 - **SPK-186 — l'onglet « Santé » de la console.** Facette **Santé** de la fenêtre d'un Spark : par sonde, l'état
