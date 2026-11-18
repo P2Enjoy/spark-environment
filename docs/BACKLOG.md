@@ -9881,6 +9881,42 @@ l'hébergeur n'efface pas les partitions entre deux installations.
   importable étranger et dégradé) ; création par `creer-pool.sh` éprouvée sur une machine
   livrée aux partitions vierges.
 
+
+### [ ] SPK-171 · Un onglet de la Forge suit les mises à jour du système (apt)
+
+**Demandé par le responsable le 2026-11-18**, à l'installation de la Forge `spark-010` :
+« la forge devrait avoir un onglet pour surveiller les mises à jour apt ». Ce matin-là, la
+machine signalait d'elle-même un redémarrage requis et une version d'Ubuntu disponible ;
+rien dans la console ne le montrait.
+
+- Spécification : **à écrire avant le code** — `docs/DAT.md` (ce qui est relevé : paquets
+  à mettre à jour, mises à jour de sécurité, redémarrage requis, nouvelle version
+  d'Ubuntu disponible ; d'où : `apt`, `/var/run/reboot-required`, `do-release-upgrade -c`),
+  `docs/DESIGN_SYSTEM.md` (l'onglet), le chapitre du manuel. **Lecture seule d'abord** :
+  appliquer une mise à jour depuis la console est une décision distincte, à arbitrer.
+- Dépend de : rien d'ouvert.
+- DoD : test unitaire du relevé, test d'API, E2E de l'onglet depuis le parcours
+  canonique, vérification visuelle, manuel à jour.
+
+### [ ] SPK-172 · Les signataires autorisés d'une Forge se posent sans geste manuel
+
+**Constaté le 2026-11-18 sur `spark-010`.** La console signe les gestes avec la clé
+déclarée pour le serveur, et la Forge refuse une signature qu'elle ne peut rattacher à
+personne (« Aucun fichier de signataires autorisés n'est configuré sur cette Forge »).
+L'ajout d'une image au catalogue échouait donc. **Aucune étape du produit n'écrit
+`allowed_signers`** : ni l'amorce, ni `sparkd.forge_install`, ni la console. Sur
+`spark-experiment`, le fichier a été posé à la main le 2026-09-14. Sur `spark-010`, il a
+été posé à la main le 2026-11-18 : la ligne `console/spark-010 namespaces="spark-audit"`
+avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS` dans
+`/etc/sparkd/sparkd.env`.
+
+- Spécification : `docs/DAT.md` §36.10.5 — **le geste qui pose le fichier reste à
+  arbitrer**. Proposition : la console le pose à la première connexion, ou quand la clé
+  de signature du serveur change. Elle seule connaît le principal (`console/<serveur>`)
+  et la clé publique ; le cloud-init ne connaît pas le nom que la console donne au serveur.
+- Dépend de : SPK-40.
+- DoD : preuve qu'une Forge neuve accepte la première signature de la console sans geste
+  manuel ; refus d'une clé non déclarée toujours prouvé ; runbook à jour.
 ---
 
 ## Lot 9 — La sauvegarde externe des instantanés
