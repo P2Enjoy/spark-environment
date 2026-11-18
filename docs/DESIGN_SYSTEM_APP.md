@@ -231,13 +231,17 @@ socle.
   Contraire de SPK-DS-02 sans le contredire : le CPU peut dépasser sa réservation sans
   défaut, la mémoire et le disque non — l'approche de la limite est un vrai signal.
 - Il **accompagne** les chiffres, il ne les remplace pas ; il est `aria-hidden`, et la
-  cellule porte le nom accessible « Mémoire : 3,3 Gio sur 8,0 Gio, 41 % ».
+  cellule porte, en `sr-only`, « 41 % de la limite » (pourcentage **tronqué**, pour ne
+  jamais contredire l'alerte).
 - Au-delà du seuil : chiffres en gras et texte `sr-only` « proche de la limite » — la
   couleur ne porte pas seule (§1.5).
+- Alignement : l'anneau tient le bord **gauche** de la cellule et les chiffres le bord
+  droit, pour que la colonne s'aligne d'une ligne à l'autre (une cellule alignée à
+  droite faisait suivre l'anneau à la largeur du texte — observé en capture).
 - Absence : pas d'anneau quand l'usage ou la limite manque ; la cellule garde son
   comportement du §14.6.
-- **Ligne « Total »** : un `tfoot`, seulement dans l'onglet « Tous ». Mêmes anneaux, face
-  aux capacités physiques de la Forge ; texte du pied en `--color-text-2`, séparateur
+- **Ligne « Total »** : un `tfoot`, seulement dans l'onglet « Tous ». Mémoire et Disque
+  en anneau, CPU en barre comme sa colonne, face aux capacités physiques de la Forge ; texte du pied en `--color-text-2`, séparateur
   haut `--color-border`. Capacité absente : nommée, jamais inventée.
 - Responsive : l'anneau ne se masque jamais ; le tableau défile dans son conteneur
   (§8.1), le pied avec lui.

@@ -7,6 +7,11 @@
  * @spec docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.4 (les projets d'un Spark en
  *       pastilles ; l'onglet d'un projet est cette liste, restreinte) ·
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-33 — pour le filtre et les pastilles
+ * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68 (l'anneau de Mémoire et de
+ *       Disque, la ligne des totaux de l'onglet « Tous ») ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-44 · docs/DESIGN_SYSTEM.md §1.5, §6.14,
+ *       §14.6 — pour `renderAnneau`, `renderMesure`, `capaciteDeForge`,
+ *       `sommerMesures` et `renderTotaux`
  *
  * Rendu en chaînes HTML plutôt qu'avec un framework : la vue est une liste, et
  * une dépendance de rendu se justifiera quand l'interactivité l'exigera
@@ -14,7 +19,8 @@
  * navigateur.
  */
 
-import { stateOf, formatBytes, formatBps, formatCpu, MEASURE, tunnelOf } from './tokens.js';
+import { stateOf, formatBytes, formatBps, formatCpu, MEASURE, tunnelOf,
+         SEUIL_ALERTE_RESSOURCE, proportionRessource } from './tokens.js';
 import { renderPastillesProjets, ADRESSE_GESTION } from './sparks-projets.js';
 
 const echapper = (v) =>
@@ -90,12 +96,155 @@ export function renderCpuGauge(usage, spark) {
   ].join('');
 }
 
-/** Cellule de mesure instantanée. Une absence de donnée reste VIDE (§6.14). */
+// Anneau de 24 px (l'échelle d'espacement, DESIGN_SYSTEM.md §4.1) : rayon 9 et
+// trait 4 le tiennent dans sa boîte, et sa circonférence se calcule une fois.
+const RAYON_ANNEAU = 9;
+const CIRCONFERENCE_ANNEAU = 2 * Math.PI * RAYON_ANNEAU;
+
+/**
+ * Anneau d'une part de limite occupée (SPK-DS-44). Décoratif : les chiffres et
+ * le texte réservé aux lecteurs d'écran portent l'information (§1.5).
+ *
+ * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.2 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-44
+ */
+export function renderAnneau(proportion) {
+  const borne = Math.min(Math.max(proportion, 0), 1);
+  const alerte = proportion >= SEUIL_ALERTE_RESSOURCE;
+  const trait = (CIRCONFERENCE_ANNEAU * borne).toFixed(2);
+  return '<svg class="anneau" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">'
+    + `<circle class="anneau__piste" cx="12" cy="12" r="${RAYON_ANNEAU}"/>`
+    + (borne > 0
+      ? `<circle class="anneau__part${alerte ? ' anneau__part--alerte' : ''}" cx="12" cy="12" r="${RAYON_ANNEAU}"`
+        + ` stroke-dasharray="${trait} ${CIRCONFERENCE_ANNEAU.toFixed(2)}" transform="rotate(-90 12 12)"/>`
+      : '')
+    + '</svg>';
+}
+
+/**
+ * Pourcentage ENTIER d'une part, tronqué et non arrondi : 89,6 % se dit 89 %, de
+ * sorte que le chiffre annoncé ne contredit jamais l'alerte (qui tient à 90 %
+ * exactement). La tolérance absorbe les restes de la virgule flottante : 0,95 ×
+ * 100 ne doit pas se dire 94 %.
+ */
+function pourcentage(proportion) {
+  return Math.floor(proportion * 100 + 1e-9);
+}
+
+/**
+ * Une mesure et sa limite : chiffres, et anneau quand la part se calcule.
+ *
+ * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.2 · docs/DESIGN_SYSTEM.md
+ *       §14.6 (une absence de donnée reste VIDE, §6.14)
+ *
+ * Sans mesure : rien. Sans limite : les chiffres seuls, il n'y a pas de part à
+ * dessiner. Au-delà du seuil, la couleur est doublée du gras et d'un texte pour
+ * lecteurs d'écran : elle ne porte jamais seule l'information (§1.5).
+ */
 function renderMesure(valeur, limite, formateur) {
   if (valeur === null || valeur === undefined) return '';
-  const rendu = formateur(valeur);
-  const total = limite ? ` / ${formateur(limite)}` : '';
-  return `<span class="technique">${echapper(rendu + total)}</span>`;
+  const texte = formateur(valeur) + (limite ? ` / ${formateur(limite)}` : '');
+  const proportion = proportionRessource(valeur, limite);
+  if (proportion === null) return `<span class="technique">${echapper(texte)}</span>`;
+  const alerte = proportion >= SEUIL_ALERTE_RESSOURCE;
+  return `<span class="mesure${alerte ? ' mesure--alerte' : ''}">${renderAnneau(proportion)}`
+    + `<span class="technique">${echapper(texte)}</span>`
+    + `<span class="sr-only"> ${pourcentage(proportion)} % de la limite${
+      alerte ? ', proche de la limite' : ''}</span></span>`;
+}
+
+/**
+ * Capacités physiques de la Forge, telles que la liste les compare (DAT §68.3).
+ *
+ * Physiques, pas allouables : la mémoire vendue en surengagement ne s'ouvre pas à
+ * un usage réel qui la dépasserait. Une lecture absente donne `null` par
+ * grandeur, jamais zéro (§14.6).
+ */
+export function capaciteDeForge(forge) {
+  if (!forge) return null;
+  return {
+    cpu: forge.cpu?.cores_total ?? null,
+    memoire: forge.memory?.total_bytes ?? null,
+    disque: forge.pools?.storage?.capacity ?? null,
+  };
+}
+
+/**
+ * Somme des mesures disponibles, et combien de Sparks en ont une.
+ *
+ * Un Spark arrêté n'a pas de CPU ni de mémoire mesurés (DAT §20.4) : il
+ * n'ajoute rien, et il n'est pas compté « mesuré ». Zéro n'est pas inconnu.
+ */
+export function sommerMesures(sparks, usage, lire) {
+  let somme = 0;
+  let mesures = 0;
+  for (const s of sparks) {
+    const v = lire(usage?.[s.name] ?? {});
+    if (typeof v === 'number' && Number.isFinite(v)) { somme += v; mesures += 1; }
+  }
+  return { somme, mesures, sparks: sparks.length };
+}
+
+/** Note d'une somme partielle (§6.13, résultat partiel). */
+function noteMesures({ mesures, sparks }) {
+  return mesures < sparks
+    ? `<span class="total__note">${mesures} Spark${mesures > 1 ? 's' : ''} sur ${sparks} mesuré${mesures > 1 ? 's' : ''}</span>`
+    : '';
+}
+
+/**
+ * Pied « Total » de l'onglet « Tous » (DAT §68.3, SPK-DS-44).
+ *
+ * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.3 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-44
+ *
+ * Le CPU garde sa forme de colonne, la barre ; Mémoire et Disque, leur anneau.
+ * Capacité inconnue : la somme reste, l'absence est NOMMÉE une fois, dans la
+ * première cellule (§14.6).
+ */
+export function renderTotaux(sparks, usage, forge) {
+  const capacite = capaciteDeForge(forge);
+  const cpu = sommerMesures(sparks, usage, (u) => u.cpu?.used);
+  const memoire = sommerMesures(sparks, usage, (u) => u.memory?.used_bytes);
+  const disque = sommerMesures(sparks, usage, (u) => u.disk?.used_bytes);
+
+  const partCpu = proportionRessource(cpu.somme, capacite?.cpu);
+  // Aucun CPU mesuré : s'il y a des Sparks en marche, le premier relevé n'a pas
+  // encore de fenêtre (DAT §20.1) — la cellule le DIT, comme celles des lignes,
+  // plutôt que de rester muette (§14.6). Sans Spark en marche, il n'y a rien à dire.
+  const enMarche = sparks.some((sp) => sp.state === 'running');
+  const celluleCpu = cpu.mesures === 0
+    ? (enMarche ? `<span class="jauge__absent">${MEASURE.pending}</span>` : '')
+    : [
+    '<span class="jauge">',
+    partCpu === null ? '' : [
+      '<span class="jauge__piste" aria-hidden="true">',
+      `<span class="jauge__part ${partCpu >= SEUIL_ALERTE_RESSOURCE ? 'jauge__part--depasse' : 'jauge__part--reserve'}" style="width:${(Math.min(partCpu, 1) * 100).toFixed(1)}%"></span>`,
+      '</span>',
+    ].join(''),
+    `<span class="jauge__texte${partCpu >= SEUIL_ALERTE_RESSOURCE ? ' mesure--alerte' : ''}">${echapper(
+      formatCpu(cpu.somme) + (capacite?.cpu ? ` sur ${capacite.cpu} cœurs` : ' CPU'))}${
+      partCpu >= SEUIL_ALERTE_RESSOURCE ? '<span class="sr-only">, proche de la limite</span>' : ''}</span>`,
+    noteMesures(cpu),
+    '</span>',
+  ].join('');
+
+  const cellule = (somme, limite) => (somme.mesures === 0 ? '' : renderMesure(somme.somme, limite, formatBytes)
+    + noteMesures(somme));
+
+  const absence = capacite === null || capacite.cpu === null || capacite.memoire === null
+    || capacite.disque === null
+    ? '<span class="total__note">Capacité de la Forge non relevée</span>' : '';
+
+  return '<tfoot><tr class="ligne-total">'
+    + `<th scope="row" class="nom-cellule">Total<span class="total__note">${sparks.length} Spark${
+      sparks.length > 1 ? 's' : ''}</span>${absence}</th>`
+    + '<td></td>'
+    + `<td>${celluleCpu}</td>`
+    + `<td class="aligne-droite">${cellule(memoire, capacite?.memoire)}</td>`
+    + `<td class="aligne-droite">${cellule(disque, capacite?.disque)}</td>`
+    + '<td class="colonne-secondaire"></td><td class="colonne-secondaire"></td>'
+    + '</tr></tfoot>';
 }
 
 const COLONNES = [
@@ -109,7 +258,7 @@ const COLONNES = [
 ];
 
 /** Vue complète. Traite explicitement chargement, vide et erreur (§6.13). */
-export function renderSparksView({ status, sparks = [], usage = {}, error = null,
+export function renderSparksView({ status, sparks = [], usage = {}, error = null, forge = null,
                                    sort = { key: 'name', dir: 'asc' }, tunnel = null,
                                    // SPK-116 · §61.4 : l'onglet d'un projet est
                                    // CETTE liste, restreinte à ses Sparks.
@@ -168,7 +317,10 @@ export function renderSparksView({ status, sparks = [], usage = {}, error = null
     <table>
       <caption class="sr-only">Liste des Sparks du serveur courant, avec leur état et leur consommation.</caption>
       <thead><tr>${entetes}</tr></thead>
-      <tbody>${lignes}</tbody>
+      <tbody>${lignes}</tbody>${
+        // DAT §68.3 : les totaux face à la Forge entière ne se rendent que dans
+        // l'onglet « Tous » ; celui d'un projet n'en montrerait qu'une part.
+        projet ? '' : renderTotaux(sparks, usage, forge)}
     </table>
   </div>
   <p class="tableau-indice">Le tableau défile horizontalement pour révéler les colonnes suivantes.</p>

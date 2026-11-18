@@ -102,6 +102,37 @@ const OCTETS = ['o', 'Kio', 'Mio', 'Gio', 'Tio'];
  *  entièrement francophone (docs/DESIGN_SYSTEM.md §11). */
 const virgule = (texte) => String(texte).replace('.', ',');
 
+/**
+ * Au-delà de cette part de sa limite, une mesure de mémoire ou de disque passe
+ * en alerte.
+ *
+ * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.2 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-44 · docs/DESIGN_SYSTEM.md §1.1 (une valeur visuelle ne se
+ *       réinvente pas dans un composant)
+ *
+ * Ce n'est ni une variable d'environnement ni un réglage : arbitré à 90 % le
+ * 2026-11-18, il se change ICI, avec le DAT §68.2 et SPK-DS-44. Il ne vaut pas
+ * pour le CPU, dont le burst n'est pas un dépassement (SPK-DS-02).
+ */
+export const SEUIL_ALERTE_RESSOURCE = 0.9;
+
+/**
+ * Part d'une limite occupée par une mesure, ou `null` quand on ne peut pas la
+ * dire.
+ *
+ * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.2 · docs/DESIGN_SYSTEM.md
+ *       §14.6 (zéro n'est pas « inconnu »)
+ *
+ * Une limite absente, nulle ou négative ne donne pas une part de 0 % : elle ne
+ * donne rien. Le résultat n'est PAS borné — 104 % est un fait qu'on affiche ;
+ * c'est le dessin de l'anneau qui se borne à 100 %.
+ */
+export function proportionRessource(utilise, limite) {
+  if (typeof utilise !== 'number' || typeof limite !== 'number') return null;
+  if (!Number.isFinite(utilise) || !Number.isFinite(limite) || limite <= 0) return null;
+  return utilise / limite;
+}
+
 /** Formate des octets. `null` reste `null` : ce n'est pas zéro (§14.6). */
 export function formatBytes(value) {
   if (value === null || value === undefined) return null;

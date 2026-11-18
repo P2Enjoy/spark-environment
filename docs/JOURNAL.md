@@ -15522,3 +15522,13 @@ sans migration.
 
 **Conséquences.** SPK-174 ouverte, DAT §69 écrit avant le code. SPK-173 est terminée côté
 code et reste en attente de son épreuve E2E ; SPK-174 vient après, une tâche à la fois.
+
+**SPK-173 : vérifications du 2026-11-18.** Deux défauts trouvés par les captures et pas par
+les tests : la cellule CPU du total restait muette au premier relevé (« Mesure en cours »
+sur chaque ligne, rien dans le total — §14.6), et les anneaux suivaient la largeur du
+texte au lieu de s'aligner (cellule alignée à droite). Corrigés, avec preuve unitaire ;
+l'alignement est écrit dans SPK-DS-44. Le parcours E2E est vert ; la pile factice ne
+donne pas de fenêtre de mesure CPU stable en 30 s, donc l'E2E accepte « Mesure en cours »
+ou « N cœurs » et l'état mesuré reste prouvé en unitaire. Les illustrations du manuel
+ont été régénérées (`make manuel`) et seules celles qui montrent la liste sont conservées.
+

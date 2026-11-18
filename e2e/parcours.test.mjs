@@ -20,6 +20,9 @@
            pourquoi, sous sa route, §18.9 ; SPK-DS-43),
            docs/BACKLOG.md#SPK-132 (recréer un conteneur de pile Compose,
  *           §37.7.5 ; l'onglet Environnement nomme ce geste, §43.7) ·
+ *           docs/BACKLOG.md#SPK-173 (la liste montre Mémoire et Disque en
+ *           anneau, et un total face à la Forge dans l'onglet « Tous »
+ *           seulement, docs/DAT.md §68 ; SPK-DS-44) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -49,6 +52,9 @@ import { monterCanalNotify } from './notify-doublon.mjs';
 // Le motif du SERVEUR, employé tel quel : une seconde heuristique écrite
 // ici dériverait de celle qui est réellement appliquée (§22.4).
 import { SECRET_HINT } from '../apps/webui/host/inventory.js';
+// SPK-173 : la MÊME écriture des octets que l'écran, pour comparer les capacités
+// de la Forge sans recopier une seconde mise en forme.
+import { formatBytes } from '../apps/webui/src/components/tokens.js';
 
 const ECHECS = new URL('./captures/echecs/', import.meta.url).pathname;
 const CAPTURES = new URL('./captures/', import.meta.url).pathname;
@@ -226,6 +232,75 @@ test('la console affiche les Sparks seedés, avec leurs états réels', async ()
     assert.ok(texte.includes('Arrêté'));
     assert.ok(texte.includes('En erreur'));
     assert.ok(texte.includes('En attente'));
+  });
+});
+
+test('la liste montre Mémoire et Disque en anneau, et le total face à la Forge dans « Tous » seulement', async () => {
+  // SPK-173 · docs/DAT.md §68 · docs/DESIGN_SYSTEM_APP.md SPK-DS-44.
+  // Le parcours d'un exploitant : il ouvre la console, lit la liste, passe dans
+  // l'onglet d'un projet, revient à « Tous ». Rien n'est atteint par une URL.
+  await parcours('liste-anneaux-totaux', async () => {
+    await accueil();
+
+    // --- les anneaux accompagnent les chiffres, ils ne les remplacent pas ----
+    const lignes = await page.$$eval('tbody tr', (tr) => tr.map((l) => ({
+      mesures: [...l.querySelectorAll('td.aligne-droite')].map((c) => ({
+        chiffres: c.querySelector('.technique')?.textContent ?? null,
+        anneau: Boolean(c.querySelector('svg.anneau')),
+        alerte: c.querySelector('.mesure')?.classList.contains('mesure--alerte') ?? false,
+        dit: c.querySelector('.sr-only')?.textContent ?? '',
+      })),
+    })));
+    const avecAnneau = lignes.flatMap((l) => l.mesures).filter((m) => m.anneau);
+    assert.ok(avecAnneau.length > 0, 'aucun anneau : le seed porte des Sparks mesurés');
+    for (const m of avecAnneau) {
+      assert.match(m.chiffres, / \/ /, 'un anneau accompagne « usage / limite », jamais seul');
+      // La couleur ne porte pas seule : l'alerte et le texte dit aux lecteurs
+      // d'écran s'accordent (§1.5), et le pourcentage est celui du seuil.
+      const pct = Number(m.dit.match(/(\d+) % de la limite/)?.[1]);
+      assert.ok(Number.isInteger(pct), `pourcentage dit : « ${m.dit} »`);
+      assert.equal(m.alerte, pct >= 90, `alerte incohérente avec ${pct} % : « ${m.dit} »`);
+      assert.equal(/proche de la limite/.test(m.dit), m.alerte);
+    }
+    // Une cellule sans mesure reste VIDE : pas d'anneau, pas de zéro (§14.6).
+    for (const l of lignes) {
+      for (const m of l.mesures) if (m.chiffres === null) assert.equal(m.anneau, false);
+    }
+
+    // --- la ligne des totaux, face à ce que la Forge porte -------------------
+    const pied = await page.textContent('tfoot');
+    assert.match(pied, /Total/);
+    const { corps: forge } = await pile.lireSparkd('/v1/forge');
+    assert.ok(pied.includes(formatBytes(forge.memory.total_bytes)),
+      `le total mémoire se lit face à la mémoire de la machine (${formatBytes(forge.memory.total_bytes)})`);
+    assert.ok(pied.includes(formatBytes(forge.pools.storage.capacity)),
+      `le total disque se lit face à la capacité de stockage (${formatBytes(forge.pools.storage.capacity)})`);
+    // Le CPU se mesure sur une FENÊTRE (DAT §20.1) : au premier relevé la cellule
+    // le dit, comme celles des lignes (§14.6), au lieu de rester muette. Avec un
+    // relevé établi, elle se lit face aux cœurs physiques — preuve unitaire, la
+    // pile factice ne garantit pas de fenêtre stable.
+    assert.match(pied, /Mesure en cours|cœurs/);
+    assert.equal(await page.locator('tfoot svg.anneau').count() > 0, true);
+    // La ligne n'est pas une ligne de Spark : le compte du registre ne bouge.
+    assert.equal(await page.locator('tbody tr').count(), lignes.length);
+
+    await capturer('spk173-liste-anneaux-totaux');
+    await capturer('spk173-liste-anneaux-totaux-mobile', { largeur: 390, hauteur: 1100 });
+
+    // --- l'onglet d'un projet : la même liste, SANS ligne de totaux ----------
+    await page.click('nav[aria-label="Sections des Sparks"] a:has-text("Client Martin")');
+    await page.waitForSelector(
+      'nav[aria-label="Sections des Sparks"] a[aria-current="page"]:has-text("Client Martin")',
+      { timeout: 10000 });
+    await page.waitForSelector('tbody a', { timeout: 10000 });
+    assert.equal(await page.locator('tfoot').count(), 0,
+      'une somme partielle face à la Forge entière se lirait comme une part de la Forge');
+    assert.ok(await page.locator('svg.anneau').count() > 0, 'les anneaux restent dans un projet');
+    await capturer('spk173-onglet-projet-sans-total', { hauteur: 700 });
+
+    // --- retour à « Tous » : la ligne revient -------------------------------
+    await page.click('nav[aria-label="Sections des Sparks"] a:has-text("Tous")');
+    await page.waitForSelector('tfoot', { timeout: 10000 });
   });
 });
 

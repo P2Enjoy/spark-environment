@@ -9153,7 +9153,7 @@ plus simple, et l'ajouter à la recette cloud-init.
     aussi OP-39 et OP-40) sur instruction du responsable, puis la vérification
     d'OP-41 ; étape 4, le noyau corrigé, à sa publication par Ubuntu.
 
-### [ ] SPK-173 · La liste des Sparks montre Mémoire et Disque en anneau, et un total face à la Forge
+### [~] SPK-173 · La liste des Sparks montre Mémoire et Disque en anneau, et un total face à la Forge
 
 **Demandé le 2026-11-18** par le responsable, depuis la liste des Sparks : la mémoire et
 le disque se lisent en chiffres seulement, là où le CPU a sa jauge ; et il manque une
@@ -9173,6 +9173,17 @@ ligne des totaux face à ce que la Forge a au total. Arbitrages du jour : la for
   l'accueil (connexion, clic, capture) ; captures observées (desktop, mobile, absence de
   capacité, un Spark arrêté, un Spark au-delà du seuil) ; manuel M3, DAT, design system,
   seed (un Spark près de sa limite) et changelog à jour.
+- **État au 2026-11-18 : implémenté et vérifié sur la pile de développement factice, pas
+  sur une Forge réelle — reste `[~]`.** Prouvé : 1665 tests unitaires de la console
+  verts, dont `sparks-totaux.test.js` ; le parcours E2E « la liste montre Mémoire et
+  Disque en anneau… » vert, depuis l'accueil, à la souris ; captures observées (desktop,
+  mobile, onglet de projet sans total) ; illustrations `m3-liste` et `m3-projets-liste`
+  du manuel renouvelées. **Non prouvé** : l'état « CPU du total mesuré » en E2E (la pile
+  factice ne garantit pas de fenêtre de mesure CPU stable ; couvert par les tests
+  unitaires seulement) ; l'écran sur une Forge réelle ou sur la VM d'installation fraîche
+  (README §28.7) ; la capture de la capacité non relevée. Le seed n'a pas été modifié :
+  le doublon fait déjà franchir 90 % de leur quota mémoire à plusieurs Sparks seedés (voir
+  le journal du 2026-11-18). Le manuel est dit M8 (« Lire les mesures »), pas M3.
 
 ### [ ] SPK-174 · Désigner l'image proposée par défaut à la création
 

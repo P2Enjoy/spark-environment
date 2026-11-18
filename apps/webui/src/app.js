@@ -3,6 +3,8 @@
  *
  * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21, docs/BACKLOG.md#SPK-64,
  *       docs/BACKLOG.md#SPK-68,
+ *       docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.3 (la capacité de la Forge se lit
+ *       avec la liste, pour sa ligne « Total »),
  *       docs/BACKLOG.md#SPK-69, docs/BACKLOG.md#SPK-70 · docs/DAT.md §37.4,
  *       §40.6 ·
  *       docs/DAT.md §26 (les trois panneaux d'administration, §26.2 le contrat
@@ -58,7 +60,7 @@ import { tunnelContextOf, tunnelFailureMessage, signatureMotifOf }
   from './components/tokens.js';
 
 const racine = document.getElementById('racine');
-const etat = { status: 'loading', sparks: [], usage: {}, error: null,
+const etat = { status: 'loading', sparks: [], usage: {}, error: null, forgeListe: null,
                sort: { key: 'name', dir: 'asc' }, tunnel: null, server: null,
                route: 'liste', spark: null, detail: {}, confirming: null,
                // SPK-63 · §6.23 : ce qui a été frappé pour confirmer une
@@ -377,7 +379,7 @@ function peindre() {
               error: { message: 'Les projets n’ont pas pu être lus : la liste de ce projet ne peut pas être composée.' } });
           }
           const vue = filtrerParProjet(etat.sparks, etat.projets, etat.projetCourant);
-          return renderSparksView({ ...etat, sparks: vue.sparks, projet: vue.projet,
+          return renderSparksView({ ...etat, forge: etat.forgeListe, sparks: vue.sparks, projet: vue.projet,
                                     // Tant que les projets ne sont pas lus, on
                                     // ne peut pas dire qu'un projet n'existe pas.
                                     projetAbsent: vue.absent && Array.isArray(etat.projets) });
@@ -5649,12 +5651,16 @@ async function charger({ projet = null } = {}) {
     // SPK-116 · §61.3 : chaque Spark porte ses projets ; la rangée d'onglets
     // vient de la liste des projets. Une liste illisible n'empêche pas de
     // montrer les Sparks : la rangée se réduit alors à Tous et Projets.
-    const [{ sparks }, projets] = await Promise.all([
+    const [{ sparks }, projets, forge] = await Promise.all([
       api('/v1/sparks'),
       api('/v1/projects').then((r) => r.projects).catch(() => null),
+      // SPK-173 · §68.3 : la capacité de la Forge pour la ligne « Total ». Une
+      // lecture en échec ne retient pas la liste : la ligne nomme l'absence.
+      api('/v1/forge').catch(() => null),
     ]);
     etat.sparks = sparks;
     etat.projets = projets;
+    etat.forgeListe = forge;
     etat.usage = {};
     // L'usage est demandé Spark par Spark : une mesure manquante n'empêche pas
     // d'afficher les autres.

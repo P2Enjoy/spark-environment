@@ -315,6 +315,30 @@ tbody tr:hover { background: var(--color-hover); }
 .jauge__texte { font-size: var(--text-compact); color: var(--color-text-2); }
 .jauge__absent { font-size: var(--text-compact); color: var(--color-text-3); font-style: italic; }
 
+/* --- Anneau de Mémoire et de Disque, et ligne « Total » (SPK-173, SPK-DS-44) ---
+   L'anneau ACCOMPAGNE les chiffres. Au-delà du seuil le remplissage passe au
+   danger ET les chiffres se mettent en gras : la couleur ne porte pas seule
+   (DESIGN_SYSTEM.md §1.5). */
+/* L'anneau tient le bord GAUCHE de la cellule et les chiffres le bord droit : la
+   colonne s'aligne d'une ligne à l'autre au lieu de suivre la largeur du texte
+   (observé en capture, 2026-11-18). */
+.mesure { display: flex; width: 100%; align-items: center; justify-content: space-between;
+          gap: var(--space-2); }
+.anneau { flex: none; }
+.anneau__piste { fill: none; stroke: var(--color-border); stroke-width: 4; }
+.anneau__part { fill: none; stroke: var(--color-brand); stroke-width: 4; }
+.anneau__part--alerte { stroke: var(--color-danger); }
+.mesure--alerte .technique, .mesure--alerte { font-weight: 700; }
+.jauge__texte.mesure--alerte { font-weight: 700; }
+.ligne-total th, .ligne-total td {
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+  vertical-align: middle;
+}
+.ligne-total th { font-size: var(--text-compact); color: var(--color-text-2); text-align: left; }
+.total__note { display: block; font-size: var(--text-compact); font-weight: 400; color: var(--color-text-3); }
+
 /* --- États systématiques (§6.13) ----------------------------------------- */
 .etat-vue {
   padding: var(--space-12) var(--space-4);
