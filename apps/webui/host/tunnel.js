@@ -433,7 +433,21 @@ export class Tunnel {
   #poserSignatairesUneFois() {
     if (this.#signatairesTentes || !this.poserSignataires) return;
     this.#signatairesTentes = true;
-    Promise.resolve()
+    this.#poser();
+  }
+
+  /**
+   * Rejoue la pose : après une mise à jour de sparkd réussie depuis la console
+   * (DAT §70.3), la Forge peut porter le module qu'elle n'avait pas.
+   */
+  reposerSignataires() {
+    if (!this.poserSignataires) return Promise.resolve();
+    this.#signatairesTentes = true;
+    return this.#poser();
+  }
+
+  #poser() {
+    return Promise.resolve()
       .then(() => this.poserSignataires(this.server))
       .catch((erreur) => ({ etat: 'echec', message: String(erreur?.message ?? erreur) }))
       .then((resultat) => {

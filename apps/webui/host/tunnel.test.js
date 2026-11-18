@@ -566,3 +566,16 @@ test('sans fonction de pose, ou quand elle ne s’applique pas, rien n’est dé
   assert.equal(t.describe().signataires, null);
   t.close();
 });
+
+test('après une mise à jour de sparkd, la pose des signataires REPART et se décrit', async () => {
+  // DAT §70.3, constat d'OP-43 : « sparkd à mettre à jour » restait affiché après
+  // la mise à jour qui venait de rendre la Forge capable.
+  const reponses = [{ etat: 'sparkd_ancien' }, { etat: 'deja' }];
+  const t = tunnel({ poserSignataires: async () => reponses.shift() });
+  await t.open();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(t.describe().signataires.etat, 'sparkd_ancien');
+  await t.reposerSignataires();
+  assert.equal(t.describe().signataires.etat, 'deja');
+  t.close();
+});

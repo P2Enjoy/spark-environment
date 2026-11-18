@@ -787,6 +787,8 @@ export function createConsoleHost(options = {}) {
         // aussi sortir de l'éventuel état broken observé pendant le restart,
         // sinon la lecture suivante refuserait une Forge pourtant revenue.
         await tunnel.probe?.().catch(() => null);
+        // SPK-172 · §70.3 : la Forge mise à jour peut poser ce qu'elle refusait.
+        if (result.state === 'success') await tunnel.reposerSignataires?.().catch(() => null);
         return { status: result.state === 'success' ? 200 : 502, body: result };
       } catch (error) {
         const known = error instanceof ForgeUpdateError;
