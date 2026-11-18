@@ -17946,35 +17946,58 @@ difficilement réversible, et il touche des services). Cette confirmation :
 L'engagement est le bouton *Appliquer*. Une frappe n'est pas exigée : le geste ne
 détruit pas de données (§6.23, frapper le nom).
 
-### 73.2 Ce que la Forge fait
+### 73.2 Par où passe le geste : la console, en SSH — pas sparkd
 
-`POST /v1/forge/systeme/appliquer` avec `{"paquets": ["nom", …]}` :
+**Révisé le 2026-11-18, après la première application réelle.** La première version
+confiait l'application à sparkd (`POST /v1/forge/systeme/appliquer`). Sous pilote
+factice, tout passait. Sur `spark-010`, `apt-get` a échoué en code 100 : `seteuid 42
+failed`, et `/var/cache/apt`, `/var/lib/dpkg` étaient en lecture seule. sparkd tourne
+dans une unité durcie (`ProtectSystem=strict`, `NoNewPrivileges=yes`) : il ne peut pas
+écrire le système, et c'est voulu. Desserrer ce durcissement pour un geste de système
+ferait de toute faille de sparkd une prise du système entier. La route de sparkd est
+**retirée**.
 
-- **Refus `422`** pour un nom qui ne figure pas dans la liste des paquets à mettre à
-  jour relevée à l'instant. On ne met à jour que ce qui l'attend : pas d'installation
-  d'un paquet nouveau, ni d'option glissée. Une liste vide est refusée, et plus de
-  500 noms aussi.
-- **Refus `409`** si une application tourne déjà, ou si `dpkg` est verrouillé (par
-  exemple `unattended-upgrades` en cours). Le refus nomme le verrou.
-- **Sinon `202`**. L'application tourne **en arrière-plan** :
-  `apt-get install -y --only-upgrade -o Dpkg::Options::=--force-confold <paquets>`,
-  avec `DEBIAN_FRONTEND=noninteractive`. Une configuration modifiée localement est
-  gardée.
-- **Une ligne d'audit `system.upgrade`** est écrite. Elle porte la signature du geste
-  (§36.10) et la liste des paquets, puis son issue : `ok`, ou `error` avec le motif.
+Le geste suit donc le chemin des autres gestes de système de la Forge : la mise à jour
+de sparkd (§40.6) et le redémarrage (§51.4). C'est **l'hôte console** qui l'exécute, par
+SSH, avec le droit d'administration de l'exploitant.
 
-`GET /v1/forge/systeme/appliquer` rend l'état de la dernière application :
+`POST /api/forge/systeme/appliquer` avec `{"server": …, "paquets": […]}` :
+
+- **Refus `422`** pour un nom hors forme (`^[a-z0-9][a-z0-9+.-]{0,127}$`), une liste
+  vide ou de plus de 500 noms, et un nom qui ne figure pas dans la liste des paquets
+  à mettre à jour que sparkd rend **à l'instant** (`GET /v1/forge/systeme`, relu par
+  le tunnel). On ne met à jour que ce qui l'attend.
+- **Refus `409`** si une application tourne déjà pour ce serveur.
+- **Sinon `202`**, et le travail tourne en arrière-plan. C'est un script fermé, lu sur
+  stdin par `sh -s` ; ses seuls arguments sont les noms validés. Il lance
+  `apt-get install -y --only-upgrade -o Dpkg::Options::=--force-confold -o
+  DPkg::Lock::Timeout=0` en `sudo -n`, avec `DEBIAN_FRONTEND=noninteractive`.
+  - **Verrou** : un `dpkg` verrouillé, par exemple par `unattended-upgrades`, fait
+    échouer `apt-get` aussitôt ; l'échec est rendu avec le motif « gestionnaire de
+    paquets occupé ».
+  - **Droits** : sans sudo sans invite, l'issue est `sans_droit`.
+
+`GET /api/forge/systeme/appliquer?server=…` rend l'état de la dernière application de
+ce serveur :
 
 - `etat` : `aucune`, `en_cours`, `terminee` ou `echec` ;
-- les paquets demandés, `debut` et `fin` ;
-- le code de sortie ;
-- les **40 dernières lignes** de la sortie d'`apt-get`, bornées à 8 Kio.
+- `motif`, en cas d'échec : `occupe`, `sans_droit` ou `apt` ;
+- les paquets, `debut`, `fin`, le code ;
+- les **40 dernières lignes** de la sortie, bornées à 8 Kio.
 
-Le relevé (§70.5) est relu à la fin.
+L'état vit dans l'hôte console : un redémarrage de la console l'oublie, et la liste
+relue dit alors la vérité.
 
-**Pilote factice.** L'application est simulée : les paquets appliqués sortent du
-relevé de démonstration et l'état passe à `terminee`. La réponse porte
-`source: "fake"`, que l'onglet affiche.
+**Journal.** L'hôte déclare deux lignes `system.upgrade` par `POST /v1/audit`, sous son
+identité. La première est la demande, **signée** comme tout geste de la console
+(§36.10.8). La seconde est l'issue, `ok` ou `error`. L'action `system.upgrade` et la
+clé `packages` (les noms, séparés par des espaces, bornés) entrent dans les listes
+fermées de ce que sparkd accepte d'un appelant extérieur (§37.4.6).
+
+**Pile d'épreuve.** Le doublon `SPARK_UPGRADE_COMMAND`, lu sous `SPARK_EPREUVE=1`
+seulement et affiché dans le bandeau (§53.3), remplace la commande. Le relevé de
+démonstration de sparkd ne change donc pas : la pile éprouve le parcours, l'issue et
+le journal. La sortie du paquet de la liste se prouve sur la machine réelle.
 
 ### 73.3 Ce que l'onglet montre pendant et après
 

@@ -10676,5 +10676,7 @@ exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
   - **Suites** : sparkd 1 992, webui 1 799.
   - **Défaut trouvé par l'E2E, corrigé** : une application déjà finie à la réponse
     laissait la liste périmée 3 s.
-  - **Reste** : une application réelle sur `spark-010`, carte blanche du
-    responsable.
+  - **Échec réel sur `spark-010`, le 2026-11-18** : `apt-get` lancé par sparkd échoue
+    en code 100 (`seteuid failed`, système en lecture seule). C'est le durcissement
+    de son unité, voulu. Le geste passe désormais par la console, en SSH (DAT §73.2
+    révisé) ; la route de sparkd est retirée.
