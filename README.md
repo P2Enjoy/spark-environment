@@ -274,7 +274,7 @@ et **rien** à coller. `--defaut -` lit l'entrée standard.
 | `--offre NOM` | `partitionnement`, `cloud-init` | une offre **connue**, par son nom : son schéma par défaut est `deploy/cloud-init/offres/<NOM>.json` | un seul parmi `--offre`, `--defaut` et (`cloud-init`) `--pool-source` |
 | `--defaut FICHIER` | `partitionnement`, `cloud-init` | le schéma par défaut d'une offre **nouvelle**, tel que la console l'affiche | idem |
 | `--racine-gio N` | les trois | taille de la partition système `root`, en Gio | `200` — la Forge de validation en consomme 2,7 |
-| `--sans-zfs` | `partitionnement` | **repli** : ne déclare pas le pool à l'hébergeur ; la partition reste `data` et l'amorce crée le pool | absent : le pool est déclaré |
+| `--sans-zfs` | `partitionnement` | **repli** : ne déclare pas le pool à l'hébergeur ; la partition reste `data` et l'amorce crée le pool | absent : l'offre décide (`--offre`), sinon le pool est déclaré |
 | `--pool-source A,B` | `cloud-init` | les deux supports du miroir, à la place de `--offre` et de `--defaut` | déduits du schéma |
 | `--arc-gib N` | `cloud-init` | plafond de l'ARC ZFS, en Gio, retiré de la mémoire allouable | l'amorce garde `16`, **réglé pour 94 Gio de RAM : à adapter** sur une machine qui en a moins |
 | `--net-mbit N` | `cloud-init` | débit du lien, **seulement** si la carte n'en annonce aucun (`virtio`) | absent : le débit est mesuré |
@@ -288,24 +288,36 @@ et **rien** à coller. `--defaut -` lit l'entrée standard.
 - tout est conservé tel quel — partitions `uefi`, `legacy`, `boot`, `swap`, RAID,
   systèmes de fichiers ;
 - la partition `root`, qui prend « tout l'espace restant » dans le défaut, est **bornée** ;
-- une partition **`zfs`** lui succède et prend ce qui reste : `sda5` et `sdb5` (ou
+- une partition **`data`** lui succède et prend ce qui reste : `sda5` et `sdb5` (ou
   `nvme0n1p5` et `nvme1n1p5`) sont les deux supports du pool ;
 - ces deux supports n'apparaissent **ni dans `raids` ni dans `filesystems`** : ils restent
   des périphériques bloc nus, ce qu'exige le miroir natif. Les confier à `md`
   reproduirait exactement le problème que le miroir ZFS résout ;
-- **le schéma déclare le pool à l'hébergeur** : une section `zfs` décrit un miroir
-  `spark` sur ces deux partitions (`name`, `type`, `devices` — les options de pool ne
-  s'écrivent pas, leur format n'est pas documenté). L'amorce **adopte** ce pool au premier
-  démarrage ; elle ne le crée par `creer-pool.sh` que si aucun pool n'est importable ;
+- **qui crée le pool se décide par offre** (`docs/DAT.md` §66.8, décision 3) :
+  - **l'hébergeur** : la section `zfs` du schéma déclare le miroir `spark` sur ces deux
+    partitions, en `ashift=12`. C'est clé pour clé le schéma avec lequel `spark-experiment`
+    a été installée, en Ubuntu 26.04. L'amorce **adopte** ce pool au premier démarrage ;
+  - **l'amorce** : aucun pool n'est déclaré, et l'amorce le crée par `creer-pool.sh` avec
+    `--pool-source`. C'est le cas d'**EM-B311X-SATA** : en Ubuntu 24.04, l'installateur de
+    l'hébergeur se fige quand le pool est déclaré, et s'installe sinon (2026-11-18).
+
+  Le tableau de [`deploy/cloud-init/offres/README.md`](deploy/cloud-init/offres/README.md)
+  donne le choix de chaque offre ; une offre versionnée qui ne le dit pas est refusée ;
 - la commande **refuse**, en le disant, un schéma qui n'a pas deux disques, qui déclare
   déjà un pool, dont la partition « reste » n'est pas `root` et dernière, ou qui est déjà
   dérivé.
 
-**Pas encore vu accepté :** ni la console ni l'installateur de l'hébergeur n'ont été vus
-accepter la section `zfs`, et l'adoption par Incus d'un pool créé par l'hébergeur n'a pas
-été jouée (le banc éprouve celle d'un pool créé par `zpool create`). Si la console refuse
-le JSON, `partitionnement --sans-zfs` donne le schéma de repli, éprouvé sur le banc ; le
-cloud-init est le même.
+**Ce qui est vu chez l'hébergeur :** le schéma avec le pool déclaré s'installe sur l'offre
+de `spark-experiment`, en Ubuntu 26.04. Sur EM-B311X-SATA en Ubuntu 24.04, seul le schéma
+sans pool déclaré s'installe ; la console accepte aussi le cloud-init léger, et la machine
+télécharge les scripts. Pour une offre nouvelle dont l'installation bloque,
+`partitionnement --defaut <FICHIER> --sans-zfs` donne le repli ; le cloud-init est le même.
+
+**Une machine réinstallée garde ses partitions.** L'installateur de l'hébergeur ne les
+efface pas, et l'amorce importe un pool `spark` laissé par une installation précédente
+(journal du 2026-11-18, SPK-170). Après l'installation, `sudo zpool status spark` doit
+montrer les deux moitiés `ONLINE`. Le préflight ne vérifie pas encore cet état
+(SPK-169).
 
 **Ce que la commande ne sait pas :** la capacité des disques. La console de l'hébergeur la
 contrôle, et l'hébergeur sait aussi vérifier un schéma avant toute installation par
@@ -643,6 +655,9 @@ Une intégration continue serait plus forte ; elle n'a jamais tourné sur ce dé
 et le responsable a tranché le 2026-09-14 de s'en passer plutôt que de laisser
 une garde qui n'existe que dans un fichier de workflow.
 
+- **Le préflight ne lit pas l'état du miroir** (SPK-169). Il dit « miroir ZFS natif »
+  sur un pool dont une moitié est en faute. Deux Forges réelles étaient dans ce cas le
+  2026-11-18, et rendaient pourtant 17 sur 17. À vérifier à la main : `sudo zpool status spark`.
 - Un seul serveur. Aucun ordonnancement inter-machines. Le transfert d'un Spark d'une
   Forge à une autre est exploré, non planifié : [docs/EXPLORATION_TRANSFERT.md](docs/EXPLORATION_TRANSFERT.md).
 - **La console n'obéit qu'à sa propre page, pas au poste entier** (`docs/DAT.md`

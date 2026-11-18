@@ -9758,8 +9758,14 @@ lien et en place des textes bruts ».
     commit épinglé, empreintes vérifiées, et l'amorce va au bout : cloud-init `done`,
     préflight 17 sur 17, `/healthz` et `/readyz` verts. L'acceptation par l'hébergeur,
     qui était le « Reste » de cette unité, est donc **établie** pour les deux sorties.
+  - **Point 9 codé le 2026-11-18** : `CREATION_POOL` porte `amorce` pour EM-B311X-SATA et
+    `hebergeur` pour EM-L101X-SATA ; `partitionnement --offre` suit l'offre, `--sans-zfs`
+    force l'amorce, et une offre versionnée absente de la table est refusée avec son nom.
+    Le JSON versionné d'EM-B311X-SATA est régénéré (`"zfs": null`) : c'est celui qui s'est
+    installé. La suite de la commande compte **152 cas**, et la suite sparkd **1 921 sur
+    1 921**.
   - **Reste `[~]`** : le mode `--compresser` n'a pas été joué sur une VM ; les schémas
-    NVMe et UEFI sont construits, pas relevés ; le point 9 n'est pas encore codé.
+    NVMe et UEFI sont construits, pas relevés.
 
 ### [~] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
 

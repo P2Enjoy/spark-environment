@@ -3,8 +3,9 @@
 
 @spec docs/BACKLOG.md#SPK-158 · docs/DAT.md §66.2 a §66.4 (la decision, la regle
       de derivation, le cloud-init produit), §66.7 (les schemas par defaut des
-      offres), §66.8 (le pool declare a l'hebergeur ; le JSON de partition versionne
-      de chaque offre connue, le cloud-init produit a la demande), §66.9 (le
+      offres), §66.8 (le pool declare a l'hebergeur ; decision 3 : qui cree le pool
+      se decide par offre ; le JSON de partition versionne de chaque offre connue, le
+      cloud-init produit a la demande), §66.9 (le
       cloud-init leger : il telecharge les scripts a un commit epingle), §8.5,
       §8.6 · README.md (« Commander une Forge ») ·
       scripts/README.md · deploy/cloud-init/offres/README.md ·
@@ -73,6 +74,14 @@ NOM_POOL = "spark"
 #: l'hebergeur emploie la premiere, le contrat de l'API la seconde (DAT §66.1).
 #: Les options du pool du schema eprouve de `spark-experiment` (DAT §66.8).
 OPTIONS_POOL = ("ashift=12",)
+#: Qui cree le pool, pour CHAQUE offre versionnee (DAT §66.8, decision 3) : `hebergeur`,
+#: le schema le declare ; `amorce`, aucun pool n'est declare et l'amorce le cree avec
+#: `--pool-source`. Une offre versionnee absente d'ici est refusee : son absence ne
+#: choisit rien en silence. EM-B311X-SATA : l'installateur de l'hebergeur se fige quand
+#: le pool est declare, s'installe quand il ne l'est pas (2026-11-18). EM-L101X-SATA :
+#: la regle d'origine, jamais jouee sur une machine de cette offre.
+CREATION_POOL = {"EM-B311X-SATA": "amorce", "EM-L101X-SATA": "hebergeur"}
+CREATEURS_DU_POOL = ("hebergeur", "amorce")
 CLES_RESTE = ("useAllAvailableSpace", "use_all_available_space")
 #: Un support de pool finit dans une ligne YAML puis dans un script lance en root :
 #: chemins surs seulement. A employer avec `fullmatch` — jamais `match` avec `$`, que
@@ -333,8 +342,20 @@ def rendre_cloud_init_leger(sha: str, empreintes: dict[str, str], supports: list
 # --- Le JSON de partition versionne de chaque offre connue (DAT §66.8) ----------
 
 
+def declare_le_pool(offre: str, creation: dict[str, str] = CREATION_POOL) -> bool:
+    """Le schema de cette offre versionnee declare-t-il le pool (DAT §66.8, decision 3) ?"""
+    createur = creation.get(offre)
+    if createur not in CREATEURS_DU_POOL:
+        raise Refus(f"l'offre « {offre} » ne dit pas qui cree le pool "
+                    f"({' ou '.join(CREATEURS_DU_POOL)}) : l'ajouter a CREATION_POOL dans "
+                    "scripts/preparer-forge.py et au tableau de deploy/cloud-init/offres/README.md "
+                    "(DAT §66.8, decision 3)")
+    return createur == "hebergeur"
+
+
 def produire_offres(dossier: Path = OFFRES,
-                    racine_gio: int = RACINE_GIO_DEFAUT) -> dict[Path, str]:
+                    racine_gio: int = RACINE_GIO_DEFAUT,
+                    creation: dict[str, str] = CREATION_POOL) -> dict[Path, str]:
     """Pour chaque `<offre>.json` du dossier : son schema pour la Forge, tel qu'il doit
     etre versionne dans `<dossier>/forge/<offre>.partitionnement.json`.
 
@@ -344,7 +365,9 @@ def produire_offres(dossier: Path = OFFRES,
     produits: dict[Path, str] = {}
     for offre in sorted(dossier.glob("*.json")):
         try:
-            schema, supports = deriver(json.loads(offre.read_text(encoding="utf-8")), racine_gio)
+            declarer = declare_le_pool(offre.stem, creation)
+            schema, supports = deriver(json.loads(offre.read_text(encoding="utf-8")), racine_gio,
+                                       declarer)
             _verifier_support(",".join(supports))
         except (Refus, json.JSONDecodeError) as erreur:
             raise Refus(f"{offre.name} : {erreur}") from erreur
@@ -353,11 +376,12 @@ def produire_offres(dossier: Path = OFFRES,
 
 
 def verifier_offres(dossier: Path = OFFRES,
-                    racine_gio: int = RACINE_GIO_DEFAUT) -> list[str]:
+                    racine_gio: int = RACINE_GIO_DEFAUT,
+                    creation: dict[str, str] = CREATION_POOL) -> list[str]:
     """Les ecarts entre ce qui est versionne et ce que la commande produit aujourd'hui :
     un fichier absent, perime, ou sans offre — un cloud-init pre-compile traine dans
     `forge/` est « sans offre ». Vide : tout est a jour."""
-    attendus = produire_offres(dossier, racine_gio)
+    attendus = produire_offres(dossier, racine_gio, creation)
     ecarts = []
     for chemin, texte in attendus.items():
         if not chemin.is_file():
@@ -372,8 +396,9 @@ def verifier_offres(dossier: Path = OFFRES,
     return ecarts
 
 
-def ecrire_offres(dossier: Path = OFFRES, racine_gio: int = RACINE_GIO_DEFAUT) -> list[Path]:
-    produits = produire_offres(dossier, racine_gio)
+def ecrire_offres(dossier: Path = OFFRES, racine_gio: int = RACINE_GIO_DEFAUT,
+                  creation: dict[str, str] = CREATION_POOL) -> list[Path]:
+    produits = produire_offres(dossier, racine_gio, creation)
     for chemin, texte in produits.items():
         chemin.parent.mkdir(parents=True, exist_ok=True)
         chemin.write_text(texte, encoding="utf-8")
@@ -445,13 +470,15 @@ def _parseur() -> argparse.ArgumentParser:
         description="Derive du schema par defaut de l'offre le schema POUR LA FORGE : « root » est "
                     "bornee, une partition « data » prend le reste de chaque disque et le schema "
                     "DECLARE le pool miroir « spark » (ashift=12) a l'hebergeur, comme le schema "
-                    "eprouve de spark-experiment ; tout le reste est conserve. "
+                    "eprouve de spark-experiment — sauf pour une offre dont le pool est cree par "
+                    "l'amorce (EM-B311X-SATA, DAT §66.8) ; tout le reste est conserve. "
                     "La commande ne connait pas la capacite des disques : la console de "
                     "l'hebergeur controle que les tailles tiennent.")
     part.add_argument(
         "--sans-zfs", action="store_true",
         help="REPLI : ne declare pas le pool a l'hebergeur ; l'amorce cree le pool au premier "
-             "demarrage. A employer si l'installateur de l'hebergeur bloque sur le pool (DAT §66.8)")
+             "demarrage. A employer si l'installateur de l'hebergeur bloque sur le pool (DAT §66.8) ; "
+             "une offre versionnee dont le pool est cree par l'amorce l'applique d'office")
 
     cloud = sous.add_parser(
         "cloud-init", parents=[commun], help="ecrit le user-data complet a coller dans la console",
@@ -548,12 +575,15 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
         else:
             source = _source_defaut(args)
-            declarer = not args.sans_zfs
+            par_offre = bool(args.offre) and not declare_le_pool(args.offre)
+            declarer = not args.sans_zfs and not par_offre
             schema, supports = deriver(_lire_defaut(source), args.racine_gio, declarer)
             sortie = partitionnement_texte(schema)
+            pourquoi = ("--sans-zfs" if args.sans_zfs else
+                        f"offre {args.offre}, DAT §66.8")
             pool = (f"« data » prend le reste et le pool miroir « {NOM_POOL} » est declare a "
                     "l'hebergeur" if declarer else "« data » prend le reste, aucun pool n'est "
-                    "declare (--sans-zfs : l'amorce le cree)")
+                    f"declare ({pourquoi} : l'amorce le cree)")
             print(f"« root » bornee a {args.racine_gio} Gio, {pool} ; "
                   f"supports du pool : {','.join(supports)}", file=sys.stderr)
             print("la commande ne connait pas la capacite des disques : la console de l'hebergeur "

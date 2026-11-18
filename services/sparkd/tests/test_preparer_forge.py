@@ -3,7 +3,8 @@
 @verifies docs/BACKLOG.md#SPK-158 · docs/DAT.md §66.2 a §66.5 (la decision, la regle
           de derivation, le cloud-init produit, la preuve), §66.7 (les schemas par
           defaut des offres sont versionnes), §66.8 (le pool est declare a
-          l'hebergeur ; le JSON de partition de chaque offre est versionne, le
+          l'hebergeur ; decision 3 : qui cree le pool se decide par offre, et
+          EM-B311X-SATA le laisse a l'amorce ; le JSON de partition de chaque offre est versionne, le
           cloud-init ne l'est PAS), §66.9 (le cloud-init leger : il telecharge les
           scripts a un commit epingle ; le mode embarque est sans commentaires),
           §8.5, §8.6 · deploy/cloud-init/offres/reference/ (le schema eprouve de
@@ -703,13 +704,79 @@ def test_AUCUN_cloud_init_n_est_versionne():
 
 @pytest.mark.parametrize("offre", OFFRES, ids=lambda f: f.stem)
 def test_chaque_offre_a_son_JSON_de_partition_pour_la_Forge(offre):
-    schema_attendu, _ = pf.deriver(json.loads(offre.read_text(encoding="utf-8")), 200)
+    brut = json.loads(offre.read_text(encoding="utf-8"))
+    declarer = pf.declare_le_pool(offre.stem)
+    schema_attendu, _ = pf.deriver(brut, 200, declarer)
     part = FORGE_DIR / f"{offre.stem}.partitionnement.json"
     assert part.is_file(), "le JSON de partition doit etre versionne"
     schema = json.loads(part.read_text(encoding="utf-8"))
     assert schema == schema_attendu
     assert [d["partitions"][-1]["label"] for d in schema["disks"]] == ["data"] * len(schema["disks"])
-    assert schema["zfs"]["pools"][0]["name"] == "spark"
+    if declarer:
+        assert schema["zfs"]["pools"][0]["name"] == "spark"
+    else:
+        assert schema.get("zfs", "absente") == brut.get("zfs", "absente"), "aucun pool declare"
+
+
+# --- Qui cree le pool, par offre (DAT §66.8, decision 3) -------------------------------
+
+
+def test_CHAQUE_offre_versionnee_dit_qui_cree_le_pool_et_rien_d_autre_n_y_figure():
+    """Une offre ajoutee sans cette donnee est refusee ICI, avant la commande d'une machine."""
+    assert set(pf.CREATION_POOL) == {f.stem for f in OFFRES}
+    assert set(pf.CREATION_POOL.values()) <= set(pf.CREATEURS_DU_POOL)
+
+
+def test_EM_B311X_SATA_laisse_le_pool_a_l_amorce_c_est_le_schema_qui_s_est_installe():
+    """Le 2026-11-18, la machine EM-B311X-SATA s'est installee avec CE schema : `root`
+    bornee, `data` qui prend le reste, `"zfs": null` ; avec le pool declare, l'installateur
+    de l'hebergeur se figeait apres la synchronisation de `md1`."""
+    assert pf.declare_le_pool("EM-B311X-SATA") is False
+    schema = json.loads((FORGE_DIR / "EM-B311X-SATA.partitionnement.json").read_text(encoding="utf-8"))
+    assert schema["zfs"] is None
+    for disque in schema["disks"]:
+        assert disque["partitions"] == PARTITIONS_ATTENDUES, disque["device"]
+
+
+def test_EM_L101X_SATA_garde_le_pool_declare():
+    assert pf.declare_le_pool("EM-L101X-SATA") is True
+
+
+@pytest.mark.parametrize("creation", [{}, {"EM-B311X-SATA": "personne"}], ids=["absente", "inconnue"])
+def test_une_offre_qui_ne_dit_pas_qui_cree_le_pool_est_REFUSEE_avec_son_nom(creation):
+    with pytest.raises(pf.Refus, match=r"EM-B311X-SATA.*ne dit pas qui cree le pool"):
+        pf.declare_le_pool("EM-B311X-SATA", creation)
+
+
+def test_produire_les_offres_refuse_une_offre_sans_createur_du_pool(tmp_path):
+    dossier = tmp_path / "offres"
+    dossier.mkdir()
+    (dossier / "EM-NOUVELLE.json").write_text(DEFAUT.read_text(encoding="utf-8"), encoding="utf-8")
+    with pytest.raises(pf.Refus, match=r"EM-NOUVELLE\.json : .*EM-NOUVELLE.*qui cree le pool"):
+        pf.produire_offres(dossier)
+    assert pf.produire_offres(dossier, creation={"EM-NOUVELLE": "amorce"})
+
+
+def test_le_README_des_offres_dit_qui_cree_le_pool_pour_chaque_offre():
+    readme = (OFFRES_DIR / "README.md").read_text(encoding="utf-8")
+    for offre, createur in pf.CREATION_POOL.items():
+        ligne = next(l for l in readme.splitlines() if l.startswith(f"| {offre} |"))
+        assert ("amorce" if createur == "amorce" else "hébergeur") in ligne, ligne
+
+
+def test_E2E_partitionnement_par_nom_d_offre_suit_l_offre_et_le_dit():
+    vu = _commande("partitionnement", "--offre", "EM-B311X-SATA")
+    assert vu.returncode == 0, vu.stderr
+    assert json.loads(vu.stdout)["zfs"] is None
+    assert "aucun pool n'est declare (offre EM-B311X-SATA" in vu.stderr
+    declare = _commande("partitionnement", "--offre", "EM-L101X-SATA")
+    assert declare.returncode == 0 and json.loads(declare.stdout)["zfs"] == ZFS_ATTENDU
+
+
+def test_E2E_sans_zfs_force_l_amorce_meme_pour_une_offre_qui_declare_le_pool():
+    vu = _commande("partitionnement", "--offre", "EM-L101X-SATA", "--sans-zfs")
+    assert vu.returncode == 0, vu.stderr
+    assert "zfs" not in json.loads(vu.stdout) and "--sans-zfs" in vu.stderr
 
 
 def test_le_README_du_dossier_des_offres_nomme_le_JSON_versionne_et_le_cloud_init_a_la_demande():
@@ -746,7 +813,7 @@ def test_une_offre_hors_regle_est_refusee_avec_son_nom_de_fichier(tmp_path):
     un_seul_disque["disks"] = un_seul_disque["disks"][:1]
     (dossier / "EM-X999X-SATA.json").write_text(json.dumps(un_seul_disque), encoding="utf-8")
     with pytest.raises(pf.Refus, match=r"EM-X999X-SATA\.json : .*deux disques"):
-        pf.produire_offres(dossier)
+        pf.produire_offres(dossier, creation={"EM-X999X-SATA": "hebergeur"})
 
 
 # --- Une offre connue, par son NOM (--offre) ---------------------------------------------
@@ -756,7 +823,10 @@ def test_une_offre_hors_regle_est_refusee_avec_son_nom_de_fichier(tmp_path):
 def test_E2E_offre_par_son_nom_donne_la_meme_sortie_que_par_son_fichier(offre):
     for sous_commande in ("partitionnement", "cloud-init"):
         en_plus = ["--embarquer"] if sous_commande == "cloud-init" else []
-        par_nom = _commande(sous_commande, "--offre", offre.stem, *en_plus)
+        if sous_commande == "partitionnement" and not pf.declare_le_pool(offre.stem):
+            en_plus = ["--sans-zfs"]  # par fichier, l'offre n'est pas connue : on le dit
+        par_nom = _commande(sous_commande, "--offre", offre.stem,
+                            *[a for a in en_plus if a != "--sans-zfs"])
         par_fichier = _commande(sous_commande, "--defaut", str(offre), *en_plus)
         assert par_nom.returncode == 0, par_nom.stderr
         assert par_nom.stdout == par_fichier.stdout, sous_commande

@@ -101,20 +101,5 @@
       "name": "/dev/md1"
     }
   ],
-  "zfs": {
-    "pools": [
-      {
-        "devices": [
-          "/dev/sda5",
-          "/dev/sdb5"
-        ],
-        "filesystemOptions": [],
-        "name": "spark",
-        "options": [
-          "ashift=12"
-        ],
-        "type": "mirror"
-      }
-    ]
-  }
+  "zfs": null
 }
