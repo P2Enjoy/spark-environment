@@ -18637,6 +18637,26 @@ sinon, et un total calculé deux fois diverge.
   la vue d'un SLA (§74.9) : `schedule`, `description`, `enabled`, `next_run_at`, `last_run_at`, `last_status`, `last_error`,
   `retention_days`, `retention_count`, `snapshots` (`count`, `size_bytes`). **Ordre** : en échec, actifs, suspendus, puis par nom.
 - `without` — les **noms** des Sparks sans SLA, triés. Une absence utile se nomme (DESIGN_SYSTEM §14.5).
+- `week` — **la charge des prises planifiées sur une semaine** (§76.3 bis).
+
+**76.3 bis. La charge de la semaine.** Le responsable (2026-11-19) : un graphe de **l'occupation des prises d'instantanés par
+tranches de 15 minutes sur une semaine, du lundi au dimanche**, pour replanifier : savoir *quand* la machine prend ses
+instantanés, et où les prises s'empilent. `week` rend :
+
+- `start` — le **lundi 00:00 UTC** de la semaine ISO qui contient l'instant de la lecture (la fréquence d'un SLA est lue en UTC,
+  §74.3 : la semaine l'est aussi, et l'écran le dit) ; `slot_minutes` — 15 ; `slots` — **672 entiers** (7 × 96), le nombre de
+  prises **prévues** dans chaque tranche, en comptant chaque SLA **qui prend** (actif ou en échec — un SLA suspendu ne prend
+  rien et ne charge rien) ;
+- `peak` — la plus forte charge d'une tranche ; `busy_slots` — le nombre de tranches qui portent au moins une prise ;
+- `busiest` — **les cinq tranches les plus chargées** (à égalité, la plus précoce), chacune `{ index, at, count, sparks }`, les
+  `sparks` nommés : c'est l'équivalent textuel du graphe, et la réponse à « qui prend à ce moment-là ? ». Aucune tranche à zéro
+  n'y figure.
+
+La charge est **calculée**, pas observée : pour chaque jour de la semaine que la fréquence retient (`cron.Horaire.convient_jour`,
+la même sémantique que le planificateur), chaque heure × minute de la chaîne est une prise, rangée dans sa tranche. C'est ce
+que le planificateur *fera*, pas ce qu'il a fait : une prise manquée, reprise ou rattrapée ne déplace rien. La **durée** d'une
+prise n'est pas connue d'avance (elle dépend de la taille du Spark) : la tranche compte des **débuts de prise**, et l'écran ne
+prétend pas mesurer une occupation en secondes (§76.5).
 
 `GET /v1/forge/health` rend :
 
@@ -18673,6 +18693,12 @@ La lecture se fait **à l'ouverture et au bouton**, jamais en tâche de fond (§
 dite, et pendant une relecture l'ancien ne reste pas affiché comme actuel (DESIGN_SYSTEM §6.13). Une lecture qui échoue
 **se dit** : jamais « aucun SLA » à la place de « SLA illisible » (§14.6).
 
+L'onglet **SLA** porte en plus, entre la synthèse et le tableau, **le graphe de la charge de la semaine** (§76.3 bis) : 672
+colonnes d'**un pixel**, du lundi au dimanche, une par tranche de 15 minutes, de la hauteur de leur charge ; une graduation par
+jour ; un équivalent textuel (les cinq tranches les plus chargées, avec les Sparks qui y prennent) ; et, au survol, la tranche
+sous le pointeur, son horaire UTC, sa charge et ses Sparks. L'onglet **Santé** n'en porte pas : ses relevés sont déjà cadencés à
+la minute, et la question « quand la machine est-elle chargée ? » n'y a pas d'objet.
+
 Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-54.
 
 ### 76.5 Limites
@@ -18680,12 +18706,17 @@ Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-54.
 - L'index ne dit pas **si une alerte est partie** : il n'a pas de relevé de ce qui a été émis. Le journal (onglet
   Journal) le dit.
 - Il ne montre pas l'historique long d'une sonde (la frise des derniers relevés seulement) : il est dans la fenêtre du Spark.
+- La **charge de la semaine** compte des débuts de prise, pas des durées (§76.3 bis) ; elle ne dit rien d'un SLA suspendu, ni
+  de ce que d'autres processus (sauvegardes de l'hôte, relevés de santé) font de la machine dans la même tranche.
 - Un SLA dont la politique n'a **jamais tourné** (`last_run_at` nul) est *actif* et sa dernière prise est dite absente : ce
   n'est pas un échec.
 
 ### 76.6 Preuves attendues
 
-Unitaires : l'agrégation (exclusivité et additivité des états, ordre, taille cumulée `null` si une taille est inconnue,
+Unitaires : la charge de la semaine (672 tranches ; une prise « tous les jours à 02:00 » charge sept tranches, le jour de
+la semaine retenu par `0 3 * * 0` n'en charge qu'une ; deux SLA à la même minute empilent ; un SLA suspendu ne charge rien ;
+la tranche se calcule au quart d'heure inférieur ; la semaine commence le lundi 00:00 UTC, y compris quand la lecture tombe un
+dimanche soir ; `busiest` : cinq au plus, plus tôt à égalité, aucune tranche vide), l'agrégation (exclusivité et additivité des états, ordre, taille cumulée `null` si une taille est inconnue,
 sonde suspendue hors de son ancien état), le rendu (ordre des lignes, liens exacts, noms hostiles échappés, états vide,
 chargement, erreur, lecture partielle). API contre le **vrai registre** : l'agrégat d'un parc réel (le seed), un Spark sans
 cellule présent, **aucune cible ni sortie de script** dans la réponse, aucune ligne d'audit écrite, aucune cellule contactée.
@@ -18701,5 +18732,8 @@ sonde, un problème en tête.
    et des liens, pas un second endroit où régler.
 3. **L'agrégation côté `sparkd`** (§76.3) plutôt que N lectures de la console.
 4. **Une sonde suspendue sort de son état** dans la synthèse (§76.3).
-5. **Pas d'actualisation en tâche de fond** (§76.4), comme l'index du §60 : un tableau qui se repeint sous les yeux d'un
+5. **La charge est le nombre de débuts de prise par tranche de 15 minutes, calculée d'après les fréquences, sur la semaine
+   ISO courante en UTC** (§76.3 bis). Les autres lectures possibles — la durée réelle des prises, ou une semaine « type »
+   sans date — demandent soit un historique que le registre ne garde pas, soit de choisir arbitrairement le mois.
+6. **Pas d'actualisation en tâche de fond** (§76.4), comme l'index du §60 : un tableau qui se repeint sous les yeux d'un
    exploitant qui lit une ligne est un piège. Si le responsable veut un rafraîchissement périodique, c'est une décision à part.

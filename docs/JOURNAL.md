@@ -16116,3 +16116,13 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **Vu à l'écran sur la Forge réelle** (lecture seule, depuis la console) : encadré neutre « Dernière tentative d'installation »,
   journal replié, aucun rouge.
 
+**SPK-188 : la charge de la semaine — ajout du responsable le 2026-11-19, en cours de route, avant le code qui s'y rapporte.**
+
+- **Demande** : sur l'onglet SLA, un graphe de l'occupation des prises par tranches de 15 minutes sur une semaine, lundi à dimanche,
+  une ligne d'un pixel par tranche — pour replanifier les ressources et savoir quand les instantanés se prennent.
+- **Observation** : le registre ne garde ni la durée ni l'historique des prises (une ligne `sla` par Spark : dernière et prochaine
+  prise). L'occupation **observée** n'existe donc pas ; l'occupation **prévue** se calcule exactement depuis les chaînes crontab.
+- **Décision** : calculer, côté `sparkd`, le nombre de **débuts de prise** par tranche pour la semaine ISO courante en UTC, en
+  réutilisant `convient_jour` du module cron (même sémantique que le planificateur) ; 672 entiers dans `week.slots`. Les SLA
+  suspendus ne chargent rien. Le graphe porte un équivalent textuel (les cinq tranches les plus chargées) et un survol lu en
+  `aria-live`. Limite assumée : on ne mesure pas des secondes d'occupation (DAT §76.5).

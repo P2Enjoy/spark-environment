@@ -9475,7 +9475,7 @@ sans écriture, cadence refusée, suspendre / reprendre / retirer, Spark protég
 observées, manuel M14. Le cas « aucun canal d'alerte » est prouvé au rendu (la pile des parcours a un canal) ; sur la
 Forge réelle, il disparaît dès que le canal courriel est actif.
 
-### [ ] SPK-187 · Le briefing d'un Spark dit la surveillance et les instantanés
+### [~] SPK-187 · Le briefing d'un Spark dit la surveillance et les instantanés
 
 **Demandé le 2026-11-19** par le responsable : « est-ce que le dossier pour un agent a ajouté les descriptions des nouvelles
 fonctionnalités ? est-ce que le projet consigne de garder les fonctionnalités exposées aux agents à jour ? devons-nous
@@ -9493,6 +9493,15 @@ paire `health.?` qui s'y inscrit par construction ; aucune règle ne l'exigeait.
   le vrai registre ; **une cellule réelle** relue après une sonde et un SLA posés par la console ; briefing, dossier, runbook,
   DAT, changelog et manuel à jour ; la règle de `CLAUDE.md` en place.
 
+**État (2026-11-19) : construit, `[~]` jusqu'à la lecture d'une cellule réelle.** Prouvé : 25 tests (`test_briefing_surveillance.py`,
+22 rouges avant) — le modèle (limites tirées de `health.py`, compte rootless lu dans l'observation d'amorçage, définition seule
+d'une sonde, politique seule du SLA, aucun état), le rendu des deux présentations (absences nommées, aucun mot du canal d'alerte,
+aucune permission, section « 7 bis » sans renumérotation), l'API contre le vrai registre et **le fichier réellement poussé dans la
+cellule** réécrit après chaque geste de sonde (poser, suspendre, retirer) et de SLA (programmer, suspendre, retirer), `briefing.json`
+sans état ; la suite `sparkd` complète verte. Le modèle est construit à UN seul endroit (`_modele_du_spark`) : deux sites le
+construisaient, et le troisième champ aurait été oublié dans l'un. Runbook agent : section H et le geste « image par défaut » en
+B.1 ; manuel M6 ; règle inscrite à `CLAUDE.md`. **Reste** : relire `/etc/spark/BRIEFING.md` dans une vraie cellule de spark-010.
+
 ### [ ] SPK-188 · Les onglets « SLA » et « Santé » de la Forge : le tableau de bord de la surveillance
 
 **Demandé le 2026-11-19** par le responsable : dans la page de la Forge, deux onglets, **SLA** et **Santé**, qui regroupent
@@ -9507,6 +9516,9 @@ bon onglet** — « un dashboard de tous les SLA et de toutes les santés déplo
   `#/forge/sla` et `#/forge/sante` et leurs deux onglets ; pour chacun, des chiffres de synthèse, un tableau trié du plus
   préoccupant au plus sain, et un lien par ligne vers `#/sparks/{nom}/instantanes` ou `#/sparks/{nom}/sante` ; les Sparks sans
   SLA ou sans sonde **nommés** ; la date de la lecture et un bouton qui relit ; le seed ; le manuel.
+- **Ajouté le 2026-11-19** par le responsable : sur l'onglet SLA, **un graphe de l'occupation des prises d'instantanés par
+  tranches de 15 minutes sur une semaine, du lundi au dimanche** — une colonne d'un pixel par tranche — pour mieux replanifier
+  les ressources et savoir quand les instantanés sont pris (DAT §76.3 bis, SPK-DS-54).
 - Hors périmètre : tout geste (programmer, suspendre, retirer, ajouter une sonde) — il reste dans la fenêtre du Spark, un seul
   endroit pour décider ; tout relevé nouveau (l'onglet lit ce que les planificateurs ont écrit) ; l'historique long.
 - DoD : tests unitaires de l'agrégation et du rendu ; API contre le vrai registre (agrégat exact, Spark sans cellule, aucune

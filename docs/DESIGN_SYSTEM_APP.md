@@ -2184,6 +2184,28 @@ zéros — elle dit l'absence (§14.5).
   (`neutral`), « Arrêtées » (`neutral`), « Saines » (`success`), « Suspendues » (`neutral`) — les **mêmes pastilles et mots**
   que la facette d'un Spark (SPK-DS-51, `ETATS_SANTE`), jamais une seconde table de correspondance.
 
+**Le graphe de la charge de la semaine** (onglet SLA seulement, entre la synthèse et le tableau ; DAT §76.3 bis). Un `h3`
+« Charge de la semaine » et une phrase qui dit **ce qui est compté** : « Prises d'instantanés prévues par tranche de 15
+minutes, du lundi au dimanche, en UTC. » Puis un SVG, `role="img"`, au `viewBox` fixe de **672 × 64** :
+
+- **672 colonnes d'un pixel**, une par tranche, du lundi 00:00 au dimanche 23:45, de la hauteur de leur charge rapportée au pic
+  de la semaine (une tranche à zéro ne dessine rien) ; une seule série, une seule couleur — `--color-brand` — donc **pas de légende**
+  (le titre nomme la série), et pas de couleur qui porte une information que le texte ne dit pas (§1.5) ;
+- **le pixel reste un pixel** : le SVG s'étire en largeur par CSS, et les colonnes sont tracées en `shape-rendering: crispEdges`
+  pour qu'une tranche chargée ne s'efface pas à l'agrandissement. Sous 768 px le graphe **défile dans son propre conteneur**
+  (§8.1, indice « Le graphe défile horizontalement. ») plutôt que de comprimer 672 colonnes en moins de 400 pixels ;
+- **sept graduations**, une par jour, aux minuits, étiquetées « Lun » … « Dim » ; l'axe vertical n'a que son **pic**, écrit
+  (« Pic : 3 prises ») ; la grille reste recessive (§2.4, `--color-border`) ;
+- **un survol** : le pointeur sur le graphe lit la tranche dessous — « Mardi 02:00 – 02:15 UTC · 2 prises · alpha, bravo » —
+  dans une ligne `aria-live="polite"` sous le graphe, jamais dans une info-bulle qui disparaîtrait au clavier. Quitter le graphe
+  rend la phrase d'invite ;
+- **l'équivalent textuel est toujours là** : une liste ordonnée des **cinq tranches les plus chargées** (jour, horaire UTC,
+  nombre de prises, Sparks nommés). Le SVG porte un `aria-label` qui résume (« 14 tranches chargées sur 672, pic de 3 prises »)
+  et renvoie à cette liste ;
+- **états** (§6.13, §14.6) : sans aucun SLA qui prend, l'absence est dite — « Aucune prise n'est planifiée cette semaine » — et
+  le graphe n'est **pas tracé** (672 colonnes vides ne sont pas une information) ; pendant une relecture, l'ancien graphe n'est pas
+  conservé ; une lecture qui échoue ne trace rien.
+
 **Le tableau** est un vrai `table` (§6.14) dans `.tableau-defilant`, qui défile dans son propre conteneur et le dit (§8.1). Une
 ligne par SLA ; **une ligne par sonde** pour la santé, le Spark répété en première colonne `th scope="row"`. **Ordre :
 le plus préoccupant en tête.** Colonnes — SLA : Spark · État · Fréquence · Dernière prise · Prochaine prise · Rétention · Tenus ;
