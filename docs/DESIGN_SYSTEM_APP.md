@@ -2163,6 +2163,56 @@ Preuves observées le 2026-09-30 : `e2e/captures/spk132-recreer-confirmation`
 tel quel), `-mobile` (les quatre gestes tiennent sur une ligne à 390 px), et
 l'illustration `docs/manuel/images/m8-docker-recreer.png`.
 
+### SPK-DS-54 · Les onglets « SLA » et « Santé » de la Forge : des chiffres qui se lisent d'abord, des liens qui mènent au geste
+
+Date : 2026-11-19 · `docs/DAT.md` §76 · `docs/DESIGN_SYSTEM.md` §1.5, §5.2, §6.13, §6.14, §8.1, §9.3, §14.5, §14.6 ·
+SPK-DS-32 (le patron de l'index), SPK-DS-50, SPK-DS-51.
+
+**Deux destinations de la Forge, des liens dans la barre d'onglets** (§5.2) : « SLA » puis « Santé », après « Supervision ».
+Chacune est une carte `h2` qui porte, dans l'ordre : une phrase qui dit ce qui est lu ; la **synthèse** ; le **tableau** ;
+les **Sparks sans** ; la **date de lecture** et « Relire ».
+
+**La synthèse** est une liste de paires terme / valeur (`dl`, §6.4), pas une rangée de tuiles décoratives : un **chiffre** en
+police technique à tabulaires, son **libellé** en toutes lettres, et la **pastille** de l'état qu'il compte — la couleur ne
+porte jamais seule (§1.5). Ordre : d'abord ce qui est préoccupant. Un chiffre à **zéro reste affiché** : « 0 en panne » est
+une information, pas un bruit (§14.6) ; en revanche la synthèse d'un parc **sans SLA ni sonde** ne montre pas une rangée de
+zéros — elle dit l'absence (§14.5).
+
+- **SLA** : « SLA programmés », puis « En échec » (`danger`), « Actifs » (`success`), « Suspendus » (`neutral`), puis « Instantanés
+  tenus » avec leur taille cumulée — « taille inconnue » et non « 0 o » quand une taille manque (§14.6).
+- **Santé** : « Sondes », « Sparks surveillés », puis « En panne » (`danger`), « Instables » (`accent`), « Jamais relevées »
+  (`neutral`), « Arrêtées » (`neutral`), « Saines » (`success`), « Suspendues » (`neutral`) — les **mêmes pastilles et mots**
+  que la facette d'un Spark (SPK-DS-51, `ETATS_SANTE`), jamais une seconde table de correspondance.
+
+**Le tableau** est un vrai `table` (§6.14) dans `.tableau-defilant`, qui défile dans son propre conteneur et le dit (§8.1). Une
+ligne par SLA ; **une ligne par sonde** pour la santé, le Spark répété en première colonne `th scope="row"`. **Ordre :
+le plus préoccupant en tête.** Colonnes — SLA : Spark · État · Fréquence · Dernière prise · Prochaine prise · Rétention · Tenus ;
+Santé : Spark · Sonde · État · Dernier relevé · Échecs · Frise. La frise est celle du SPK-DS-51 (ronds pleins et croix, avec son
+équivalent textuel). Un motif d'échec se lit sous l'état, tel que le serveur le donne (§1.3).
+
+**Deux liens par ligne, et seulement eux** (§6.14, « seul l'élément concerné est un lien ») : le **nom du Spark** mène à sa
+fenêtre, et un **second lien dont le texte nomme la facette** — « Ouvrir les instantanés de {nom} », « Ouvrir la santé de
+{nom} » — mène à `#/sparks/{nom}/instantanes` ou `#/sparks/{nom}/sante`. La ligne entière n'est pas cliquable : deux
+destinations, donc aucune ligne-lien. Le nom accessible du second lien porte le nom du Spark (§10.2, plusieurs éléments).
+La cible interactive atteint `--size-target`.
+
+**Aucun bouton de geste** : ni « Programmer », ni « Suspendre », ni « Ajouter une sonde » — le geste vit dans la fenêtre du
+Spark (DAT §76.2). Les Sparks sans SLA / sans sonde sont **nommés**, chacun un lien vers la facette où l'on en pose un.
+
+**États** (§6.13) : *chargement* — « Lecture… » en `role="status"` `aria-busy`, et l'ancien contenu **n'est pas conservé** ;
+*erreur* — le motif dans un bloc `role="alert"` (jamais « aucun SLA ») ; *vide* — « Aucun SLA n'est programmé sur cette Forge »
+/ « Aucune sonde ne surveille cette Forge », avec les Sparks nommés dessous ; *partiel* — pas de cas : la lecture est celle du
+registre, entière ou refusée.
+
+**La date** : « Lu à HH:MM », en police technique. **« Relire »** : bouton `bouton`, désactivé pendant la lecture, le focus
+lui est rendu s'il venait de lui (§14.3). Aucune actualisation en tâche de fond.
+
+**Responsive.** Sous 768 px, la synthèse passe en une colonne et le tableau défile dans son conteneur avec son indice
+« Le tableau défile horizontalement. » ; aucune information n'est masquée sans autre accès.
+
+**Accessibilité.** Tout se fait au clavier : onglets (liens), liens de ligne, « Relire ». Les titres ne sautent pas de niveau
+(§9.3). Une relecture annonce le résultat en `role="status"`. Aucun état ne repose sur la couleur seule.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

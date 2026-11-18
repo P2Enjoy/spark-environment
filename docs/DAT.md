@@ -18588,3 +18588,109 @@ panne, puis une de rétablissement ; un Spark arrêté qui n'alerte pas ; un can
 échouer le relevé. Le seed pose les états que l'écran doit montrer — sain, instable, en panne, arrêté —
 **par le même planificateur**, jamais par une écriture directe.
 
+---
+
+## 76. Le tableau de bord de la surveillance : les onglets « SLA » et « Santé » de la Forge : contrat (SPK-188)
+
+*Contrat écrit le 2026-11-19, avant le code, sur la demande du responsable (§76.1). Ce qui est du rédacteur, et à
+confirmer, est au §76.7.*
+
+### 76.1 La demande
+
+Le responsable : dans la page de la Forge, **deux onglets, SLA et Santé**, qui regroupent des statistiques sur ces
+fonctionnalités **activées sur cette Forge**, et qui, **par un lien, ouvrent le Spark directement sur le bon onglet**. Un
+tableau de bord de tous les SLA et de toutes les santés déployés.
+
+### 76.2 Un index qui mène, pas un second écran de décision
+
+C'est le patron du §60 (les propositions de toute la Forge) : l'onglet **montre** ce qui existe sur tous les Sparks et **mène**
+là où se règle l'objet. **Aucun geste n'y vit** — ni programmer, ni suspendre, ni retirer, ni ajouter une sonde : un second
+endroit pour décider ferait deux gestes pour le même objet, et la protection d'un Spark (§34) et son journal ne seraient
+tenus qu'à l'un des deux. Un seul bouton : **relire**.
+
+**Il ne relève rien.** Il lit le registre, c'est-à-dire ce que le planificateur du SLA (§74) et celui de la santé (§75) y ont
+déjà écrit. Aucune cellule n'est atteinte, aucune sonde n'est jouée, aucun instantané n'est pris : ouvrir l'onglet ne
+déclenche aucun effet de bord, et ne coûte que deux lectures du registre.
+
+### 76.3 L'API : deux lectures, côté serveur
+
+`GET /v1/forge/sla` et `GET /v1/forge/health`, en lecture seule, comme `GET /v1/forge/systeme` : même plan de contrôle, mêmes
+droits que la lecture d'un Spark. L'agrégation est faite **par `sparkd`** et non par la console : N Spark, c'est 2N requêtes
+sinon, et un total calculé deux fois diverge.
+
+`GET /v1/forge/sla` rend :
+
+- `summary` — `sparks` (les Sparks de la Forge), `configured`, `active`, `failing`, `suspended`, `snapshots_count`,
+  `snapshots_size_bytes`. **Les trois états sont exclusifs et additifs** : `configured = active + failing + suspended`.
+  *Suspendu* : `enabled` est faux ; *en échec* : actif et dernière prise en `error` ; *actif* : le reste. La taille cumulée est
+  `null` dès qu'**une** taille tenue est inconnue (§14.6 : une somme partielle n'est pas un total).
+- `sparks` — une entrée par Spark **qui a un SLA** : `spark`, `state` (`active` | `failing` | `suspended`), puis les champs de
+  la vue d'un SLA (§74.9) : `schedule`, `description`, `enabled`, `next_run_at`, `last_run_at`, `last_status`, `last_error`,
+  `retention_days`, `retention_count`, `snapshots` (`count`, `size_bytes`). **Ordre** : en échec, actifs, suspendus, puis par nom.
+- `without` — les **noms** des Sparks sans SLA, triés. Une absence utile se nomme (DESIGN_SYSTEM §14.5).
+
+`GET /v1/forge/health` rend :
+
+- `summary` — `sparks`, `monitored` (Sparks qui portent au moins une sonde), `checks`, puis un compte par état :
+  `down`, `unstable`, `unknown`, `stopped`, `healthy`, et `suspended` (sondes dont `enabled` est faux). **Exclusifs et
+  additifs** : `checks = down + unstable + unknown + stopped + healthy + suspended`. Une sonde **suspendue** ne relève plus
+  rien : elle ne compte pas dans l'état qu'elle gardait, sans quoi une panne vieille de trois mois, suspendue, se lirait
+  comme une panne en cours.
+- `sparks` — une entrée par Spark **qui a au moins une sonde** : `spark`, `worst` (le pire état de ses sondes actives, ou
+  `suspended` si toutes le sont), `checks` : par sonde `name`, `kind`, `state`, `enabled`, `schedule`, `description`,
+  `threshold`, `consecutive_failures`, `state_since`, `last_run_at`, `next_run_at`, `last_latency_ms`, `last_detail`,
+  `results` (les derniers relevés : `run_at`, `ok`, `latency_ms`). **Ordre** des Sparks : par pire état (`down`, `unstable`,
+  `unknown`, `stopped`, `healthy`, `suspended`), puis par nom ; des sondes : le même ordre, puis par nom.
+- `without` — les noms des Sparks sans sonde.
+
+**Ce que la réponse ne porte jamais** : la **cible** d'une sonde (la commande d'un script, ou l'URL) et la **sortie** d'un
+script. L'index n'en a pas besoin pour répondre à « qu'est-ce qui va mal, et où ? » ; le Spark les montre à qui l'ouvre
+(§75.10). Une valeur qui n'est pas nécessaire à la question ne sort pas (CLAUDE.md §10, moindre exposition).
+
+Aucune écriture, donc aucune migration, aucune variable d'environnement, aucun point d'autorisation nouveau : l'autorité reste
+celle des routes d'écriture du §74.8 et du §75.8. Aucune ligne d'audit n'est écrite par une lecture.
+
+### 76.4 Ce que la console en fait
+
+Deux destinations de la Forge — **des adresses**, pas des panneaux échangés (DESIGN_SYSTEM §5.2) : `#/forge/sla` (onglet
+**SLA**) et `#/forge/sante` (onglet **Santé**), après **Supervision** : c'est ce qui surveille la Forge et ses Sparks.
+
+Chaque onglet porte, dans l'ordre : le **titre** et la phrase qui dit ce qu'il lit ; la **synthèse** en chiffres ; le **tableau**,
+du plus préoccupant au plus sain ; les **Sparks sans** SLA ou sans sonde, nommés, chacun un lien vers l'onglet du Spark où
+l'on en pose un ; la **date de la lecture** et **Relire**. Chaque ligne du tableau porte **deux liens** : le nom du Spark (sa
+fenêtre) et la facette qui règle l'objet (`#/sparks/{nom}/instantanes` pour un SLA, `#/sparks/{nom}/sante` pour une sonde).
+
+La lecture se fait **à l'ouverture et au bouton**, jamais en tâche de fond (§60.3) : l'état affiché est celui de l'heure
+dite, et pendant une relecture l'ancien ne reste pas affiché comme actuel (DESIGN_SYSTEM §6.13). Une lecture qui échoue
+**se dit** : jamais « aucun SLA » à la place de « SLA illisible » (§14.6).
+
+Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-54.
+
+### 76.5 Limites
+
+- L'index ne dit pas **si une alerte est partie** : il n'a pas de relevé de ce qui a été émis. Le journal (onglet
+  Journal) le dit.
+- Il ne montre pas l'historique long d'une sonde (la frise des derniers relevés seulement) : il est dans la fenêtre du Spark.
+- Un SLA dont la politique n'a **jamais tourné** (`last_run_at` nul) est *actif* et sa dernière prise est dite absente : ce
+  n'est pas un échec.
+
+### 76.6 Preuves attendues
+
+Unitaires : l'agrégation (exclusivité et additivité des états, ordre, taille cumulée `null` si une taille est inconnue,
+sonde suspendue hors de son ancien état), le rendu (ordre des lignes, liens exacts, noms hostiles échappés, états vide,
+chargement, erreur, lecture partielle). API contre le **vrai registre** : l'agrégat d'un parc réel (le seed), un Spark sans
+cellule présent, **aucune cible ni sortie de script** dans la réponse, aucune ligne d'audit écrite, aucune cellule contactée.
+E2E depuis l'accueil, à la souris **et** au clavier : atteindre l'onglet par la navigation de la Forge, lire la synthèse, suivre
+le lien d'une ligne et **arriver sur la bonne facette du bon Spark**, revenir. Captures : desktop, mobile, parc sans SLA ni
+sonde, un problème en tête.
+
+### 76.7 Décisions du rédacteur, à confirmer par le responsable
+
+1. **« Santé » et non « Health »** pour l'intitulé de l'onglet : c'est celui de la facette du Spark (§75.10), et le même mot
+   des deux côtés du lien évite de chercher.
+2. **Lecture seule, un seul bouton « Relire »** : aucun geste dans l'index (§76.2). Le responsable a demandé des statistiques
+   et des liens, pas un second endroit où régler.
+3. **L'agrégation côté `sparkd`** (§76.3) plutôt que N lectures de la console.
+4. **Une sonde suspendue sort de son état** dans la synthèse (§76.3).
+5. **Pas d'actualisation en tâche de fond** (§76.4), comme l'index du §60 : un tableau qui se repeint sous les yeux d'un
+   exploitant qui lit une ligne est un piège. Si le responsable veut un rafraîchissement périodique, c'est une décision à part.

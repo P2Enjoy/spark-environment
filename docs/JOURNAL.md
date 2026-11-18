@@ -16083,3 +16083,21 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   Forge réelle a montré sur SPK-184. Le briefing ne doit pas le répéter.
 - **La règle** est inscrite à `CLAUDE.md` §17 (à la demande du responsable) et au DAT §44.12.
 
+
+**SPK-188 : les onglets « SLA » et « Santé » de la Forge — contrat écrit le 2026-11-19, avant le code.**
+
+- **Demande du responsable** : dans la page de la Forge, deux onglets qui regroupent des statistiques sur les SLA et les santés
+  activés sur la Forge, avec un lien qui ouvre le Spark directement sur le bon onglet — un tableau de bord de tout ce qui est
+  déployé.
+- **Constat** : les deux fonctions n'existent aujourd'hui qu'**au grain du Spark** (`GET /v1/sparks/{nom}/sla`, `…/health`). Aucune
+  lecture ne couvre le parc ; la console n'aurait pu agréger qu'en lisant chaque Spark (2N requêtes, et des totaux calculés de son
+  côté).
+- **Solutions envisagées** : (a) la console boucle sur les Sparks et additionne ; (b) deux lectures de parc côté `sparkd`.
+  **Décision : (b)**, comme `/v1/suggestions` pour l'index des propositions (§60). Un total n'est calculé qu'une fois, la réponse
+  est testable contre le vrai registre, et on y décide **ce qui ne sort pas** (la cible d'une sonde, la sortie d'un script).
+- **Décisions de forme** : lecture seule, un seul bouton « Relire », aucun geste dans l'index (un seul endroit pour décider) ;
+  les états de la synthèse sont **exclusifs et additifs** ; une sonde suspendue sort de son ancien état ; une taille cumulée
+  inconnue se dit, elle ne vaut pas zéro. Détail et décisions à confirmer : DAT §76.
+- **État du dépôt à l'écriture** : le projet porte deux chantiers d'une autre session non commités (SPK-187 dans `app.py` et
+  `briefing.py` ; SPK-68 dans l'installateur de la console). Ils ne sont pas les miens : chaque commit de cette unité ne porte que
+  ses propres fichiers et hunks.

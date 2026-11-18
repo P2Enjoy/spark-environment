@@ -9493,6 +9493,26 @@ paire `health.?` qui s'y inscrit par construction ; aucune règle ne l'exigeait.
   le vrai registre ; **une cellule réelle** relue après une sonde et un SLA posés par la console ; briefing, dossier, runbook,
   DAT, changelog et manuel à jour ; la règle de `CLAUDE.md` en place.
 
+### [ ] SPK-188 · Les onglets « SLA » et « Santé » de la Forge : le tableau de bord de la surveillance
+
+**Demandé le 2026-11-19** par le responsable : dans la page de la Forge, deux onglets, **SLA** et **Santé**, qui regroupent
+des statistiques sur ces fonctionnalités **activées sur cette Forge** et, avec un lien, **ouvrent le Spark directement sur le
+bon onglet** — « un dashboard de tous les SLA et de toutes les santés déployés sur la Forge ».
+
+- Spécification : `docs/DAT.md` **§76** · §74 (le SLA), §75 (la santé), §60 (le patron « index » : un onglet de la Forge qui
+  couvre tous les Sparks et mène à l'objet) · `docs/DESIGN_SYSTEM.md` §5.2, §6.13, §6.14, §1.5, §14.5, §14.6 ·
+  `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-54** · manuel M8 · `docs/SCHEMA.md` §8 ter, §8 quater (lus, non modifiés).
+- Dépend de : SPK-182 à SPK-186.
+- Portée : `GET /v1/forge/sla` et `GET /v1/forge/health` (lecture seule, registre seul, aucune cellule touchée) ; les routes
+  `#/forge/sla` et `#/forge/sante` et leurs deux onglets ; pour chacun, des chiffres de synthèse, un tableau trié du plus
+  préoccupant au plus sain, et un lien par ligne vers `#/sparks/{nom}/instantanes` ou `#/sparks/{nom}/sante` ; les Sparks sans
+  SLA ou sans sonde **nommés** ; la date de la lecture et un bouton qui relit ; le seed ; le manuel.
+- Hors périmètre : tout geste (programmer, suspendre, retirer, ajouter une sonde) — il reste dans la fenêtre du Spark, un seul
+  endroit pour décider ; tout relevé nouveau (l'onglet lit ce que les planificateurs ont écrit) ; l'historique long.
+- DoD : tests unitaires de l'agrégation et du rendu ; API contre le vrai registre (agrégat exact, Spark sans cellule, aucune
+  commande de script ni sortie rendue) ; E2E depuis l'accueil, à la souris et au clavier (onglet, lien, retour) ; captures
+  observées (desktop, mobile, vide, problème en tête) ; contrat OpenAPI régénéré ; manuel, seed, changelog à jour.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks
