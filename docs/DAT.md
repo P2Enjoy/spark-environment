@@ -3346,6 +3346,18 @@ d'écriture : ajouter un serveur changeait celui qu'on regardait.
 (§22.6). Changer de serveur courant ouvre le tunnel du nouveau ; elle ne ferme pas
 celui de l'ancien, qui peut encore servir et se ferme explicitement.
 
+**Ce que l'écran devient au changement de serveur (SPK-180, rapporté par le
+responsable le 2026-11-18).** La console relisait l'adresse courante pour le
+nouveau serveur, telle quelle. C'est juste pour une section de la Forge (*Pools*,
+*Images*, *Mises à jour*, …) ou pour la liste des Sparks : elles existent sur toute
+Forge et se relisent. C'est faux pour ce qui **nomme un objet de l'ancienne Forge** :
+la fenêtre d'un Spark (`#/sparks/<nom>/…`) et l'onglet d'un projet
+(`#/sparks/~projet/<id>`). Vu le 2026-11-18 : après un passage de `spark-experiment` à
+`spark-010`, la console restait sur `#/sparks/gram/routes`, un Spark que `spark-010`
+n'a pas. Règle : au changement de serveur, une adresse qui nomme un Spark ou un
+projet est remplacée par la liste des Sparks (`#/sparks`) ; toute autre adresse est
+gardée et relue.
+
 #### 22.4.6 La reconnexion est un geste, pas une attente
 
 Un tunnel `broken` porte une commande de reconnexion **à l'écran**. Aujourd'hui il

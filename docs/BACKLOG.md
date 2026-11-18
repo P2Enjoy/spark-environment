@@ -10626,3 +10626,17 @@ puis le retrait de l'option — il reste `s1 s2`, avec les données d'avant la r
   2026-11-17 avec le responsable, et laissé non planifié : `docs/EXPLORATION_TRANSFERT.md`
   (il se bâtirait sur le lot 9).
 - Quotas d'E/S disque par Spark au-delà de la priorité.
+
+### [ ] SPK-180 · Changer de serveur ne laisse pas la fenêtre d'un Spark de l'autre Forge
+
+**Rapporté par le responsable le 2026-11-18** : « j'ai switch de forge et il a essayé de
+rester sur le spark de l'autre (`#/sparks/gram/routes` alors que je venais de
+sélectionner spark-010) ». Le sélecteur de serveur relisait l'adresse courante telle
+quelle, y compris celle d'un Spark que la nouvelle Forge n'a pas.
+
+- Spécification : `docs/DAT.md` §22.4.5 (complété le 2026-11-18) — au changement de
+  serveur, une adresse qui nomme un Spark ou un projet devient `#/sparks` ; les
+  sections de la Forge et la liste sont gardées et relues.
+- Dépend de : SPK-41.
+- DoD : test unitaire de la règle d'adresse ; E2E au sélecteur depuis la fenêtre d'un
+  Spark ; vérification visuelle.
