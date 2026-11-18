@@ -16377,9 +16377,12 @@ croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
     `creer-pool.sh` **identiques octet pour octet**, en `0755`, qui passent leur
     analyseur et rendent l'aide.
 
-  Le démarrage d'une Forge ne diffère de celui de `--embarquer`, joué sur la VM du banc,
-  que par ce décodage ; la VM entière n'a donc pas été rejouée. Elle demande 6 Gio, et
-  le poste n'en avait que 3 de libres.
+  Le banc de redémarrage l'a ensuite joué **de bout en bout**, le même jour
+  (`make forge-vm ARGS="--compresser"`) : **VERT en 220 s**. cloud-init a décodé puis
+  lancé l'amorce, sparkd a été installé depuis `main` publié (ead39a1), et la Forge
+  revient seule après un redémarrage, avec un préflight à 19 sur 19. Le texte compressé
+  ne se modifie pas : le banc n'y substitue pas sa roue locale, et le dit comme un
+  écart.
 
 ### 66.6 Ce qui reste ouvert
 

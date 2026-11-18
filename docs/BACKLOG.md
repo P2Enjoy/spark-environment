@@ -9829,10 +9829,16 @@ lien et en place des textes bruts ».
     schémas valides. Son module `write_files` dépose, pour l'une comme pour l'autre,
     `spark-amorce.sh` (sha256 `5b792db8…`) et `creer-pool.sh` (`cb9699f3…`),
     **identiques octet pour octet**, en `0755`, analyseurs passés, aide rendue.
-    - **Pourquoi hors VM** : le démarrage ne diffère de `--embarquer`, vert sur la VM
-      du banc, que par ce décodage. La VM entière n'a pas été rejouée : elle demande
-      6 Gio, le poste en avait 3 de libres, et le banc substitue sa roue dans le texte
-      de l'amorce, ce qu'un texte compressé ne permet pas.
+    - **Puis sur la VM du banc, de bout en bout**, le même jour : `make forge-vm
+      ARGS="--compresser"` (nouvelle option), **VERT en 220 s**.
+      - Le cloud-init est celui de `preparer-forge.py cloud-init --embarquer
+        --compresser`. cloud-init l'a décodé et a lancé l'amorce.
+      - sparkd a été installé depuis `main` publié (ead39a1). C'est l'écart du banc,
+        imprimé : le texte compressé ne se modifie pas.
+      - Après le redémarrage, sparkd est prêt et le préflight rend 19 sur 19.
+      - Une première tentative avait été tuée (137) par le délai de 10 minutes de
+        l'outil qui la lançait, sans laisser de processus orphelin. Le banc a ensuite
+        été relancé seul, avec 9,4 Gio libres.
   - **Fermée le 2026-11-18.** Les preuves unitaires NVMe et UEFI que la DoD demande
     existent. Le **relevé** de ces schémas chez l'hébergeur n'en fait pas partie : il
     demande une machine de ces offres, et il se fera à la première commande (README

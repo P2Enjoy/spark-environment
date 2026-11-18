@@ -5,6 +5,8 @@
  * @verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (ce qui doit reprendre
  *           seul ; la preuve est un redémarrage réel, et le banc dit ses écarts)
  *           · README.md (amorçage par cloud-init) · CLAUDE.md §15, §15 bis
+ * @verifies docs/BACKLOG.md#SPK-158 · docs/DAT.md §66.5 (`--compresser` : le cloud-init
+ *           embarqué et compressé, joué de bout en bout)
  * @verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis (`--carte virtio` :
  *           une carte qui n'annonce aucun débit, et le débit déclaré retenu)
  * @verifies docs/BACKLOG.md#SPK-137 · docs/DAT.md §51.6 (la machine gardée, la
@@ -53,6 +55,10 @@
  *                                          # branchée sur elle, attend Ctrl-C
  *   make forge-vm ARGS="--epreuve <a,b>"   # SPK-137 : joue e2e/forge-vm/epreuves/<a>.mjs,
  *                                          # puis <b>.mjs, contre cette console, puis démonte
+ *   make forge-vm ARGS="--compresser"      # SPK-158 · §66.5 : le cloud-init embarqué ET
+ *                                          # compressé (gz+b64). Son texte ne se modifie
+ *                                          # pas : sparkd vient de `main` PUBLIÉ, et le banc
+ *                                          # le dit comme un écart (pas de roue locale)
  *   … --port-ssh <n>                       # port SSH de la machine gardée (2222 par défaut)
  *   … --travail <dossier>                  # SPK-160 : où la machine écrit ses disques ET son
  *                                          # répertoire jetable. Défaut : /tmp — qui peut être
@@ -111,6 +117,8 @@ const carte = iCarte >= 0 ? args[iCarte + 1] : 'e1000e';
 if (!['e1000e', 'virtio'].includes(carte)) throw new Error('--carte attend e1000e ou virtio');
 // SPK-137 · docs/DAT.md §51.6 : garder la machine, et brancher une console dessus.
 const garder = args.includes('--garder');
+// SPK-158 · docs/DAT.md §66.5 : le mode compressé, joué de bout en bout.
+const compresser = args.includes('--compresser');
 const iEpreuve = args.indexOf('--epreuve');
 const epreuves = iEpreuve >= 0 ? String(args[iEpreuve + 1] ?? '').split(',').filter(Boolean) : [];
 if (iEpreuve >= 0 && !epreuves.length) throw new Error('--epreuve attend un nom, ou plusieurs séparés par des virgules');
@@ -140,7 +148,9 @@ if (iTravail >= 0) {
 }
 const valeurs = new Set([iRoue + 1, iCarte + 1, iEpreuve + 1, iPortSsh + 1, iTravail + 1].filter((i) => i > 0));
 const inconnus = args.filter((a, i) => a.startsWith('--')
-  && !['--roue', '--carte', '--garder', '--epreuve', '--port-ssh', '--travail'].includes(a) && !valeurs.has(i));
+  && !['--roue', '--carte', '--garder', '--epreuve', '--port-ssh', '--travail', '--compresser'].includes(a)
+  && !valeurs.has(i));
+if (compresser && roueDonnee) throw new Error('--compresser installe sparkd depuis main publié : --roue n’a pas de sens avec lui');
 if (inconnus.length) throw new Error(`arguments inconnus : ${inconnus.join(' ')} (voir --help)`);
 
 // --- outillage --------------------------------------------------------------
@@ -256,7 +266,8 @@ function remplacer(texte, avant, apres, ecart) {
 // `--pool-source` donné, comme le donne la commande depuis le schéma de l'hébergeur.
 // --embarquer : le banc remplace sparkd par une roue locale DANS le texte de l'amorce, ce que le
 // mode leger (qui la telecharge de GitHub) ne permet pas (DAT §66.9).
-const argsCommande = ['cloud-init', '--embarquer', '--pool-source', '/dev/vdb,/dev/vdc', '--arc-gib', '1',
+const argsCommande = ['cloud-init', '--embarquer', ...(compresser ? ['--compresser'] : []),
+                      '--pool-source', '/dev/vdb,/dev/vdc', '--arc-gib', '1',
                       ...(carte === 'virtio' ? ['--net-mbit', '1000'] : [])];
 const produit = spawnSync('python3', [join(RACINE, 'scripts', 'preparer-forge.py'), ...argsCommande],
                           { encoding: 'utf8' });
@@ -266,10 +277,18 @@ if (produit.status !== 0) {
 console.log(`Le cloud-init est celui de « preparer-forge.py ${argsCommande.join(' ')} »`);
 console.log('Écarts du banc à ce cloud-init (docs/DAT.md §51.5, §66.5) :');
 if (dossierTravail) console.log(`  écart du banc — disques et répertoire jetable dans ${dossierTravail} (--travail), pas dans ${tmpdir()} ; disques en cache=unsafe : la machine est jetable`);
-let userData = remplacer(produit.stdout,
-  '"git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"',
-  `"http://10.0.2.2:${portSeed}/${basename(roue)}"`,
-  `sparkd installé depuis ${basename(roue)}, pas depuis main`);
+// Compressé, le texte de l'amorce n'est plus lisible ici : rien n'y est remplacé, et
+// sparkd vient de `main` publié — c'est l'écart, et il est dit.
+if (compresser && !produit.stdout.includes('encoding: gz+b64')) {
+  throw new Error('--compresser : le cloud-init produit ne porte pas gz+b64');
+}
+let userData = compresser
+  ? (console.log('  écart du banc — sparkd installé depuis main PUBLIÉ : un texte compressé ne se modifie pas (--compresser)'),
+     produit.stdout)
+  : remplacer(produit.stdout,
+    '"git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"',
+    `"http://10.0.2.2:${portSeed}/${basename(roue)}"`,
+    `sparkd installé depuis ${basename(roue)}, pas depuis main`);
 console.log('  écart du banc — ARC à 1 Gio (--arc-gib 1) : la machine en a 6'
   + (carte === 'virtio' ? ' ; carte virtio, qui n’annonce aucun débit : 1000 Mbit/s déclarés (--net-mbit 1000, SPK-135)' : ''));
 userData = remplacer(userData, '\nwrite_files:',
