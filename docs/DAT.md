@@ -18650,7 +18650,10 @@ instantanés, et où les prises s'empilent. `week` rend :
 - `peak` — la plus forte charge d'une tranche ; `busy_slots` — le nombre de tranches qui portent au moins une prise ;
 - `busiest` — **les cinq tranches les plus chargées** (à égalité, la plus précoce), chacune `{ index, at, count, sparks }`, les
   `sparks` nommés : c'est l'équivalent textuel du graphe, et la réponse à « qui prend à ce moment-là ? ». Aucune tranche à zéro
-  n'y figure.
+  n'y figure ;
+- `sparks_by_slot` — pour **chaque** tranche chargée, les noms des Sparks qui y prennent (clés : le rang de la tranche, en
+  texte ; une tranche vide n'a pas d'entrée) : le survol du graphe nomme ainsi n'importe quelle tranche, pas seulement les cinq
+  premières.
 
 La charge est **calculée**, pas observée : pour chaque jour de la semaine que la fréquence retient (`cron.Horaire.convient_jour`,
 la même sémantique que le planificateur), chaque heure × minute de la chaîne est une prise, rangée dans sa tranche. C'est ce

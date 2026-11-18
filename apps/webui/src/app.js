@@ -64,6 +64,8 @@ import { brancherModale } from './components/modale.js';
 import { renderSupervisionForge, SUPERVISION_VIDE }
   from './components/supervision.js';
 import { renderMisesAJour, SYSTEME_VIDE } from './components/forge-systeme.js';
+import { SURVEILLANCE_VIDE, renderSlaForge, renderSanteForge, lectureTranche, trancheSousLePointeur }
+  from './components/forge-surveillance.js';
 import { tunnelContextOf, tunnelFailureMessage, signatureMotifOf }
   from './components/tokens.js';
 
@@ -93,6 +95,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null, forgeListe
                // SPK-171 · §70.5 : les mises à jour du système, relevées à la
                // demande et en lecture seule.
                systeme: { ...SYSTEME_VIDE },
+               // SPK-188 · §76 : le SLA et la santé de TOUS les Sparks, lus à
+               // l'ouverture et au bouton, jamais en tâche de fond (§76.4).
+               surveillance: { sla: { ...SURVEILLANCE_VIDE }, sante: { ...SURVEILLANCE_VIDE } },
                // SPK-57 · §49 : la modale de redimensionnement. Fermée tant
                // qu'on ne l'a pas ouverte, et ses valeurs sont celles du Spark
                // AU MOMENT DE L'OUVERTURE — pas des champs vides qui feraient
@@ -225,7 +230,7 @@ function marquerNavigation() {
   const courant = etat.route === 'serveurs' ? '#/serveurs'
     : etat.route === 'manuel' ? '#/manuel'
     : ['forge', 'images', 'environnement', 'journal', 'forgedns',
-       'supervision', 'misesajour', 'alertes', 'propositions'].includes(etat.route)
+       'supervision', 'misesajour', 'alertes', 'propositions', 'forgesla', 'forgesante'].includes(etat.route)
       ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
@@ -366,6 +371,10 @@ function peindre() {
         + renderSupervisionForge(etat.supervision)
       : etat.route === 'misesajour'
       ? renderOngletsForge('#/forge/mises-a-jour') + renderMisesAJour(etat.systeme)
+      : etat.route === 'forgesla'
+      ? renderOngletsForge('#/forge/sla') + renderSlaForge(etat.surveillance.sla)
+      : etat.route === 'forgesante'
+      ? renderOngletsForge('#/forge/sante') + renderSanteForge(etat.surveillance.sante)
       : etat.route === 'serveurs'
       ? renderServeurs(etat.catalogueServeurs)
       : etat.route === 'forge'
@@ -467,6 +476,11 @@ function brancher() {
   racine.querySelector('[data-action="relire-systeme"]')
     ?.addEventListener('click', () => chargerSysteme({ focus: true }));
   if (etat.route === 'misesajour') brancherMisesAJour();
+  // SPK-188 · §76.4 : relire ne change rien sur la Forge — pas de confirmation.
+  for (const bouton of racine.querySelectorAll('[data-surveillance-relire]')) {
+    bouton.addEventListener('click', () => chargerSurveillance(bouton.dataset.surveillanceRelire, { focus: true }));
+  }
+  brancherChargeSemaine();
   brancherGraphiques();
   // §27.8 : le relevé ne détruit rien et n'a aucun paramètre — pas de confirmation.
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
@@ -5620,6 +5634,51 @@ async function chargerPropositionsForge({ depuisBouton = false } = {}) {
 }
 
 /**
+ * Onglets « SLA » et « Santé » de la Forge : le tableau de bord de la surveillance (SPK-188).
+ *
+ * @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3 (deux lectures de parc), §76.4 (à l'ouverture
+ *       et au bouton, jamais en tâche de fond) · docs/DESIGN_SYSTEM.md §6.13 (pendant une relecture,
+ *       l'ancien état ne reste pas affiché comme actuel), §14.3 (le focus revient au bouton qui a relu)
+ */
+async function chargerSurveillance(onglet, { focus = false } = {}) {
+  etat.route = onglet === 'sla' ? 'forgesla' : 'forgesante';
+  etat.surveillance[onglet] = { ...SURVEILLANCE_VIDE, status: 'loading',
+                                luA: etat.surveillance[onglet]?.luA ?? null };
+  peindre();
+  try {
+    const donnees = await api(onglet === 'sla' ? '/v1/forge/sla' : '/v1/forge/health');
+    etat.surveillance[onglet] = { ...SURVEILLANCE_VIDE, status: 'ready', donnees,
+                                  luA: new Date().toISOString().slice(11, 16) };
+  } catch (erreur) {
+    etat.surveillance[onglet] = { ...SURVEILLANCE_VIDE, status: 'error', error: erreur.message };
+  }
+  // Un chargement TARDIF ne repeint pas un autre écran (même règle que la Forge, vue sur spark-010).
+  if (etat.route !== (onglet === 'sla' ? 'forgesla' : 'forgesante')) return;
+  peindre();
+  if (focus) racine.querySelector(`[data-surveillance-relire="${onglet}"]`)?.focus();
+}
+
+/**
+ * Le survol du graphe de charge : la tranche sous le pointeur se lit dans la ligne annoncée (SPK-188).
+ *
+ * @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3 bis · docs/DESIGN_SYSTEM_APP.md SPK-DS-54
+ *       (la lecture est une ligne `aria-live`, pas une info-bulle qui disparaît au clavier)
+ */
+const INVITE_GRAPHE = 'Survolez le graphe pour lire une tranche.';
+function brancherChargeSemaine() {
+  const graphe = racine.querySelector('[data-charge-semaine]');
+  const lecture = racine.querySelector('[data-charge-lecture]');
+  const semaine = etat.surveillance?.sla?.donnees?.week;
+  if (!graphe || !lecture || !semaine) return;
+  graphe.addEventListener('pointermove', (evenement) => {
+    const cadre = graphe.getBoundingClientRect();
+    const rang = trancheSousLePointeur(semaine, (evenement.clientX - cadre.left) / cadre.width);
+    lecture.textContent = rang === null ? INVITE_GRAPHE : lectureTranche(semaine, rang);
+  });
+  graphe.addEventListener('pointerleave', () => { lecture.textContent = INVITE_GRAPHE; });
+}
+
+/**
  * Onglet « Mises à jour » de la Forge (SPK-171).
  *
  * @spec docs/BACKLOG.md#SPK-171 · docs/DAT.md §70.5 · docs/DESIGN_SYSTEM.md
@@ -6393,6 +6452,8 @@ function router() {
   if (location.hash === '#/forge/dns') return chargerInventaireDns();
   if (location.hash === '#/forge/alertes') return chargerAlertes();
   if (location.hash === '#/forge/mises-a-jour') return chargerSysteme();
+  if (location.hash === '#/forge/sla') return chargerSurveillance('sla');
+  if (location.hash === '#/forge/sante') return chargerSurveillance('sante');
   if (location.hash === '#/forge/propositions') return chargerPropositionsForge();
   if (location.hash === '#/forge/journal') return chargerJournal();
   if (location.hash === '#/forge/environnement') return chargerCatalogueEnv();

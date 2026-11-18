@@ -237,6 +237,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/forge/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Forge Health
+         * @description Les sondes de TOUS les Sparks, rangées du pire au plus sain (SPK-188).
+         *
+         *     @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3
+         *
+         *     Lecture du registre seule : aucune sonde n'est jouée. Ni la cible ni la commande
+         *     d'une sonde n'en sortent.
+         */
+        get: operations["forge_health_v1_forge_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/forge/isolation": {
         parameters: {
             query?: never;
@@ -281,6 +306,30 @@ export interface paths {
          *     machine (§52.7).
          */
         get: operations["forge_metrics_v1_forge_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/forge/sla": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Forge Sla
+         * @description Le SLA des instantanés de TOUS les Sparks, et la charge de la semaine (SPK-188).
+         *
+         *     @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3, §76.3 bis
+         *
+         *     Lecture du registre seule : aucune cellule, aucune prise, aucune ligne d'audit.
+         */
+        get: operations["forge_sla_v1_forge_sla_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -437,6 +486,29 @@ export interface paths {
          * @description Retire une entree du catalogue, avec ses deux refus (§33.7).
          */
         delete: operations["remove_image_v1_images__image_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/images/{image_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Default Image
+         * @description Désigne l'image proposée par défaut à la création (docs/DAT.md §69, SPK-174).
+         *
+         *     Idempotent, sans corps. Seule une entrée `verified` peut l'être ; le refus nomme
+         *     l'état. La règle est celle du serveur : le bouton de l'écran n'en est que l'aide.
+         */
+        put: operations["set_default_image_v1_images__image_id__default_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -699,10 +771,9 @@ export interface paths {
          * Set Channels
          * @description Règle les canaux. Exige le mot de passe du §47.3.3.
          *
-         *     **La désactivation NOTIFIE par le canal qu'elle coupe**, et pendant qu'il
-         *     fonctionne encore (§47.3.3) : sans quoi la coupure serait le seul geste
-         *     dont personne n'entendrait parler — et c'est le premier qu'un attaquant
-         *     tenterait.
+         *     **La coupure d'un canal le DIT, par lui**, et pendant qu'il fonctionne encore
+         *     (§47.3.3, §47.3.2 ter) : sans quoi elle serait le seul geste dont personne
+         *     n'entendrait parler — et c'est le premier qu'un attaquant tenterait.
          */
         put: operations["set_channels_v1_notify_channels_put"];
         post?: never;
@@ -1041,6 +1112,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sparks/{name}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Health */
+        get: operations["get_health_v1_sparks__name__health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/health/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Health
+         * @description Exécute une définition UNE fois, sans rien écrire (§75.8).
+         *
+         *     Exécuter un script est un GESTE, pas une lecture : sur un Spark protégé, il est
+         *     refusé comme toute écriture. Les relevés planifiés, eux, continuent (§75.8).
+         */
+        post: operations["test_health_v1_sparks__name__health_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/health/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Health
+         * @description Valide une définition SANS l'exécuter ni l'écrire (SPK-185, §75.9).
+         *
+         *     C'est ce qui permet à la console de dire, ligne par ligne, ce qu'une proposition
+         *     de `health.?` a de refusable AVANT que le propriétaire n'accepte : un domaine qui
+         *     n'est pas une route du Spark, une cadence trop serrée, un seuil hors bornes. Ce
+         *     n'est pas une écriture : elle ne demande pas que le Spark soit inscriptible.
+         */
+        post: operations["validate_health_v1_sparks__name__health_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/health/{sonde}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Health */
+        put: operations["put_health_v1_sparks__name__health__sonde__put"];
+        post?: never;
+        /** Delete Health */
+        delete: operations["delete_health_v1_sparks__name__health__sonde__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/health/{sonde}/{geste}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Basculer Health */
+        post: operations["basculer_health_v1_sparks__name__health__sonde___geste__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sparks/{name}/identity": {
         parameters: {
             query?: never;
@@ -1246,6 +1417,68 @@ export interface paths {
          * @description Lever DÉSARME durablement (§35.4). Il n'y a pas de fenêtre de temps.
          */
         delete: operations["lift_protection_v1_sparks__name__protection_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/sla": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sla */
+        get: operations["get_sla_v1_sparks__name__sla_get"];
+        /** Put Sla */
+        put: operations["put_sla_v1_sparks__name__sla_put"];
+        post?: never;
+        /**
+         * Delete Sla
+         * @description Retire la politique ; **aucun instantané n'est supprimé** (§74.2).
+         */
+        delete: operations["delete_sla_v1_sparks__name__sla_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/sla/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Sla
+         * @description Ce que la politique proposée ferait, SANS rien écrire (§74.7).
+         */
+        post: operations["preview_sla_v1_sparks__name__sla_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/sla/{geste}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Basculer Sla
+         * @description `suspend` ou `resume` : suspendre gèle la prise ET la suppression (§74.2).
+         */
+        post: operations["basculer_sla_v1_sparks__name__sla__geste__post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1907,6 +2140,28 @@ export interface operations {
             };
         };
     };
+    forge_health_v1_forge_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     forge_isolation_v1_forge_isolation_get: {
         parameters: {
             query?: never;
@@ -1981,6 +2236,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forge_sla_v1_forge_sla_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -2144,6 +2421,39 @@ export interface operations {
         };
     };
     remove_image_v1_images__image_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_default_image_v1_images__image_id__default_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -3475,6 +3785,226 @@ export interface operations {
             };
         };
     };
+    get_health_v1_sparks__name__health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_health_v1_sparks__name__health_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_health_v1_sparks__name__health_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_health_v1_sparks__name__health__sonde__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                sonde: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_health_v1_sparks__name__health__sonde__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                sonde: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    basculer_health_v1_sparks__name__health__sonde___geste__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                sonde: string;
+                geste: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_identity_v1_sparks__name__identity_get: {
         parameters: {
             query?: never;
@@ -3849,6 +4379,184 @@ export interface operations {
                 };
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sla_v1_sparks__name__sla_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_sla_v1_sparks__name__sla_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_sla_v1_sparks__name__sla_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_sla_v1_sparks__name__sla_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    basculer_sla_v1_sparks__name__sla__geste__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                geste: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

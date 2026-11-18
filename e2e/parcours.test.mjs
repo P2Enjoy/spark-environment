@@ -8009,3 +8009,120 @@ test('l\u2019onglet Santé montre les sondes d\u2019un Spark, relit leur proposi
     await capturer('spk186-sante-refus-protege', { hauteur: 1500 });
   });
 });
+
+// SPK-188 · docs/DAT.md §76 · docs/DESIGN_SYSTEM_APP.md SPK-DS-54.
+// @verifies docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.2 (aucun geste, un seul bouton : relire), §76.3 (la
+//           synthèse = l'API), §76.3 bis (la charge de la semaine : 672 colonnes d'un pixel, survol lu),
+//           §76.4 (un lien par ligne vers la bonne facette du bon Spark) · CLAUDE.md §16 (depuis l'accueil, à
+//           la souris et au clavier ; jamais par une adresse saisie)
+test('les onglets SLA et Santé de la Forge montrent tout ce qui surveille les Sparks, et mènent à la bonne facette', async () => {
+  await parcours('surveillance-forge', async () => {
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    const onglet = page.locator('.onglet[href="#/forge/sla"]');
+    await onglet.waitFor();
+    assert.equal(await onglet.innerText(), 'SLA');
+    assert.equal(await page.locator('.onglet[href="#/forge/sante"]').innerText(), 'Santé');
+
+    // --- SLA : la synthèse et le tableau sont ceux de l'API, du plus préoccupant au plus sain ------------
+    await onglet.click();
+    await page.waitForSelector('#titre-sla-forge');
+    await page.waitForSelector('[data-sla-ligne]');
+    const sla = (await pile.lireSparkd('/v1/forge/sla')).corps;
+    assert.equal(sla.summary.configured, sla.summary.active + sla.summary.failing + sla.summary.suspended);
+    assert.ok(sla.summary.failing >= 1 && sla.summary.suspended >= 1 && sla.summary.active >= 1,
+      'le seed montre un SLA en échec, un suspendu et un actif');
+    const lignes = await page.locator('[data-sla-ligne]').evaluateAll((l) => l.map((e) => e.dataset.slaLigne));
+    assert.deepEqual(lignes, sla.sparks.map((s) => s.spark), 'l\u2019ordre de l\u2019écran est celui de l\u2019API');
+    assert.equal(sla.sparks[0].state, 'failing', 'le plus préoccupant vient en tête');
+    const synthese = await page.locator('.synthese').innerText();
+    assert.match(synthese, new RegExp(`SLA programmés\\s*${sla.summary.configured}`));
+    assert.match(synthese, new RegExp(`En échec\\s*${sla.summary.failing}`));
+    assert.equal(await page.locator('.synthese__item dt .badge').count(), 3, 'trois états : la pastille EST le terme');
+    assert.equal(await page.locator('.onglet[aria-current="page"]').innerText(), 'SLA');
+    assert.equal(await page.locator('.principal button:not([data-surveillance-relire])').count(), 0,
+      'un seul bouton sur l\u2019index : Relire — aucun geste');
+
+    // --- la charge de la semaine : 672 colonnes d'UN pixel, et un survol qui se lit -----------------------
+    const graphe = page.locator('svg[data-charge-semaine]');
+    await graphe.waitFor();
+    const cadre = await graphe.boundingBox();
+    assert.equal(cadre.width, 672, 'une colonne par tranche, un pixel par colonne : le graphe ne s\u2019étire pas');
+    assert.match(await graphe.getAttribute('aria-label'), new RegExp(`pic de ${sla.week.peak} prises?`));
+    const chargee = sla.week.busiest[0];
+    await page.mouse.move(cadre.x + chargee.index + 0.5, cadre.y + 30);
+    const lecture = page.locator('[data-charge-lecture]');
+    await page.waitForFunction(() => /UTC · \d+ prises?/.test(document.querySelector('[data-charge-lecture]')?.textContent ?? ''));
+    const lu = await lecture.innerText();
+    assert.match(lu, /^(Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi|Dimanche) \d\d:\d\d – \d\d:\d\d UTC/);
+    assert.ok(chargee.sparks.every((nom) => lu.includes(nom)), `le survol nomme ${chargee.sparks.join(', ')} : « ${lu} »`);
+    // Une tranche vide se dit, et quitter le graphe rend l'invite.
+    const vide = sla.week.slots.findIndex((n) => n === 0);
+    await page.mouse.move(cadre.x + vide + 0.5, cadre.y + 30);
+    await page.waitForFunction(() => /aucune prise/.test(document.querySelector('[data-charge-lecture]')?.textContent ?? ''));
+    await page.mouse.move(cadre.x + cadre.width + 40, cadre.y + 200);
+    await page.waitForFunction(() => /Survolez le graphe/.test(document.querySelector('[data-charge-lecture]')?.textContent ?? ''));
+    // L'équivalent textuel : les tranches les plus chargées, nommées.
+    const liste = await page.locator('.graphe-defilant ~ ol.liste-simple').innerText();
+    assert.ok(sla.week.busiest[0].sparks.every((nom) => liste.includes(nom)));
+    await capturer('spk188-sla-forge', { hauteur: 1500 });
+    await capturer('spk188-sla-forge-mobile', { largeur: 390, hauteur: 2600 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true,
+      'la page ne défile pas horizontalement à 390 px : le graphe défile dans son conteneur');
+    await page.setViewportSize({ width: 1440, height: 1300 });
+
+    // --- le lien d'une ligne, au CLAVIER : il ouvre le Spark sur sa facette Instantanés ----------------------
+    const premier = sla.sparks[0].spark;
+    await page.focus(`[data-lien-sla="${premier}"]`);
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.onglet[href$="/instantanes"][aria-current="page"]', { timeout: 10000 });
+    assert.match(page.url(), new RegExp(`#/sparks/${premier}/instantanes$`));
+    await page.waitForSelector('section[aria-labelledby="titre-sla"]');
+    assert.equal(await page.locator('.entete-entite h1').innerText(), premier);
+    // Retour : l'index est relu et retrouve sa place.
+    await page.goBack();
+    await page.waitForSelector('#titre-sla-forge');
+    await page.waitForSelector('[data-sla-ligne]');
+
+    // --- Relire, au clavier : le focus revient au bouton, et rien n'est journalisé ---------------------------
+    const avant = await pile.lireSparkd('/v1/audit');
+    await page.focus('[data-surveillance-relire="sla"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('[data-sla-ligne]');
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset?.surveillanceRelire), 'sla');
+    assert.match(await page.locator('.relecture .note').innerText(), /Lu à \d\d:\d\d/);
+    assert.deepEqual((await pile.lireSparkd('/v1/audit')).corps, avant.corps, 'une lecture ne journalise rien');
+
+    // --- Santé : mêmes règles, un lien par sonde vers l'onglet Santé du Spark, à la SOURIS --------------------
+    await page.click('.onglet[href="#/forge/sante"]');
+    await page.waitForSelector('#titre-sante-forge');
+    await page.waitForSelector('[data-sante-ligne]');
+    const sante = (await pile.lireSparkd('/v1/forge/health')).corps;
+    assert.equal(sante.summary.checks,
+      sante.summary.down + sante.summary.unstable + sante.summary.unknown
+      + sante.summary.stopped + sante.summary.healthy + sante.summary.suspended);
+    assert.ok(sante.summary.down >= 1 && sante.summary.unstable >= 1 && sante.summary.healthy >= 1,
+      'le seed montre une sonde en panne, une instable et une saine');
+    const sondes = await page.locator('[data-sante-ligne]').evaluateAll((l) => l.map((e) => e.dataset.santeLigne));
+    assert.deepEqual(sondes, sante.sparks.flatMap((s) => s.checks.map((c) => `${s.spark}:${c.name}`)));
+    assert.equal(sante.sparks[0].worst, 'down', 'le pire état vient en tête');
+    const premiereLigne = page.locator('[data-sante-ligne]').first();
+    assert.match(await premiereLigne.innerText(), /En panne/);
+    assert.ok(await premiereLigne.locator('svg.frise').count() >= 1, 'la frise et son équivalent textuel');
+    assert.equal(await page.locator('.principal button:not([data-surveillance-relire])').count(), 0);
+    assert.doesNotMatch(await page.locator('.principal').innerText(), /exit 2|https:\/\//,
+      'ni la commande d\u2019un script ni l\u2019adresse d\u2019une sonde ne sortent de l\u2019index');
+    await capturer('spk188-sante-forge', { hauteur: 1500 });
+    await capturer('spk188-sante-forge-mobile', { largeur: 390, hauteur: 2600 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await page.setViewportSize({ width: 1440, height: 1300 });
+
+    const cle = sondes[0];
+    const [spark, sonde] = cle.split(':');
+    await page.click(`[data-lien-sante="${cle}"]`);
+    await page.waitForSelector('.onglet[href$="/sante"][aria-current="page"]', { timeout: 10000 });
+    assert.match(page.url(), new RegExp(`#/sparks/${spark}/sante$`));
+    await page.waitForSelector(`[data-sante-sonde="${sonde}"]`);
+    assert.match(await page.locator(`[data-sante-sonde="${sonde}"]`).innerText(), /En panne/);
+  });
+});

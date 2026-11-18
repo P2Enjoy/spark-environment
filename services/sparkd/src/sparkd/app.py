@@ -941,6 +941,29 @@ def create_app(config: Config) -> FastAPI:
             return systeme_service.releve_factice()
         return systeme_service.releve(systeme_service.lecteur_local())
 
+    @app.get("/v1/forge/sla", tags=["forge"])
+    def forge_sla() -> dict:
+        """Le SLA des instantanés de TOUS les Sparks, et la charge de la semaine (SPK-188).
+
+        @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3, §76.3 bis
+
+        Lecture du registre seule : aucune cellule, aucune prise, aucune ligne d'audit.
+        """
+        with registry() as connection:
+            return sla_service.parc(connection, service.listing(connection))
+
+    @app.get("/v1/forge/health", tags=["forge"])
+    def forge_health() -> dict:
+        """Les sondes de TOUS les Sparks, rangées du pire au plus sain (SPK-188).
+
+        @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3
+
+        Lecture du registre seule : aucune sonde n'est jouée. Ni la cible ni la commande
+        d'une sonde n'en sortent.
+        """
+        with registry() as connection:
+            return health_service.parc(connection, service.listing(connection))
+
     @app.post("/v1/forge/isolation", tags=["forge"])
     def forge_isolate() -> dict:
         """« Isoler le parc » : une entrée d'audit par Spark, le protégé refuse

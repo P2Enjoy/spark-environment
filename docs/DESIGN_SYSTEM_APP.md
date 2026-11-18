@@ -2173,8 +2173,9 @@ Chacune est une carte `h2` qui porte, dans l'ordre : une phrase qui dit ce qui e
 les **Sparks sans** ; la **date de lecture** et « Relire ».
 
 **La synthèse** est une liste de paires terme / valeur (`dl`, §6.4), pas une rangée de tuiles décoratives : un **chiffre** en
-police technique à tabulaires, son **libellé** en toutes lettres, et la **pastille** de l'état qu'il compte — la couleur ne
-porte jamais seule (§1.5). Ordre : d'abord ce qui est préoccupant. Un chiffre à **zéro reste affiché** : « 0 en panne » est
+police technique à tabulaires, et son **terme** en toutes lettres. Quand le compte porte un état, **la pastille EST le terme** —
+le mot et la couleur ensemble (§1.5), sans répéter le libellé à côté d'elle (défaut vu à la capture du 2026-11-19 : « En échec »
+écrit deux fois). La taille cumulée des instantanés s'écrit **à côté** du chiffre. Ordre : d'abord ce qui est préoccupant. Un chiffre à **zéro reste affiché** : « 0 en panne » est
 une information, pas un bruit (§14.6) ; en revanche la synthèse d'un parc **sans SLA ni sonde** ne montre pas une rangée de
 zéros — elle dit l'absence (§14.5).
 

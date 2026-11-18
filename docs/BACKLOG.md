@@ -9475,7 +9475,7 @@ sans écriture, cadence refusée, suspendre / reprendre / retirer, Spark protég
 observées, manuel M14. Le cas « aucun canal d'alerte » est prouvé au rendu (la pile des parcours a un canal) ; sur la
 Forge réelle, il disparaît dès que le canal courriel est actif.
 
-### [~] SPK-187 · Le briefing d'un Spark dit la surveillance et les instantanés
+### [x] SPK-187 · Le briefing d'un Spark dit la surveillance et les instantanés
 
 **Demandé le 2026-11-19** par le responsable : « est-ce que le dossier pour un agent a ajouté les descriptions des nouvelles
 fonctionnalités ? est-ce que le projet consigne de garder les fonctionnalités exposées aux agents à jour ? devons-nous
@@ -9493,16 +9493,20 @@ paire `health.?` qui s'y inscrit par construction ; aucune règle ne l'exigeait.
   le vrai registre ; **une cellule réelle** relue après une sonde et un SLA posés par la console ; briefing, dossier, runbook,
   DAT, changelog et manuel à jour ; la règle de `CLAUDE.md` en place.
 
-**État (2026-11-19) : construit, `[~]` jusqu'à la lecture d'une cellule réelle.** Prouvé : 25 tests (`test_briefing_surveillance.py`,
+**État (2026-11-19) : livré et vérifié, `[x]`.** **Preuve sur une cellule RÉELLE (spark-010, `b751ebf`)** : un Spark d'essai rootless,
+une sonde `docker ps` et un SLA `*/15` posés **depuis la console** ; `/etc/spark/BRIEFING.md`, relu dans la cellule, nomme la
+sonde, dit le compte `spark-docker` pour les scripts (lu dans l'observation d'amorçage, pas sur la ligne du Spark), la politique du
+SLA en clair et les `SLA_…` gérés par la Forge ; `briefing.json` porte les clés `health` et `snapshots` sans aucun état. Le Spark
+d'essai a ensuite été supprimé. Prouvé en local : 25 tests (`test_briefing_surveillance.py`,
 22 rouges avant) — le modèle (limites tirées de `health.py`, compte rootless lu dans l'observation d'amorçage, définition seule
 d'une sonde, politique seule du SLA, aucun état), le rendu des deux présentations (absences nommées, aucun mot du canal d'alerte,
 aucune permission, section « 7 bis » sans renumérotation), l'API contre le vrai registre et **le fichier réellement poussé dans la
 cellule** réécrit après chaque geste de sonde (poser, suspendre, retirer) et de SLA (programmer, suspendre, retirer), `briefing.json`
 sans état ; la suite `sparkd` complète verte. Le modèle est construit à UN seul endroit (`_modele_du_spark`) : deux sites le
 construisaient, et le troisième champ aurait été oublié dans l'un. Runbook agent : section H et le geste « image par défaut » en
-B.1 ; manuel M6 ; règle inscrite à `CLAUDE.md`. **Reste** : relire `/etc/spark/BRIEFING.md` dans une vraie cellule de spark-010.
+B.1 ; manuel M6 ; règle inscrite à `CLAUDE.md`. Rien ne reste.
 
-### [ ] SPK-188 · Les onglets « SLA » et « Santé » de la Forge : le tableau de bord de la surveillance
+### [x] SPK-188 · Les onglets « SLA » et « Santé » de la Forge : le tableau de bord de la surveillance
 
 **Demandé le 2026-11-19** par le responsable : dans la page de la Forge, deux onglets, **SLA** et **Santé**, qui regroupent
 des statistiques sur ces fonctionnalités **activées sur cette Forge** et, avec un lien, **ouvrent le Spark directement sur le
@@ -9524,6 +9528,18 @@ bon onglet** — « un dashboard de tous les SLA et de toutes les santés déplo
 - DoD : tests unitaires de l'agrégation et du rendu ; API contre le vrai registre (agrégat exact, Spark sans cellule, aucune
   commande de script ni sortie rendue) ; E2E depuis l'accueil, à la souris et au clavier (onglet, lien, retour) ; captures
   observées (desktop, mobile, vide, problème en tête) ; contrat OpenAPI régénéré ; manuel, seed, changelog à jour.
+- **État au 2026-11-19 : livré et vérifié sur la pile d'épreuve, `[x]` ; non éprouvé sur une Forge réelle** (aucun élément
+  de la DoD ne l'exige : la lecture est celle du registre). Prouvé : 11 tests de la charge de semaine (672 tranches, lundi
+  00:00 UTC, jour de semaine et mensuel, empilement, suspendu exclu, cinq plus chargées) ; 15 tests d'API contre le **vrai
+  registre** (états exclusifs et additifs, ordre, taille cumulée inconnue ≠ zéro, sonde suspendue sortie de son état, **ni cible ni
+  commande de script**, aucune écriture ni cellule touchée — Incus remplacé par un objet qui échoue au moindre appel — et seul
+  `GET` accepté) ; 21 tests de rendu (liens exacts, aucun geste, états chargement/erreur/vide, nom hostile échappé, survol) ;
+  la suite `sparkd` (2381) et celle de la console (1952) vertes ; contrat OpenAPI à jour. Le parcours E2E « les onglets SLA et
+  Santé de la Forge… » est vert **depuis l'accueil, à la souris et au clavier** : synthèse = API, ordre, graphe de 672 pixels
+  mesuré, survol, lien au clavier qui ouvre le bon Spark sur le bon onglet puis retour, *Relire* sans journal, pas de défilement
+  horizontal de la page à 390 px ; captures observées (desktop et mobile des deux onglets). **Défaut vu à la capture et corrigé** :
+  la synthèse répétait le mot de l'état à côté de sa pastille, et la taille cumulée des instantanés n'était pas affichée.
+  Décisions du rédacteur à confirmer : DAT §76.7.
 
 ---
 

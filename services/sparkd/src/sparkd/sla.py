@@ -193,6 +193,108 @@ def vue(connection: sqlite3.Connection, spark: dict) -> dict:
             "snapshots": tenus}
 
 
+#: Ce qu'une entrée du parc reprend de la vue d'un SLA (§74.9) : la MÊME vue, jamais un second
+#: modèle. `attempts`, `created_at`, `updated_at` n'aident pas à répondre à « qu'est-ce qui va mal ? ».
+_CHAMPS_PARC = ("schedule", "description", "enabled", "next_run_at", "last_run_at", "last_status",
+                "last_error", "retention_days", "retention_count", "snapshots")
+_RANG_PARC = {"failing": 0, "active": 1, "suspended": 2}
+
+
+def etat_parc(vue_sla: dict) -> str:
+    """`suspended` | `failing` | `active` : exclusifs. Une politique suspendue ne tourne pas, quoi
+    qu'elle ait rendu la dernière fois ; une politique qui n'a jamais tourné est active (§76.5)."""
+    if not vue_sla["enabled"]:
+        return "suspended"
+    return "failing" if vue_sla.get("last_status") == "error" else "active"
+
+
+#: La grille de la charge (DAT §76.3 bis) : des tranches de 15 minutes, du lundi 00:00 UTC.
+TRANCHE_MINUTES = 15
+TRANCHES_PAR_JOUR = 24 * 60 // TRANCHE_MINUTES
+TRANCHES_PAR_SEMAINE = 7 * TRANCHES_PAR_JOUR
+PLUS_CHARGEES = 5
+
+
+def debut_de_semaine(now: datetime) -> datetime:
+    """Le lundi 00:00 UTC de la semaine ISO qui contient `now`."""
+    jour = now.astimezone(timezone.utc).date()
+    lundi = jour - timedelta(days=jour.weekday())
+    return datetime(lundi.year, lundi.month, lundi.day, tzinfo=timezone.utc)
+
+
+def charge_semaine(politiques: list[tuple[str, str]], now: datetime) -> dict:
+    """Les prises PRÉVUES de la semaine, rangées par tranche de 15 minutes.
+
+    @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3 bis (la charge est calculée d'après les
+          fréquences, pas observée), §76.5 (on compte des débuts de prise, pas des durées)
+
+    `politiques` : des couples (nom du Spark, chaîne crontab) des SLA qui PRENNENT. Pour chaque jour de
+    la semaine que la fréquence retient — `convient_jour`, la sémantique même du planificateur — chaque
+    heure × minute de la chaîne est une prise. Pure : l'instant est un argument.
+    """
+    debut = debut_de_semaine(now)
+    tranches = [0] * TRANCHES_PAR_SEMAINE
+    noms: list[set[str]] = [set() for _ in range(TRANCHES_PAR_SEMAINE)]
+    for nom, chaine in politiques:
+        horaire = cron.analyser(chaine)
+        for decalage in range(7):
+            if not horaire.convient_jour((debut + timedelta(days=decalage)).date()):
+                continue
+            for heure in sorted(horaire.heures):
+                for minute in sorted(horaire.minutes):
+                    rang = decalage * TRANCHES_PAR_JOUR + (heure * 60 + minute) // TRANCHE_MINUTES
+                    tranches[rang] += 1
+                    noms[rang].add(nom)
+    chargees = sorted((i for i, n in enumerate(tranches) if n), key=lambda i: (-tranches[i], i))
+    return {
+        "start": _iso(debut), "slot_minutes": TRANCHE_MINUTES, "slots": tranches,
+        "peak": max(tranches), "busy_slots": sum(1 for n in tranches if n),
+        "busiest": [{"index": i, "at": _iso(debut + timedelta(minutes=TRANCHE_MINUTES * i)),
+                     "count": tranches[i], "sparks": sorted(noms[i])}
+                    for i in chargees[:PLUS_CHARGEES]],
+        # Qui prend dans une tranche donnée, pour TOUTES les tranches chargées : le survol du graphe
+        # les nomme. Les clés sont les rangs en texte (JSON) ; une tranche vide n'a pas d'entrée.
+        "sparks_by_slot": {str(i): sorted(noms[i]) for i in chargees},
+    }
+
+
+def parc(connection: sqlite3.Connection, sparks: list[dict], now: datetime | None = None) -> dict:
+    """Le SLA de TOUTE la Forge, lu dans le registre et nulle part ailleurs.
+
+    @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3 (l'agrégation se fait ici, pas dans la console),
+          §76.2 (aucune cellule, aucune écriture), §76.5
+
+    Les trois états sont exclusifs et additifs : `configured = active + failing + suspended`. La
+    taille cumulée est `None` dès qu'une taille tenue est inconnue — une somme partielle n'est pas un
+    total (DESIGN_SYSTEM §14.6) — et vaut 0 quand le SLA ne tient rien : alors c'est un zéro vrai.
+    """
+    entrees, sans = [], []
+    compte = {"active": 0, "failing": 0, "suspended": 0}
+    nombre, taille = 0, 0
+    for spark in sparks:
+        lue = vue(connection, spark)
+        if not lue["configured"]:
+            sans.append(spark["name"])
+            continue
+        etat = etat_parc(lue)
+        compte[etat] += 1
+        tenus = lue["snapshots"]
+        nombre += tenus["count"]
+        if tenus["count"]:
+            taille = None if (taille is None or tenus["size_bytes"] is None) else taille + tenus["size_bytes"]
+        entrees.append({"spark": spark["name"], "state": etat, **{c: lue[c] for c in _CHAMPS_PARC}})
+    entrees.sort(key=lambda e: (_RANG_PARC[e["state"]], e["spark"]))
+    # Un SLA suspendu ne prend rien : il ne charge pas la semaine (§76.3 bis).
+    prennent = [(e["spark"], e["schedule"]) for e in entrees if e["state"] != "suspended"]
+    return {
+        "summary": {"sparks": len(sparks), "configured": len(entrees), **compte,
+                    "snapshots_count": nombre, "snapshots_size_bytes": taille},
+        "sparks": entrees,
+        "without": sorted(sans),
+        "week": charge_semaine(prennent, now or maintenant()),
+    }
+
+
 def _audit(connection, action, spark, message, payload, result="ok") -> None:
     audit.record(connection, None, action, result, message,
                  target_type="sla", target_id=spark["id"], payload=payload)

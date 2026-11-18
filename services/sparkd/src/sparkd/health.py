@@ -343,6 +343,53 @@ def lister(connection: sqlite3.Connection, spark: dict) -> dict:
     return {"checks": [_vue_sonde(connection, s) for s in lignes], "limit": MAX_SONDES}
 
 
+#: Du pire au plus sain (§76.3). `suspended` n'est pas un état de la machine du §75.6 : c'est l'ÉTAT
+#: EFFECTIF d'une sonde dont `enabled` est faux — elle ne relève plus rien.
+ORDRE_PARC = ("down", "unstable", "unknown", "stopped", "healthy", "suspended")
+#: Ce qu'une sonde du parc reprend de sa vue (§75.8) : jamais `target` (la commande d'un script, ou
+#: l'URL) ni `expected` — l'index répond à « qu'est-ce qui va mal ? », le Spark montre le reste.
+_CHAMPS_PARC = ("name", "kind", "state", "enabled", "schedule", "description", "threshold",
+                "consecutive_failures", "state_since", "last_run_at", "next_run_at",
+                "last_latency_ms", "last_detail", "results")
+
+
+def etat_effectif(sonde: dict) -> str:
+    """L'état qui compte au parc : une sonde suspendue sort de l'état qu'elle gardait (§76.3)."""
+    return sonde["state"] if sonde["enabled"] else "suspended"
+
+
+def parc(connection: sqlite3.Connection, sparks: list[dict]) -> dict:
+    """La santé de TOUTE la Forge, lue dans le registre et nulle part ailleurs.
+
+    @spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3 (l'agrégation se fait ici, pas dans la console),
+          §76.2 (aucune sonde jouée, aucune écriture)
+
+    Les six comptes sont exclusifs et additifs : `checks = down + unstable + unknown + stopped +
+    healthy + suspended`. Un Spark est rangé par le PIRE état effectif de ses sondes.
+    """
+    rang = {etat: i for i, etat in enumerate(ORDRE_PARC)}
+    compte = dict.fromkeys(ORDRE_PARC, 0)
+    entrees, sans = [], []
+    for spark in sparks:
+        sondes = lister(connection, spark)["checks"]
+        if not sondes:
+            sans.append(spark["name"])
+            continue
+        for s in sondes:
+            compte[etat_effectif(s)] += 1
+        sondes.sort(key=lambda s: (rang[etat_effectif(s)], s["name"]))
+        entrees.append({
+            "spark": spark["name"], "worst": etat_effectif(sondes[0]),
+            "checks": [{c: s[c] for c in _CHAMPS_PARC} for s in sondes]})
+    entrees.sort(key=lambda e: (rang[e["worst"]], e["spark"]))
+    return {
+        "summary": {"sparks": len(sparks), "monitored": len(entrees),
+                    "checks": sum(compte.values()), **compte},
+        "sparks": entrees,
+        "without": sorted(sans),
+    }
+
+
 def _audit(connection, action, spark, sonde, message, payload, result="ok") -> None:
     audit.record(connection, None, action, result, message,
                  target_type="health", target_id=sonde, payload=payload)

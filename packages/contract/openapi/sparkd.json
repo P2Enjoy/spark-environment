@@ -544,6 +544,30 @@
         ]
       }
     },
+    "/v1/forge/health": {
+      "get": {
+        "description": "Les sondes de TOUS les Sparks, rangées du pire au plus sain (SPK-188).\n\n@spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3\n\nLecture du registre seule : aucune sonde n'est jouée. Ni la cible ni la commande\nd'une sonde n'en sortent.",
+        "operationId": "forge_health_v1_forge_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forge Health V1 Forge Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Forge Health",
+        "tags": [
+          "forge"
+        ]
+      }
+    },
     "/v1/forge/isolation": {
       "get": {
         "description": "L'état d'isolation de chaque Spark, LU dans Incus (SPK-109, §57.3).",
@@ -655,6 +679,30 @@
         "summary": "Forge Metrics",
         "tags": [
           "metriques"
+        ]
+      }
+    },
+    "/v1/forge/sla": {
+      "get": {
+        "description": "Le SLA des instantanés de TOUS les Sparks, et la charge de la semaine (SPK-188).\n\n@spec docs/BACKLOG.md#SPK-188 · docs/DAT.md §76.3, §76.3 bis\n\nLecture du registre seule : aucune cellule, aucune prise, aucune ligne d'audit.",
+        "operationId": "forge_sla_v1_forge_sla_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forge Sla V1 Forge Sla Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Forge Sla",
+        "tags": [
+          "forge"
         ]
       }
     },

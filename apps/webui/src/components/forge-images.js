@@ -337,6 +337,12 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
                              // — la somme de ses Sparks et leur repartition. Ce
                              // qu'un Spark consomme se regarde dans sa fenetre.
                              ['#/forge/supervision', 'Supervision'],
+                             // SPK-188 · §76 : tous les SLA d'instantanés et toutes
+                             // les sondes de santé de la FORGE, en un tableau de bord
+                             // qui MÈNE au Spark. Aucun geste ici : il reste à la
+                             // fenêtre du Spark (un seul endroit pour décider).
+                             ['#/forge/sla', 'SLA'],
+                             ['#/forge/sante', 'Santé'],
                              // SPK-171 · §70.5 : ce que le SYSTÈME de la Forge
                              // attend — paquets, redémarrage, version, pools.
                              ['#/forge/mises-a-jour', 'Mises à jour'],

@@ -392,6 +392,23 @@ tbody tr:hover { background: var(--color-hover); }
 .frise__echec { fill: none; stroke: var(--color-danger); stroke-width: 2; stroke-linecap: round; }
 .frise__texte { font-size: var(--text-compact); color: var(--color-text-2); }
 
+/* SPK-188 · SPK-DS-54 : le tableau de bord de la surveillance de la Forge. Une synthèse en paires terme / valeur, et le
+   graphe de la charge de la semaine : 672 colonnes d'UN pixel, qui ne s'étirent donc jamais — c'est le conteneur qui défile. */
+.synthese { margin: 0 0 var(--space-4); display: grid; gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.synthese__item { display: grid; gap: var(--space-1); padding: var(--space-3);
+  background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.synthese__item dt { color: var(--color-text-2); font-size: var(--text-compact); }
+.synthese__item dd { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.synthese__chiffre { font-size: var(--text-h2); font-weight: 700; color: var(--color-ink);
+  font-variant-numeric: tabular-nums; }
+.graphe-defilant { max-width: 100%; overflow-x: auto; }
+.graphe-semaine { display: block; width: 672px; max-width: none; height: 78px; }
+.graphe__jour { fill: none; stroke: var(--color-border); stroke-width: 1; shape-rendering: crispEdges; }
+.graphe__colonnes { fill: none; stroke: var(--color-brand); stroke-width: 1; shape-rendering: crispEdges; }
+.graphe__etiquette { fill: var(--color-text-2); font-family: var(--font-sans); font-size: 12px; }
+.graphe__lecture { min-height: calc(var(--leading-body) * 1em); }
+
 /* --- États systématiques (§6.13) ----------------------------------------- */
 .etat-vue {
   padding: var(--space-12) var(--space-4);

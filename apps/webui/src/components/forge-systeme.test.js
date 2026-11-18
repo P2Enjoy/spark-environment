@@ -37,7 +37,8 @@ const pret = (donnees) => renderMisesAJour({ ...SYSTEME_VIDE, status: 'pret', do
 test('l’onglet existe dans les sections de la Forge, après Supervision', () => {
   const hrefs = ONGLETS_FORGE.map(([h]) => h);
   assert.ok(hrefs.includes('#/forge/mises-a-jour'));
-  assert.equal(hrefs.indexOf('#/forge/mises-a-jour'), hrefs.indexOf('#/forge/supervision') + 1);
+  // SPK-188 a inséré le SLA et la santé entre la supervision et les mises à jour : « après » reste vrai.
+  assert.ok(hrefs.indexOf('#/forge/mises-a-jour') > hrefs.indexOf('#/forge/supervision'));
 });
 
 test('le chargement et l’erreur sont des états nommés, sans bouton Relire dans l’en-tête', () => {

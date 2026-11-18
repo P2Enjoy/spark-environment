@@ -124,6 +124,38 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-50 · Le briefing d'un Spark dit la surveillance et les instantanés (SPK-187)
+
+```
+État          : APPLIQUÉ le 2026-11-19 sur spark-010 (sparkd b751ebf, par « Code déployé »). Cellule réelle relue :
+                BRIEFING.md et briefing.json portent la sonde, le compte spark-docker et le SLA. spark-experiment n'a
+                PAS reçu ce code.
+Quoi          : les clés health et snapshots du modèle du briefing, deux sections de BRIEFING.md, une section 7 bis du
+                dossier ; le briefing est réécrit après chaque geste de sonde et de SLA.
+Migration     : AUCUNE. Variables : AUCUNE.
+À redéployer  : sparkd. Les cellules existantes reçoivent le nouveau briefing à leur prochaine projection (un geste de
+                sonde, de SLA, de route, de variable…, ou le veilleur au démarrage).
+Vérifier      : ssh <spark> 'sed -n "/## Surveillance de ce Spark/,/## Proposer/p" /etc/spark/BRIEFING.md'.
+Retour arrière: redéployer le code précédent : le briefing perd les deux sections, rien n'est à défaire.
+```
+
+### OP-49 · Les onglets « SLA » et « Santé » de la Forge (SPK-188)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable. Prouvé sur la pile d'épreuve (pilote
+                factice, registre réel) ; PAS encore sur une Forge réelle.
+Quoi          : deux lectures de parc, GET /v1/forge/sla (avec la charge de la semaine) et
+                GET /v1/forge/health, et les deux onglets de la console qui les affichent.
+Migration     : AUCUNE. Lecture seule du registre ; aucune écriture, aucune ligne d'audit.
+À redéployer  : sparkd (les deux routes) et la console (les onglets).
+Variables     : AUCUNE.
+Vérifier      : Forge > SLA et Forge > Santé : les chiffres de la synthèse égalent le nombre de lignes ;
+                un lien « Ouvrir … » mène au Spark sur le bon onglet ; Relire ne change rien au journal.
+Retour arrière: redéployer le code précédent : les onglets disparaissent, rien n'est à défaire.
+Risques       : aucun connu ; la lecture parcourt les Sparks un à un dans le registre (quelques
+                requêtes par Spark), sans toucher aucune cellule.
+```
+
 ### OP-48 · Le canal SMTP des alertes hors bande (SPK-62)
 
 ```

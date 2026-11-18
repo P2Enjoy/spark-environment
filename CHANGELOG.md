@@ -3,6 +3,18 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-188 — les onglets « SLA » et « Santé » de la Forge : le tableau de bord de la surveillance.** Deux nouvelles
+  destinations de la Forge (`#/forge/sla`, `#/forge/sante`), après la Supervision, qui regroupent ce que le SLA des
+  instantanés et la santé ont posé sur **tous** les Sparks, et **mènent** au Spark sur le bon onglet (*Instantanés*,
+  *Santé*) par un lien par ligne. **Lecture seule** : un seul bouton, *Relire* ; aucun geste, qui reste dans la fenêtre du
+  Spark. Synthèse en états **exclusifs et additifs** (SLA : en échec / actifs / suspendus ; sondes : en panne / instables /
+  jamais relevées / arrêtées / saines / suspendues), tableaux du plus préoccupant au plus sain, Sparks sans SLA ou sans
+  sonde **nommés**. **La charge de la semaine** : un graphe du lundi au dimanche (UTC), une colonne d'un pixel par tranche
+  de 15 minutes, des **prises d'instantanés prévues** — pour replanifier —, avec survol lu en `aria-live`, les cinq
+  tranches les plus chargées en texte, et sans les SLA suspendus. Côté `sparkd`, `GET /v1/forge/sla` et
+  `GET /v1/forge/health` agrègent le registre (aucune cellule touchée, aucune écriture, **ni la cible ni la commande d'une
+  sonde** dans la réponse). Contrat OpenAPI et types régénérés. Manuel M8 et deux illustrations. Aucune migration,
+  **aucune variable d'environnement**. DAT §76 ; SPK-DS-54 ; OP-49.
 - **SPK-174 — désigner l'image proposée par défaut à la création.** `PUT /v1/images/{id}/default` désigne
   l'entrée par défaut, **atomiquement** (l'ancienne perd son drapeau, la nouvelle le gagne, une seule transaction),
   **idempotent** (`changed: false` sans rien écrire), réservé aux entrées **vérifiées** (le refus nomme l'état),
