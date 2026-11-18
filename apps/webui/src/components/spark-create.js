@@ -31,13 +31,32 @@ const GIO = 1024 ** 3;
 const MBIT = 1e6;
 
 export const DEFAUTS = {
-  name: '', image: 'images:debian/13', cpu_mode: 'shared',
+  // SPK-174 · DAT §69, §33.5 : l'image n'est PAS codée en dur. Vide, elle est présélectionnée à
+  // l'ouverture de l'écran depuis l'entrée par défaut du CATALOGUE (`chargerCreation`) — sans quoi
+  // désigner une autre entrée par défaut n'aurait aucun effet sur la création, une valeur métier
+  // figée dans le composant l'emportant sur le catalogue (trouvé par le parcours E2E).
+  name: '', image: '', cpu_mode: 'shared',
   cpu_reservation: 0.5, cpu_max: 0.5, cpu_cores: 1,
   memory_gib: 2, storage_gib: 10, network_mbit: 100,
   // SPK-142 · SPK-DS-37 : le plafond réseau. Il SUIT la réservation tant qu'on
   // ne l'a pas réglé — le défaut reste un plafond égal à la réservation.
   burst_mbit: 100,
 };
+
+/**
+ * L'image à présélectionner à l'ouverture de l'écran de création (DAT §33.5, §69).
+ *
+ * @spec docs/BACKLOG.md#SPK-174 · docs/DAT.md §69, §33.5
+ *
+ * Une saisie déjà faite qui figure encore parmi les images proposées est CONSERVÉE (elle survit à la
+ * navigation) ; sinon, l'entrée par défaut du catalogue, sinon la première proposée. `''` quand
+ * rien n'est proposé : l'écran le dit, il n'invente pas une image.
+ */
+export function imagePreselectionnee(images, courante) {
+  if (!images?.length) return '';
+  if (images.some((i) => i.reference === courante)) return courante;
+  return (images.find((i) => i.is_default) ?? images[0]).reference;
+}
 
 /** Noms de ressources rendus en français. Une valeur technique brute ne doit
  *  pas atteindre l'écran (docs/DESIGN_SYSTEM.md §14.7). */

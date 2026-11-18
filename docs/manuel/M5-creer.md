@@ -117,11 +117,28 @@ l'emploient déjà ne sont pas touchés, et l'entrée se recoche depuis le dép�
 
 Deux retraits sont refusés, et l'écran dit lequel s'applique :
 
-- **l'image proposée par défaut** ne peut pas être retirée. Le produit n'offre
-  pas encore de geste pour en désigner une autre ;
+- **l'image proposée par défaut** ne peut pas être retirée tant qu'elle l'est : le
+  refus vous dit de **désigner une autre image par défaut**, puis de retirer celle-ci
+  (voir plus bas) ;
 - **une image qu'un Spark emploie** ne peut pas l'être non plus, et le refus
   **nomme** les Sparks concernés. Le catalogue est ce qui explique sur quoi vos
   cellules tournent ; le retirer effacerait cette explication.
+
+### Choisir l'image proposée par défaut
+
+L'écran de création présélectionne **l'image par défaut** du catalogue — celle qui
+porte la pastille *Par défaut*. Pour en changer, cliquez *Définir par défaut* sur la
+ligne voulue : l'écran vous confirme ce que la Forge a retenu, et la pastille change
+de ligne. Il n'y a **qu'une seule** image par défaut à la fois.
+
+- seule une image **vérifiée** peut l'être — une image absente du dépôt ou pas
+  encore relevée n'est pas proposée à la création, elle n'a donc pas ce bouton ;
+- si l'image est déjà celle par défaut, la Forge le dit et ne change rien ;
+- le geste se **défait** par le même geste, sur l'ancienne ligne : il ne détruit rien
+  et ne donne aucun accès, c'est pourquoi il ne demande ni confirmation ni alerte
+  hors bande ;
+- c'est ce qui rend l'ancienne image par défaut **retirable** : désignez-en une autre,
+  puis retirez-la (si aucun Spark ne l'emploie).
 
 ### Ce catalogue n'est pas un registre d'images
 

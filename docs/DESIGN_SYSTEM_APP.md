@@ -413,6 +413,30 @@ liste une ligne par canal — `Webhook — veille · envoyées N · en échec M`
 sont pas parties · … · dernier motif : …` (classe `.detail-canaux`) — et l'agrégat préfixe le motif de son
 canal. Un agrégat qui dirait « tout est parti » quand l'un des deux est muet mentirait (§14.6).
 
+### SPK-DS-53 · Désigner l'image par défaut : un bouton par ligne vérifiée, empilé avec « Retirer »
+
+Date : 2026-11-18 · `docs/DAT.md` §69 · `docs/DESIGN_SYSTEM.md` §1.3, §1.4, §6.24, §9.9, §14.9.
+
+**La ligne par défaut porte la pastille « Par défaut »** (neutre, en texte : la couleur ne porte pas seule),
+et **aucun bouton** pour le redevenir. **Toute autre ligne `verified`** porte **« Définir par défaut »**, nommé
+pour le lecteur d'écran (« Définir Alpine 3.21 comme image par défaut »). **Les lignes `missing` et `unknown`
+n'ont pas ce bouton** : ce n'est pas une commande morte (§1.4), c'est un geste dont l'objet n'existe pas — la
+création ne les propose pas. « Retirer » reste sur toutes les lignes : le serveur refuse pour l'entrée par défaut
+et **dit la sortie**.
+
+**L'état et sa commande occupent le même emplacement : sous le nom de l'image.** La pastille sur la ligne par
+défaut, le bouton sur toute autre ligne `verified`. Le bouton n'est **pas** dans la colonne des actions : à côté
+de « Retirer » il élargissait le tableau jusqu'à rogner « Retirer » à 1280 et 1440 px — vu en capture, deux
+dispositions essayées (côte à côte, puis empilés dans la cellule) avant de retenir celle-ci.
+
+**Après le geste, l'écran montre l'état relu** (§1.3) : une phrase `role="status"` au-dessus du tableau —
+« « images:almalinux/9 » est désormais l'image proposée par défaut à la création. » — qui **reçoit le focus**,
+le bouton ayant disparu de la ligne. Un refus s'affiche mot pour mot, en alerte, au même endroit. Déjà par
+défaut : « était déjà l'image proposée par défaut » — le serveur a répondu `changed: false`, rien n'a été écrit.
+
+**La création suit.** L'écran de création **ne fige aucune image** : sa valeur initiale est vide, et l'image
+présélectionnée vient de l'entrée par défaut du catalogue — une saisie déjà faite, encore proposée, est conservée.
+
 ### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
 
 Les mesures d'un Spark viennent du runtime et se comparent à ses quotas

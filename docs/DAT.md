@@ -5033,11 +5033,9 @@ le retrait, ce qui est faux.
    jamais existé — exactement ce que le §33.3 interdit déjà pour une entrée
    `missing`.
 
-**Limite connue, assumée par cette décision** : désigner une *autre* entrée par
-défaut n'est pas un geste existant — `is_default` n'est posé que par le
-pré-renseignement. L'entrée par défaut n'est donc retirable par personne
-aujourd'hui. Cette décision ne l'ouvre pas ; elle le note, plutôt que de laisser
-croire que le refus est temporaire.
+Le premier refus **dit sa sortie** : on désigne une autre entrée par défaut (§69), puis on retire
+celle-ci. *(Limite levée par SPK-174, le 2026-11-18 : avant, `is_default` n'était posé que par le
+pré-renseignement et l'entrée par défaut n'était retirable par personne.)*
 
 
 ## 34. L'architecture de navigation de la console
@@ -17486,11 +17484,17 @@ issue. Le §33.7 le notait comme limite connue.
 
 ### 69.3 L'écran
 
-Dans le catalogue (SPK-DS-45) : la ligne par défaut porte une pastille « Par défaut » ;
+Dans le catalogue (SPK-DS-53) : la ligne par défaut porte une pastille « Par défaut » ;
 chaque autre ligne `verified` porte « Définir par défaut ». Les lignes `missing` et
 `unknown` n'ont pas le bouton : ce n'est pas une commande morte (§1.4), c'est un geste
 dont l'objet n'existe pas pour elles. Après le geste, l'écran montre l'état **relu**
 (§1.3).
+
+**La création suit, et c'est un défaut trouvé par le parcours E2E.** L'écran de création portait
+`images:debian/13` en dur comme valeur initiale ; tant que cette entrée était proposée, le défaut du
+catalogue n'était jamais consulté, et désigner une autre entrée n'aurait eu **aucun effet** sur la
+présélection. La valeur initiale est désormais vide ; `imagePreselectionnee` choisit : la saisie déjà
+faite si elle est encore proposée, sinon l'entrée par défaut du catalogue, sinon la première.
 
 ### 69.4 Le refus du retrait
 

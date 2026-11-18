@@ -15993,3 +15993,17 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **Reste** : un courriel reçu d'une vraie Forge par un vrai destinataire — d'où `[~]`. Décisions à confirmer :
   DAT §47.3.2 point 8.
 
+**SPK-174 : livraison de la désignation de l'image par défaut, le 2026-11-18.**
+
+- **Défaut trouvé par le parcours E2E, pas par le service** : le service désignait correctement, mais l'écran de
+  création portait `images:debian/13` en dur comme valeur initiale. Tant que cette entrée était proposée, le défaut
+  du catalogue n'était jamais consulté — désigner une autre image n'aurait changé **aucune** création. Le contrat
+  disait « sert de présélection » (§33.5) ; le code ne le faisait que si l'entrée figée disparaissait. La valeur
+  initiale est vide, et `imagePreselectionnee` choisit.
+- **Une référence fausse dans mon propre contrat** : le §69.3 citait « SPK-DS-45 » pour le catalogue ; c'est l'entrée
+  des signataires. Corrigé : SPK-DS-53, créée pour ce geste.
+- **Mise en page vue en capture** : deux boutons par ligne, côte à côte, rognaient « Retirer » à 1440 px ; empilés.
+- **Pour « 32, 92 » du `/goal`** : SPK-32 (le catalogue) et SPK-92 (le dépôt coché, le retrait) étaient déjà `[x]`.
+  La seule chose encore ouverte du catalogue était SPK-174, qui lève la limite que le §33.7 laissait ouverte — c'est
+  ce que j'ai livré sous ces numéros, faute d'une autre lecture qui tienne.
+

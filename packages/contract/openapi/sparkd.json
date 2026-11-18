@@ -889,6 +889,51 @@
         ]
       }
     },
+    "/v1/images/{image_id}/default": {
+      "put": {
+        "description": "Désigne l'image proposée par défaut à la création (docs/DAT.md §69, SPK-174).\n\nIdempotent, sans corps. Seule une entrée `verified` peut l'être ; le refus nomme\nl'état. La règle est celle du serveur : le bouton de l'écran n'en est que l'aide.",
+        "operationId": "set_default_image_v1_images__image_id__default_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Default Image V1 Images  Image Id  Default Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Default Image",
+        "tags": [
+          "images"
+        ]
+      }
+    },
     "/v1/ingress": {
       "get": {
         "operationId": "list_routes_v1_ingress_get",

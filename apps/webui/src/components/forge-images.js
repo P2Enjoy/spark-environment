@@ -125,7 +125,17 @@ function renderLigne(image, ui) {
   const { label, token, sens } = etatOf(image.state);
   const ligne = `<tr>
   <td class="cellule-nom">${echapper(image.label)}${
-    image.is_default ? ' <span class="badge badge--neutral">par défaut</span>' : ''}</td>
+    /* SPK-174 · §69.3 : l'état « par défaut » et sa commande occupent le MÊME emplacement, sous le nom :
+       la pastille sur la ligne qui l'est, le bouton sur toute autre ligne VÉRIFIÉE. Pour une entrée
+       absente ou non relevée, ce n'est pas une commande morte (§1.4) : son objet n'existe pas, la
+       création ne les propose pas. Le bouton n'est PAS dans la colonne des actions : il l'élargissait
+       jusqu'à rogner « Retirer » à 1280 et 1440 px (vu en capture). */
+    image.is_default
+      ? '<div><span class="badge badge--neutral">Par défaut</span></div>'
+      : (image.state === 'verified'
+        ? `<div><button type="button" class="bouton bouton--compact" data-defaut="${echapper(image.id)}"
+      aria-label="Définir ${echapper(image.label)} comme image par défaut">Définir par défaut</button></div>`
+        : '')}</td>
   <td class="technique cellule-dense">${echapper(image.reference)}</td>
   <td><span class="badge badge--${token}" title="${echapper(sens)}">` +
     `<span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span></td>
@@ -209,6 +219,9 @@ export const CATALOGUE_VIDE = {
   // §33.7 : le retrait se confirme DANS le flux, ligne par ligne. On retient
   // donc quelle ligne est en cours de confirmation, et le refus qu'elle a reçu.
   retrait: null, retraitRefus: null,
+  // SPK-174 · DAT §69.3 : le résultat du dernier « Définir par défaut » — le refus mot pour mot, ou la
+  // phrase qui confirme ce que le serveur a RELU (jamais un succès simulé, design system §1.3).
+  defautRefus: null, defautInfo: null,
 };
 
 /** Vue complète du catalogue. */
@@ -267,6 +280,8 @@ export function renderCatalogue({ status = 'loading', images = [], error = null,
 </header>
 <section class="carte bloc" aria-labelledby="titre-catalogue">
   <h2 id="titre-catalogue">Catalogue</h2>
+  ${ui.defautRefus ? `<p class="refus" role="alert">${echapper(ui.defautRefus)}</p>` : ''}
+  ${ui.defautInfo ? `<p class="succes" role="status" tabindex="-1" data-defaut-info>${echapper(ui.defautInfo)}</p>` : ''}
   ${corps}
   ${(compte.missing || compte.unknown)
     ? `<p class="avertissement" role="status">${

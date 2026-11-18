@@ -581,6 +581,21 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=422, detail={
                     "error": "invalid_image", "message": str(erreur)}) from erreur
 
+    @app.put("/v1/images/{image_id}/default", tags=["images"])
+    def set_default_image(image_id: str) -> dict:
+        """Désigne l'image proposée par défaut à la création (docs/DAT.md §69, SPK-174).
+
+        Idempotent, sans corps. Seule une entrée `verified` peut l'être ; le refus nomme
+        l'état. La règle est celle du serveur : le bouton de l'écran n'en est que l'aide.
+        """
+        with registry() as connection:
+            try:
+                return images_service.set_default(
+                    connection, image_id, audit_service.current_actor()[0])
+            except images_service.ImageError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_image", "message": str(erreur)}) from erreur
+
     @app.post("/v1/images/verify", tags=["images"])
     def verify_images() -> dict:
         """Releve explicite et date (docs/DAT.md §33.3).

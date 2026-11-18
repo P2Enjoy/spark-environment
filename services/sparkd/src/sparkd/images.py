@@ -754,15 +754,15 @@ def remove(
         raise ImageError("Cette image n'est pas au catalogue.")
 
     # L'entrée par défaut est examinée EN PREMIER, et l'ordre porte du sens :
-    # son refus est structurel — personne ne peut la retirer aujourd'hui —, là
-    # où la liste des Sparks décrit une situation qui, elle, peut changer.
+    # son refus est structurel — il faut d'abord en désigner une autre (SPK-174,
+    # `set_default`) —, là où la liste des Sparks décrit une situation qui, elle,
+    # peut changer.
     # Nommer d'abord les Sparks laisserait croire qu'en les supprimant on
     # débloquerait le retrait, ce qui est faux.
     if entree["is_default"]:
         raise ImageError(
             f"« {entree['reference']} » est l'image proposée par défaut à la "
-            "création. Le produit n'offre pas encore de geste pour en désigner "
-            "une autre : elle n'est donc pas retirable."
+            "création. Désignez-en une autre par défaut, puis retirez celle-ci."
         )
 
     porteurs = [
@@ -787,3 +787,47 @@ def remove(
                target_type="image", target_id=identifiant,
                payload={"reference": entree["reference"]})
     return entree
+
+
+def set_default(
+    connection: sqlite3.Connection,
+    identifiant: str,
+    actor: str | None = None,
+) -> dict:
+    """Désigne l'entrée proposée par défaut à la création (DAT §69.2, SPK-174).
+
+    @spec docs/BACKLOG.md#SPK-174 · docs/DAT.md §69 (le geste), §33.5 (la
+          présélection), §33.7 (le retrait de l'ancienne entrée devient possible)
+
+    **Atomique** : l'ancienne entrée perd son drapeau et la nouvelle le gagne dans
+    UNE transaction — un instant sans défaut, ou avec deux, ne doit jamais être lisible.
+    **Seule une entrée `verified` peut l'être** : le défaut est une présélection de
+    création, et une entrée `missing` ou `unknown` n'est pas proposée à la création
+    (§33.3). **Idempotent, sans succès simulé** : déjà par défaut, `changed` vaut
+    `False` et rien n'est écrit ni journalisé (design system §1.3).
+    """
+    entree = by_id(connection, identifiant)
+    if entree is None:
+        raise ImageError("Cette image n'est pas au catalogue.")
+    if entree["state"] != VERIFIED:
+        raise ImageError(
+            f"« {entree['reference']} » est à l'état {entree['state']} : seule une image "
+            "vérifiée peut être proposée par défaut, car la création ne propose que celles-là."
+        )
+    if entree["is_default"]:
+        return {"changed": False, "image": entree}
+
+    ancienne = connection.execute(
+        "SELECT reference FROM image_catalog WHERE is_default = 1 AND id != ?",
+        (identifiant,),
+    ).fetchone()
+    with transaction(connection):
+        connection.execute("UPDATE image_catalog SET is_default = 0 WHERE is_default = 1")
+        connection.execute("UPDATE image_catalog SET is_default = 1 WHERE id = ?", (identifiant,))
+        de = f" (à la place de « {ancienne['reference']} »)" if ancienne else ""
+        _audit(connection, actor, "image.default", "ok",
+               f"Image par défaut : « {entree['reference']} »{de}.",
+               target_type="image", target_id=identifiant,
+               payload={"reference": entree["reference"],
+                        "previous": ancienne["reference"] if ancienne else None})
+    return {"changed": True, "image": by_id(connection, identifiant)}

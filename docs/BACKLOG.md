@@ -9227,7 +9227,7 @@ ligne des totaux face à ce que la Forge a au total. Arbitrages du jour : la for
   alloue 92 % du CPU partagé (voir le journal du 2026-11-18). Le manuel est M8 (« Lire les
   mesures »).
 
-### [ ] SPK-174 · Désigner l'image proposée par défaut à la création
+### [~] SPK-174 · Désigner l'image proposée par défaut à la création
 
 **Demandé le 2026-11-18** par le responsable, en lisant le refus de retrait du catalogue :
 « « images:debian/13 » est l'image proposée par défaut à la création. Le produit n'offre
@@ -9237,7 +9237,7 @@ pré-renseignement, donc l'entrée par défaut n'est retirable par personne.
 
 - Spécification : `docs/DAT.md` **§69** · §33.5 (la présélection à la création), §33.7
   (les deux refus du retrait) · `docs/DESIGN_SYSTEM.md` §1.3, §1.4, §6.24, §9.9, §14.9 ·
-  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-45 · manuel M5 · `docs/JOURNAL.md` 2026-11-18.
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-53 · manuel M5 · `docs/JOURNAL.md` 2026-11-18.
 - Dépend de : SPK-32 (le catalogue), SPK-92 (le retrait et ses refus).
 - Portée : `PUT /v1/images/{id}/default` désigne l'entrée par défaut, atomiquement ; un
   bouton « Définir par défaut » par ligne du catalogue, sur les entrées `verified` ; le
@@ -9250,6 +9250,18 @@ pré-renseignement, donc l'entrée par défaut n'est retirable par personne.
   composant), API contre le vrai registre — y compris un refus par requête directe —, E2E
   depuis l'accueil (Forge → Images → désigner → retirer l'ancienne) ; captures observées ;
   manuel M5, DAT §33.7, README si concerné, seed et changelog à jour.
+
+**État (2026-11-18) : livré, `[~]`.** Prouvé : 14 tests de service et d'API contre le vrai registre
+(`test_image_defaut.py` : atomicité sous panne d'audit, une seule entrée par défaut, idempotence sans écriture,
+refus `missing`/`unknown`/inconnue par requête directe, journal `image.default`, pas d'alerte hors bande, retrait
+de l'ancienne entrée possible ensuite) ; 12 tests de composant (bouton seulement sur une entrée vérifiée,
+pastille, refus, phrase annoncée ; présélection de la création) ; parcours E2E depuis l'accueil, au clavier
+(désigner → la pastille change de ligne → la création présélectionne la nouvelle entrée → le retrait de l'ancienne
+n'est plus refusé pour cette raison → requêtes directes refusées → la pile est remise dans l'état du seed) ;
+captures desktop et mobile observées. **Défauts trouvés par le parcours et corrigés** : l'écran de création
+figeait `images:debian/13`, donc le défaut du catalogue n'avait aucun effet ; les deux boutons côte à côte
+rognaient « Retirer » à 1440 px. **Non prouvé** : sur une Forge réelle (le catalogue y est relevé sur le vrai
+dépôt).
 
 ### [~] SPK-179 · Le domaine d'une route est un lien, ouvert dans un nouvel onglet
 

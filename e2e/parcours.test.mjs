@@ -2768,6 +2768,88 @@ test('retirer une image libre aboutit, et la retire de la création', async () =
   });
 });
 
+// --- SPK-174 · DÉSIGNER L'IMAGE PAR DÉFAUT (docs/DAT.md §69) ---------------------------------
+
+test('désigner une autre image par défaut : la présélection suit, et l’ancienne cesse d’être protégée', async () => {
+  await parcours('image-defaut', async () => {
+    // @verifies docs/BACKLOG.md#SPK-174 · docs/DAT.md §69 (le geste, l'écran, le refus qui dit sa sortie),
+    //           §33.5 (la présélection à la création) · docs/DESIGN_SYSTEM_APP.md SPK-DS-53
+    await allerAuCatalogue();
+    const depart = (await pile.lireSparkd('/v1/images')).corps.images;
+    const origine = depart.find((i) => i.is_default);
+    const cible = depart.find((i) => i.state === 'verified' && !i.is_default);
+    assert.ok(origine && origine.state === 'verified', 'le point de départ : le défaut est vérifié');
+    assert.ok(cible, 'le seed offre une autre entrée vérifiée à désigner');
+
+    // Une entrée qui n'est pas vérifiée n'a pas le bouton : son objet n'existe pas (§69.3).
+    for (const autre of depart.filter((i) => i.state !== 'verified')) {
+      assert.equal(await page.locator(`tr:has-text("${autre.reference}") [data-defaut]`).count(), 0, autre.reference);
+    }
+    assert.equal(await page.locator(`tr:has-text("${origine.reference}") [data-defaut]`).count(), 0,
+      'la ligne par défaut n’a pas de bouton pour le redevenir');
+    await capturer('spk174-defaut-avant', { hauteur: 900 });
+
+    // --- AU CLAVIER : le bouton se focalise, Entrée désigne ------------------------------------------
+    await page.locator(`tr:has-text("${cible.reference}") [data-defaut]`).focus();
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('[data-defaut-info]', { timeout: 15000 });
+    assert.match(await page.textContent('[data-defaut-info]'), new RegExp(`${cible.reference}.*désormais`));
+    assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-defaut-info')), true,
+      'le focus va à la phrase qui confirme — le bouton a disparu de la ligne');
+    // L'écran montre l'état RELU : la pastille a changé de ligne.
+    assert.match(await page.textContent(`tr:has-text("${cible.reference}")`), /Par défaut/);
+    assert.doesNotMatch(await page.textContent(`tr:has-text("${origine.reference}")`), /Par défaut/);
+    assert.equal(await page.locator(`tr:has-text("${origine.reference}") [data-defaut]`).count(), 1,
+      'l’ancienne entrée peut maintenant être redésignée');
+    const apres = (await pile.lireSparkd('/v1/images')).corps.images;
+    assert.deepEqual(apres.filter((i) => i.is_default).map((i) => i.reference), [cible.reference],
+      'une et une seule entrée par défaut, côté serveur');
+    await capturer('spk174-defaut-apres', { hauteur: 900 });
+    await capturer('spk174-defaut-apres-mobile', { largeur: 390, hauteur: 1800 });
+
+    // --- la présélection de la création suit (§33.5) ----------------------------------------------------
+    // Une session NEUVE : une saisie déjà faite dans l'écran de création survit à la navigation, et
+    // l'emporterait sur la présélection — qui ne joue que pour une entrée encore jamais choisie.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await accueil();
+    await page.click('.titre-vue .bouton--primaire');
+    await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
+    assert.equal(await page.inputValue('#image'), cible.reference, 'la création présélectionne la nouvelle entrée');
+
+    // --- le refus du retrait DIT sa sortie, et l'ancien défaut n'est plus refusé pour cette raison ----------
+    await allerAuCatalogue();
+    await page.click(`tr:has-text("${origine.reference}") [data-retire]`);
+    await page.click('[data-confirme-retrait]');
+    await page.waitForFunction(
+      () => document.querySelector('.confirmation--sensible .refus, tr.ligne-retrait') === null
+        || document.querySelector('.confirmation--sensible .refus'), { timeout: 15000 }).catch(() => {});
+    const refus = await page.locator('.confirmation--sensible .refus').count()
+      ? await page.innerText('.confirmation--sensible .refus') : '';
+    assert.doesNotMatch(refus, /proposée par défaut/, 'le premier refus ne s’applique plus à l’ancienne entrée');
+    if (refus) assert.match(refus, /employée par/, 'reste le second refus, qui nomme les Sparks');
+    await page.click('[data-annule-retrait]').catch(() => {});
+
+    // --- la règle est celle du SERVEUR : une requête directe est refusée (CLAUDE.md §10) -------------------
+    const inconnue = await pile.ecrireSparkd('/v1/images/00000000000000000000000000000000/default', null, 'PUT');
+    assert.equal(inconnue.status, 422);
+    const nonVerifiee = depart.find((i) => i.state !== 'verified');
+    if (nonVerifiee) {
+      const direct = await pile.ecrireSparkd(`/v1/images/${nonVerifiee.id}/default`, null, 'PUT');
+      assert.equal(direct.status, 422);
+      assert.match(direct.corps.detail.message, new RegExp(nonVerifiee.state));
+    }
+    assert.deepEqual((await pile.lireSparkd('/v1/images')).corps.images.filter((i) => i.is_default)
+      .map((i) => i.reference), [cible.reference], 'les refus ne changent rien');
+
+    // --- ON REMET la pile dans l'état du seed (§29.2) -------------------------------------------------------
+    await allerAuCatalogue();
+    await page.click(`tr:has-text("${origine.reference}") [data-defaut]`);
+    await page.waitForSelector('[data-defaut-info]', { timeout: 15000 });
+    assert.deepEqual((await pile.lireSparkd('/v1/images')).corps.images.filter((i) => i.is_default)
+      .map((i) => i.reference), [origine.reference], 'la pile est rendue dans l’état du seed');
+  });
+});
+
 // --- LE CONTRAT CLAVIER DES TROIS DEGRÉS (SPK-33, §5.4, §9.1) --------------
 
 test('les trois degrés s’atteignent au clavier, et annoncent où l’on est', async () => {

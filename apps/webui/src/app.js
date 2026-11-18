@@ -36,7 +36,7 @@ import { DOCKER_VIDE } from './components/spark-docker.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL, COMPTE_ADMIN, destinationPorteSession }
   from './components/spark-terminal.js';
 import { INVENTAIRE_VIDE, renderSessionRegistry } from './components/session-registry.js';
-import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
+import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS, imagePreselectionnee }
   from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zonePour,
          renderVerification, refusEcritureRecette, cleApercuRecette, apercuAJour }
@@ -3715,10 +3715,9 @@ async function chargerCreation() {
     // a trouvées sont proposées (docs/DAT.md §33.5).
     const catalogue = await api('/v1/images').catch(() => ({ images: [] }));
     etat.creation.images = (catalogue.images ?? []).filter((i) => i.state === 'verified');
-    if (etat.creation.images.length && !etat.creation.images
-        .some((i) => i.reference === etat.creation.values.image)) {
-      const defaut = etat.creation.images.find((i) => i.is_default) ?? etat.creation.images[0];
-      etat.creation.values.image = defaut.reference;
+    // SPK-174 : l'entrée par défaut du CATALOGUE décide — aucune image n'est figée dans le composant.
+    if (etat.creation.images.length) {
+      etat.creation.values.image = imagePreselectionnee(etat.creation.images, etat.creation.values.image);
     }
     const forge = await api('/v1/forge');
     etat.creation.pools = forge.pools;
@@ -6042,6 +6041,26 @@ function brancherRetraitImage() {
       // §14.3 : le déclencheur disparaît sous la confirmation qui s'ouvre. Le
       // focus va donc DANS la confirmation, jamais laissé au hasard.
       racine.querySelector('[data-confirme-retrait]')?.focus();
+    });
+  }
+  // SPK-174 · DAT §69 : désigner l'image proposée par défaut. Le serveur décide (une entrée
+  // vérifiée seulement) ; l'écran montre l'état RELU, et le refus mot pour mot.
+  for (const bouton of racine.querySelectorAll('[data-defaut]')) {
+    bouton.addEventListener('click', async () => {
+      const identifiant = bouton.dataset.defaut;
+      ui.defautRefus = null;
+      ui.defautInfo = null;
+      const { ok, corps } = await appel('PUT', `/v1/images/${encodeURIComponent(identifiant)}/default`);
+      if (!ok) {
+        ui.defautRefus = corps?.detail?.message ?? corps?.message ?? 'Le serveur a refusé cette désignation.';
+        return peindre();
+      }
+      await chargerCatalogue();
+      ui.defautInfo = corps?.changed
+        ? `« ${corps.image?.reference} » est désormais l’image proposée par défaut à la création.`
+        : `« ${corps.image?.reference} » était déjà l’image proposée par défaut.`;
+      peindre();
+      racine.querySelector('[data-defaut-info]')?.focus();
     });
   }
   racine.querySelector('[data-annule-retrait]')?.addEventListener('click', () => {

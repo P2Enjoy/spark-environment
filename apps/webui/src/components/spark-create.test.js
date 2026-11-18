@@ -553,3 +553,35 @@ test('le plafond se borne au LIEN, pas au pool surengagé', () => {
   assert.equal(borneHaute('burst_mbit', contexte), 1000);
   assert.equal(borneHaute('network_mbit', contexte), 2000);
 });
+
+
+// --- SPK-174 · DAT §69, §33.5 : la présélection vient du CATALOGUE, pas du composant --------------
+
+import { imagePreselectionnee } from './spark-create.js';
+
+const PROPOSEES = [
+  { reference: 'images:debian/13', is_default: 0 },
+  { reference: 'images:alpine/3.21', is_default: 1 },
+];
+
+test('aucune image n’est figée dans le composant : le défaut de saisie est vide', () => {
+  assert.equal(DEFAUTS.image, '');
+});
+
+test('une saisie vide reçoit l’entrée par défaut du catalogue — celle qu’on a DÉSIGNÉE', () => {
+  assert.equal(imagePreselectionnee(PROPOSEES, ''), 'images:alpine/3.21');
+});
+
+test('une saisie déjà faite et encore proposée est conservée', () => {
+  assert.equal(imagePreselectionnee(PROPOSEES, 'images:debian/13'), 'images:debian/13');
+});
+
+test('une saisie qui n’est plus proposée retombe sur le défaut du catalogue', () => {
+  assert.equal(imagePreselectionnee(PROPOSEES, 'images:retiree/1'), 'images:alpine/3.21');
+});
+
+test('sans entrée par défaut, la première proposée ; sans rien proposé, rien n’est inventé', () => {
+  assert.equal(imagePreselectionnee([{ reference: 'images:a/1' }, { reference: 'images:b/2' }], ''), 'images:a/1');
+  assert.equal(imagePreselectionnee([], 'images:debian/13'), '');
+  assert.equal(imagePreselectionnee(undefined, ''), '');
+});

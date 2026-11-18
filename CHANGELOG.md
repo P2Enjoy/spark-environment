@@ -3,6 +3,15 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-174 — désigner l'image proposée par défaut à la création.** `PUT /v1/images/{id}/default` désigne
+  l'entrée par défaut, **atomiquement** (l'ancienne perd son drapeau, la nouvelle le gagne, une seule transaction),
+  **idempotent** (`changed: false` sans rien écrire), réservé aux entrées **vérifiées** (le refus nomme l'état),
+  journalisé `image.default`, sans confirmation ni alerte hors bande. Le catalogue porte la pastille « Par défaut »
+  et un bouton **« Définir par défaut »** sur chaque ligne vérifiée, l'écran montre l'état relu ; **le refus du
+  retrait de l'entrée par défaut dit sa sortie** (« Désignez-en une autre par défaut, puis retirez celle-ci »). La
+  limite connue du §33.7 disparaît. **Corrigé avec elle** : l'écran de création figeait `images:debian/13` — le
+  défaut du catalogue n'avait donc aucun effet sur la présélection. Manuel M5. Aucune migration, aucune variable
+  d'environnement. DAT §69 ; SPK-DS-53.
 - **SPK-62 — le second canal d'alerte hors bande : le courriel (SMTP), et la preuve que les deux sont indépendants.**
   Un **canal courriel** aux côtés du webhook, réglé depuis **Forge → Alertes** : serveur, port, chiffrement
   (**STARTTLS**, **TLS implicite**, ou **Aucun** pour un relais interne sans compte), compte facultatif et son mot

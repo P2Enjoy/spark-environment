@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-174 · docs/DAT.md §69.3 (la pastille « Par défaut », le bouton
+ *           « Définir par défaut » seulement sur une entrée vérifiée), §69.4 · design system §1.3, §1.4
  * @verifies docs/BACKLOG.md#SPK-32, docs/BACKLOG.md#SPK-33 ·
  *           docs/DAT.md §33.2, §33.3 (les trois états, la date), §33.4,
  *           §34.1 (l'onglet Images), §26.2 (la saisie passe par une modale) ·
@@ -232,3 +234,56 @@ test('un catalogue plus ancien que ce code ne PRÉTEND rien', () => {
   assert.equal(renderCapacites({ reference: 'images:debian/13' }),
                '<span class="note">—</span>');
 });
+
+
+// --- SPK-174 · DAT §69 : désigner l'image proposée par défaut -------------------------------------
+
+const VERIFIEES = [
+  { id: 'a', reference: 'images:debian/13', label: 'Debian 13', state: 'verified', is_default: 1,
+    verified_at: '2026-08-19T09:45:00', detail: '' },
+  { id: 'b', reference: 'images:alpine/3.21', label: 'Alpine 3.21', state: 'verified', is_default: 0,
+    verified_at: '2026-08-19T09:45:00', detail: '' },
+  { id: 'c', reference: 'images:debian/31', label: 'Inexistante', state: 'missing', is_default: 0,
+    verified_at: '2026-08-19T09:45:00', detail: '' },
+  { id: 'd', reference: 'images:fedora/41', label: 'Fedora 41', state: 'unknown', is_default: 0,
+    verified_at: null, detail: '' },
+];
+const vue = (extra = {}) => renderCatalogue({ status: 'ready', images: VERIFIEES, ui: ui(extra) });
+const ligneDe = (html, id) => html.slice(html.indexOf('<tr>', html.indexOf(`data-retire="${id}"`) - 900),
+                                          html.indexOf('</tr>', html.indexOf(`data-retire="${id}"`)));
+
+test('la ligne par défaut porte la pastille « Par défaut » et AUCUN bouton pour le redevenir', () => {
+  const ligne = ligneDe(vue(), 'a');
+  assert.match(ligne, /badge badge--neutral">Par défaut</);
+  assert.doesNotMatch(ligne, /data-defaut=/);
+});
+
+test('une entrée VÉRIFIÉE qui n’est pas par défaut porte « Définir par défaut », nommé pour le lecteur d’écran', () => {
+  const ligne = ligneDe(vue(), 'b');
+  assert.match(ligne, /data-defaut="b"[^>]*aria-label="Définir Alpine 3\.21 comme image par défaut">Définir par défaut</);
+  assert.doesNotMatch(ligne, /Par défaut</);
+});
+
+test('une entrée absente ou non relevée n’a PAS le bouton : son objet n’existe pas, ce n’est pas une commande morte', () => {
+  for (const id of ['c', 'd']) assert.doesNotMatch(ligneDe(vue(), id), /data-defaut=/, id);
+});
+
+test('« Retirer » reste présent sur toutes les lignes, y compris celle par défaut (le serveur refuse et dit la sortie)', () => {
+  for (const id of ['a', 'b', 'c', 'd']) assert.match(ligneDe(vue(), id), new RegExp(`data-retire="${id}"`));
+});
+
+test('le refus du serveur s’affiche mot pour mot, en alerte', () => {
+  const html = vue({ defautRefus: '« images:debian/31 » est à l’état missing : seule une image vérifiée peut l’être.' });
+  assert.match(html, /class="refus" role="alert">« images:debian\/31 » est à l’état missing/);
+});
+
+test('la phrase de succès est annoncée (role=status) et focalisable, et dit ce que le serveur a relu', () => {
+  const html = vue({ defautInfo: '« images:alpine/3.21 » est désormais l’image proposée par défaut à la création.' });
+  assert.match(html, /role="status" tabindex="-1" data-defaut-info>« images:alpine\/3\.21 » est désormais/);
+});
+
+test('sans geste, ni refus ni succès ne s’affichent', () => {
+  const html = vue();
+  assert.doesNotMatch(html, /data-defaut-info|class="refus"/);
+});
+
