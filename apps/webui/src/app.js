@@ -15,6 +15,8 @@
  */
 
 import { renderSparksView } from './components/sparks-view.js';
+import { SLA_VIDE, valeursDe as valeursSla, corpsDe as corpsSla, presetPour, PERSONNALISEE,
+         renderZoneApercu, engagementSla, detruit as detruitSla } from './components/sla-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE, valeursDesQuotas,
   corpsDesQuotas } from './components/spark-detail.js';
 import { IDENTITE_VIDE } from './components/spark-identity.js';
@@ -92,6 +94,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null, forgeListe
                // AU MOMENT DE L'OUVERTURE — pas des champs vides qui feraient
                // saisir de mémoire ce qui est déjà à l'écran.
                quotas: { ...QUOTAS_VIDE, values: { ...QUOTAS_VIDE.values } },
+               // SPK-183 · §74.10 : la modale du SLA a son propre état, comme les quotas — son
+               // SUJET est la section, pas les panneaux d'administration (§6.27).
+               sla: { ...SLA_VIDE, values: { ...SLA_VIDE.values } },
                // SPK-58 · §43 : l'état de la facette Environnement.
                envUi: { ...ENV_VIDE, values: { ...ENV_VIDE.values } },
                // SPK-97 · §43.10 : la modale d'import, partagée par l'écran de
@@ -365,6 +370,7 @@ function peindre() {
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
                             confirming: etat.confirming, frappe: etat.frappe,
                             admin: etat.admin, quotas: etat.quotas,
+                            slaUi: etat.sla, fuseau: fuseauDuNavigateur(),
                             envUi: etat.envUi, envImport: etat.envImport,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
@@ -665,6 +671,7 @@ function brancher() {
     racine.querySelector('#titre-ressources')?.focus();
   });
   brancherPanneaux();
+  brancherSla();
   brancherTerminal();
   brancherAmorcage();
   // §6.27 : le contrat de la modale est tenu à UN SEUL endroit — focus entrant,
@@ -693,6 +700,10 @@ function brancher() {
       // afficherait une surface que l'utilisateur croit avoir refermée.
       etat.quotas.open = false;
       etat.quotas.refusal = null;
+      // SPK-183 : la modale du SLA suit le MÊME contrat. L'oublier ici la laisserait ouverte après
+      // « Échap » : la repeinte trouverait `open` encore posé et rappellerait `showModal()`.
+      etat.sla.open = false;
+      etat.sla.refusal = null;
       // SPK-58 : la facette Environnement suit le MÊME contrat, et l'oublier
       // ici RÉOUVRAIT la modale — MESURÉ par le parcours E2E du refus :
       // `close()` s'exécutait, puis la repeinte trouvait `open` encore vrai et
@@ -3261,6 +3272,154 @@ async function autoriserCle() {
   if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
 }
 
+// --- SPK-183 · le SLA des instantanés (docs/DAT.md §74, SPK-DS-50) ------------------------------
+
+/** Le fuseau du navigateur, pour dire une heure UTC « soit … ». `null` s'il ne le sait pas. */
+function fuseauDuNavigateur() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; }
+}
+
+const urlSla = (suite = '') => `/v1/sparks/${encodeURIComponent(etat.spark.name)}/sla${suite}`;
+
+/**
+ * Met à jour SUR PLACE ce que l'aperçu change : la zone, et le bouton d'engagement. Repeindre la
+ * modale arracherait le focus au champ en cours de frappe (§14.3).
+ */
+function majZoneSla() {
+  const sla = etat.sla;
+  const zone = racine.querySelector('#sla-apercu');
+  if (zone) zone.innerHTML = renderZoneApercu(sla);
+  const bouton = racine.querySelector('[data-engage="sla"]');
+  if (bouton) {
+    bouton.textContent = sla.busy ? 'Envoi…' : engagementSla(sla);
+    bouton.classList.toggle('bouton--destructif', detruitSla(sla));
+    bouton.classList.toggle('bouton--primaire', !detruitSla(sla));
+    // §9.9 : présent, mais indisponible tant qu'il n'y a pas d'aperçu valide.
+    bouton.disabled = sla.busy || Boolean(sla.erreur) || !sla.apercu;
+  }
+}
+
+let rangApercuSla = 0;
+let minuteurApercuSla = null;
+
+/** Demande l'aperçu de la saisie COURANTE. Une réponse tardive n'écrase jamais une saisie plus récente. */
+async function majApercuSla() {
+  const sla = etat.sla;
+  const rang = ++rangApercuSla;
+  sla.chargement = true;
+  majZoneSla();
+  const r = await appel('POST', urlSla('/preview'), corpsSla(sla.values)).catch((e) => ({
+    ok: false, corps: { detail: { message: e.message } } }));
+  if (rang !== rangApercuSla || !sla.open) return;
+  sla.chargement = false;
+  if (r.ok) { sla.apercu = r.corps; sla.erreur = null; }
+  else { sla.apercu = null; sla.erreur = r.corps?.detail?.message ?? 'Saisie refusée.'; }
+  majZoneSla();
+}
+
+/** L'aperçu suit la frappe, sans la précéder à chaque touche. */
+function planifierApercuSla() {
+  clearTimeout(minuteurApercuSla);
+  minuteurApercuSla = setTimeout(majApercuSla, 250);
+}
+
+async function enregistrerSla() {
+  const sla = etat.sla;
+  sla.busy = true;
+  sla.refusal = null;
+  peindre();
+  const r = await appel('PUT', urlSla(), corpsSla(sla.values, { accepter: detruitSla(sla) }))
+    .catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
+  sla.busy = false;
+  if (!r.ok) {
+    const detail = r.corps?.detail ?? {};
+    if (r.statut === 409 && detail.error === 'deletion_requires_confirmation') {
+      // L'aperçu était périmé : ce qui serait supprimé a changé depuis. On le MONTRE, le geste
+      // ne part pas — la confirmation porte sur ce que l'utilisateur a vu.
+      sla.apercu = { ...(sla.apercu ?? {}), would_delete: detail.deletions ?? [] };
+    } else {
+      sla.refusal = detail.message ?? 'Le serveur a refusé ce geste.';
+    }
+    peindre();
+    return;
+  }
+  sla.open = false;
+  await chargerDetail(etat.spark.name, etat.facette);
+  racine.querySelector('[data-ouvre="sla"]')?.focus();
+}
+
+/** Suspendre, reprendre, retirer : des gestes de SECTION, leur refus se dit dans la section. */
+async function gesteSla(operation) {
+  const sla = etat.sla;
+  sla.refusGeste = null;
+  const r = await operation().catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
+  if (!r.ok) {
+    sla.refusGeste = r.corps?.detail?.message ?? 'Le serveur a refusé ce geste.';
+    sla.confirmingRetrait = false;
+    peindre();
+    return;
+  }
+  sla.confirmingRetrait = false;
+  await chargerDetail(etat.spark.name, etat.facette);
+}
+
+function brancherSla() {
+  const sla = etat.sla;
+  for (const bouton of racine.querySelectorAll('[data-ouvre="sla"]')) {
+    bouton.addEventListener('click', () => {
+      sla.open = true;
+      sla.values = valeursSla(etat.detail?.sla);
+      sla.apercu = null; sla.erreur = null; sla.refusal = null;
+      sla.confirmingRetrait = false; sla.refusGeste = null;
+      peindre();
+      majApercuSla();
+    });
+  }
+  racine.querySelector('[data-sla-bascule]')?.addEventListener('click', (e) =>
+    gesteSla(() => appel('POST', urlSla(`/${e.currentTarget.dataset.slaBascule}`))));
+  racine.querySelector('[data-sla-retrait]')?.addEventListener('click', () => {
+    sla.confirmingRetrait = true;
+    peindre();
+    racine.querySelector('[data-sla-confirme-retrait]')?.focus();
+  });
+  racine.querySelector('[data-sla-annule-retrait]')?.addEventListener('click', () => {
+    sla.confirmingRetrait = false;
+    peindre();
+    racine.querySelector('[data-sla-retrait]')?.focus();
+  });
+  racine.querySelector('[data-sla-confirme-retrait]')?.addEventListener('click', () =>
+    gesteSla(() => appel('DELETE', urlSla())));
+
+  const formulaire = racine.querySelector('[data-modale="sla"]');
+  if (!formulaire) return;
+  const menu = formulaire.querySelector('#sla-preset');
+  const chaine = formulaire.querySelector('#sla-schedule');
+  // Le menu n'est qu'une aide de saisie : il ÉCRIT la chaîne, et seule la chaîne est envoyée.
+  menu.addEventListener('change', () => {
+    if (menu.value === PERSONNALISEE) return;
+    chaine.value = menu.value;
+    sla.values.schedule = menu.value;
+    planifierApercuSla();
+  });
+  chaine.addEventListener('input', () => {
+    sla.values.schedule = chaine.value;
+    menu.value = presetPour(chaine.value);
+    planifierApercuSla();
+  });
+  for (const champ of formulaire.querySelectorAll('#sla-days, #sla-count')) {
+    champ.addEventListener('input', () => { sla.values[champ.name] = champ.value; planifierApercuSla(); });
+  }
+  formulaire.querySelector('#sla-enabled').addEventListener('change', (e) => {
+    sla.values.enabled = e.target.checked;
+    planifierApercuSla();
+  });
+  formulaire.addEventListener('submit', (evenement) => {
+    evenement.preventDefault();
+    if (sla.busy || sla.erreur || !sla.apercu) return;
+    enregistrerSla();
+  });
+}
+
 async function prendreInstantane() {
   const resultat = await agir('snapshot', () => appel(
     'POST', `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots`,
@@ -3889,7 +4048,7 @@ async function chargerDetail(nom, facette = '') {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
            env, catalogue, forge, , isolation, reseauDuSpark, reseaux,
-           projets] = await Promise.all([
+           projets, sla] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -3927,9 +4086,12 @@ async function chargerDetail(nom, facette = '') {
       api('/v1/networks').then((r) => r.networks).catch(() => []),
       // SPK-116 · §61.4 : les projets de la Forge, pour la section Projets.
       api('/v1/projects').then((r) => r.projects).catch(() => null),
+      // SPK-183 · §74.10 : la politique de SLA. `null` si la lecture échoue : l'écran le DIT
+      // plutôt que de montrer « aucun SLA » (§14.6).
+      api(`/v1/sparks/${encodeURIComponent(nom)}/sla`).catch(() => null),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
-                    snapshots, audit, isolation, reseaux, projets,
+                    snapshots, audit, isolation, reseaux, projets, sla,
                     memberships: reseauDuSpark.memberships ?? [],
                     exposed: reseauDuSpark.exposed ?? [],
                     consumable: reseauDuSpark.consumable ?? [],

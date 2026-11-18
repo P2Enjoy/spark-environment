@@ -9291,7 +9291,7 @@ rétention et l'API. L'écran est SPK-183.
   suppression réelles sur la VM d'installation fraîche (README §28.7) ; le comportement après un
   vrai arrêt de `sparkd`. Décisions du rédacteur à confirmer : DAT §74.11.
 
-### [ ] SPK-183 · Le SLA des instantanés dans la console : le panneau et sa modale
+### [~] SPK-183 · Le SLA des instantanés dans la console : le panneau et sa modale
 
 Suite de SPK-182 : l'**écran**. Dans l'onglet Instantanés d'un Spark, une section « SLA des
 instantanés » et la modale qui la règle.
@@ -9306,6 +9306,18 @@ instantanés » et la modale qui la règle.
 - DoD : tests unitaires de composant ; E2E depuis l'accueil, à la souris et au clavier ;
   captures observées (desktop, mobile, états : sans SLA, actif, suspendu, en échec, aperçu de
   suppression) ; manuel M9, seed et changelog à jour.
+- **État au 2026-11-18 : implémenté et vérifié sur la pile de développement factice, pas sur une
+  Forge réelle — reste `[~]`.** Prouvé : 34 tests de composant (le menu ne stocke rien, l'engagement
+  change de nom et de variante quand l'enregistrement supprimerait, un SLA illisible ne se rend pas
+  comme une absence, UTC puis fuseau) ; le parcours E2E « le SLA des instantanés se programme… » vert
+  depuis l'accueil — **souris et clavier** (Entrée ouvre, Échap ferme et rend le focus), chaîne refusée
+  avec sa raison et engagement désactivé, aperçu qui nomme les trois suppressions **sans rien supprimer**,
+  enregistrement qui supprime exactement ce qui a été montré, deux instantanés manuels intacts, suspendre,
+  reprendre, annuler un retrait, refus d'un Spark protégé dit dans la modale avec la saisie conservée ;
+  captures observées (desktop, mobile, chaîne refusée, aperçu de suppression, suspendu, refus) ;
+  illustrations `m9-sla`, `m9-sla-apercu` et `m9-restauration-refusee` renouvelées. **Non prouvé** : sur
+  une Forge réelle ; la prise réelle d'un instantané `SLA_…` par Incus (SPK-182). Sur le doublon la taille
+  des instantanés est nulle (« 0 o »). Décisions du rédacteur à confirmer : DAT §74.11.
 
 ### [~] SPK-184 · La santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes
 

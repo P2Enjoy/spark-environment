@@ -41,3 +41,65 @@ qui rend la perte visible.
 ## Supprimer un instantané
 
 Irréversible. La confirmation nomme l'instantané.
+
+## Le SLA : des instantanés pris tout seuls
+
+Dans l'onglet **Instantanés**, la section **SLA des instantanés** programme une prise
+automatique et dit combien de temps on garde ce qu'elle produit.
+
+![La section SLA d'un Spark : fréquence, prochaine prise, dernière prise, rétention](images/m9-sla.png)
+
+### Programmer
+
+**Programmer** (ou **Modifier**) ouvre une fenêtre à quatre réglages :
+
+- **La fréquence.** Un menu propose les fréquences courantes — toutes les heures, toutes les
+  6 heures, tous les jours à 02:00, deux fois par jour, les jours ouvrés, le dimanche, le 1er
+  du mois. Choisir une fréquence **écrit la chaîne** dans le champ voisin ; vous pouvez la
+  modifier à la main, et le menu se repositionne sur « Personnalisée » si elle n'est aucune des
+  fréquences courantes. C'est une chaîne crontab à cinq champs (`minute heure jour mois
+  jour-de-la-semaine`), **lue en UTC**. Deux prises ne peuvent pas être espacées de moins de
+  15 minutes ; une chaîne plus serrée est refusée avec sa raison.
+- **La rétention**, par ancienneté (**jours**) et/ou par nombre (**instantanés au plus**). Il en
+  faut **au moins une** : sans elle, les instantanés s'accumuleraient dans le quota du Spark.
+  Si vous remplissez les deux, le premier atteint supprime.
+- **Actif** : décoché, la politique est enregistrée mais ne prend rien.
+
+Sous les champs, **l'aperçu** dit la fréquence en clair, les trois prochaines prises, et — quand
+la rétention saisie **supprimerait** des instantanés qui existent déjà — **les nomme tous**.
+
+![L'aperçu d'une rétention de deux instantanés : trois sont nommés avant d'être supprimés](images/m9-sla-apercu.png)
+
+Dans ce cas le bouton dit **Enregistrer et supprimer 3 instantanés** et prend la couleur de
+l'alerte : la suppression est définitive. Sans suppression, il dit simplement **Enregistrer**.
+
+### Ce que le SLA supprime, et ce qu'il ne supprime jamais
+
+- Il ne supprime que **ses propres instantanés** — ceux qui portent le badge **SLA**. Un
+  instantané que vous avez pris à la main n'est **jamais** supprimé par le SLA.
+- Il garde **toujours le plus récent**, quelle que soit la rétention : même une rétention d'un
+  jour, après trois jours sans prise, ne laisse pas un Spark sans point de retour.
+- Les instantanés pris par le SLA s'appellent `SLA_AAAAMMJJ-HHMMSS` (en UTC). Ce préfixe est
+  réservé : un instantané manuel ne peut pas le porter.
+- Ils comptent dans le **quota disque** du Spark, comme les autres.
+
+### Suspendre, reprendre, retirer
+
+- **Suspendre** gèle la politique **entièrement** : plus de prise, et plus de suppression. Une
+  pause ne détruit rien. **Reprendre** repart d'aujourd'hui : les prises manquées pendant la
+  pause ne sont pas rattrapées.
+- **Retirer** supprime la politique, après une confirmation. **Les instantanés déjà pris
+  restent** ; ils se suppriment à la main.
+
+### Quand quelque chose ne va pas
+
+- La section affiche la **dernière prise** et son résultat. Un échec s'écrit en toutes lettres,
+  avec la raison que le serveur donne.
+- Si `sparkd` a été arrêté, **une seule** prise est rattrapée au redémarrage (et le journal dit
+  combien d'occurrences ont été manquées) ; après un échec, la prise est reprise trois fois,
+  à cinq minutes d'écart.
+- Un **Spark protégé** refuse qu'on règle son SLA, comme toute écriture. Le refus s'affiche dans
+  la fenêtre, et votre saisie n'est pas perdue. La politique déjà posée, elle, continue d'agir.
+- Pour l'instant, un échec de SLA **n'envoie pas d'alerte hors bande** : il se lit ici et au
+  Journal.
+

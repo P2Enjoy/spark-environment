@@ -31,6 +31,7 @@ import { renderDocker, DOCKER_VIDE } from './spark-docker.js';
 import { facetteOffertes, renderOngletsSpark } from './forge-images.js';
 import { renderProjetsSpark } from './sparks-projets.js';
 import { renderModale } from './modale.js';
+import { SLA_VIDE, renderSlaSection } from './sla-view.js';
 import { renderSupervisionSpark, SUPERVISION_VIDE } from './supervision.js';
 import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
 import { IMPORT_VIDE } from './env-import.js';
@@ -1015,6 +1016,9 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     notes = NOTES_VIDE,
                                     propositions = PROPOSITIONS_VIDE,
                                     mesures = SUPERVISION_VIDE,
+                                    // SPK-183 · §74.10 : la politique de SLA (`null` si sa lecture a
+                                    // échoué — l'écran le dit, il ne rend pas une absence) et sa modale.
+                                    sla = null, slaUi = SLA_VIDE, fuseau = null,
                                     catalogue = [], pools = null, cores = null,
                                     // SPK-109 · §57.3 : l'isolation, lue dans Incus.
                                     isolation = undefined,
@@ -1066,7 +1070,10 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                + renderDepotPanel(spark,
                                     depotCle.spark === spark.name ? depotCle : DEPOT_CLE_VIDE,
                                     identite.releve),
-    instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),
+    // SPK-183 · DESIGN_SYSTEM_APP.md SPK-DS-50 : la section du SLA vient AU-DESSUS de la
+    // liste — un sujet de plus, donc une carte de plus (§5.4).
+    instantanes: () => renderSlaSection(sla, slaUi, { fuseau })
+                       + renderSnapshotsPanel(spark, snapshots, admin),
     // SPK-93 · §52.11 : la meme lecture que l'ecran de Forge, bornee a CE Spark
     // et comparee a SES quotas.
     mesures: () => renderSupervisionSpark(mesures),

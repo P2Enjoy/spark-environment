@@ -15921,3 +15921,21 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   il n'aurait rien prouvé. Remplacé par un test sur le texte produit.
 - **Reste** : SPK-186, l'écran — la proposition d'un script s'y montre avec sa commande exacte.
 
+**SPK-183 : livraison de l'écran du SLA, le 2026-11-18.**
+
+- **Mise à jour sur place pendant la frappe.** L'aperçu suit la saisie (250 ms) et ne repeint **pas** la modale :
+  repeindre arracherait le focus au champ en cours (§14.3). Seuls la zone d'aperçu et le bouton d'engagement
+  sont réécrits ; une réponse tardive n'écrase jamais une saisie plus récente (un rang par requête).
+- **L'engagement porte ce qu'il fait.** Quand l'aperçu nomme des suppressions, le bouton passe en variante
+  destructive et dit combien ; `PUT` part alors avec `accept_deletion`. Si l'aperçu était périmé (le serveur
+  répond 409 avec d'autres noms), l'écran **montre** la nouvelle liste et ne part pas : la confirmation porte
+  sur ce que l'utilisateur a vu.
+- **Défaut du harnais du manuel, corrigé** : `make manuel` échouait par intermittence (« Element is not
+  attached to the DOM ») — la facette Routes se repeint quand le relevé de Caddy arrive, et le harnais
+  faisait défiler une ligne qui venait d'être détachée. Il attend désormais ce relevé, comme les parcours E2E.
+  J'avais noté l'échec plus tôt comme inexpliqué : il ne l'est plus.
+- **Effet visible du SLA ailleurs** : l'illustration du refus de restauration (§19.1) nomme maintenant les
+  prises du SLA ; son cadre a été agrandi pour que le refus reste dans l'image.
+- **Un défaut de forme repéré, non traité** : sur le doublon la taille des instantanés est nulle, donc « 0 o »
+  s'affiche. Sur une vraie Forge la taille est relevée (`sync_sizes`).
+

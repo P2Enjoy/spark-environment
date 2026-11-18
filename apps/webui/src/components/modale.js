@@ -46,11 +46,18 @@ const echapper = (v) =>
  * proposerait enverrait une écriture vide dont le refus n'apprendrait rien.
  *
  * Le bouton restant dit alors « Fermer » : il n'y a rien à annuler.
+ *
+ * `destructif` (SPK-183, DESIGN_SYSTEM.md §6.23) : le point d'engagement prend la
+ * variante destructive quand ce qu'il engage SUPPRIME — « Enregistrer et supprimer
+ * 2 instantanés ». Il ne s'emploie que lorsque la suppression est NOMMÉE dans la
+ * modale : une couleur d'alerte sur une action importante mais sans perte banaliserait
+ * la couleur qui dit qu'on détruit.
  */
 export function renderModale({ ouverte = false, id = 'modale', titre = '',
                                corps = '', engagement = 'Enregistrer',
                                refus = null, occupee = false,
-                               desactivee = false, indication = null } = {}) {
+                               desactivee = false, indication = null,
+                               destructif = false } = {}) {
   if (!ouverte) return '';
   return `
 <dialog class="modale" id="${echapper(id)}" aria-labelledby="${echapper(id)}-titre">
@@ -71,7 +78,7 @@ export function renderModale({ ouverte = false, id = 'modale', titre = '',
       ? `<p class="note" id="${echapper(id)}-indication">${echapper(indication)}</p>`
       : ''}
     <p class="modale__actions">
-      ${engagement === null ? '' : `<button type="submit" class="bouton bouton--primaire" data-engage="${echapper(id)}"
+      ${engagement === null ? '' : `<button type="submit" class="bouton ${destructif ? 'bouton--destructif' : 'bouton--primaire'}" data-engage="${echapper(id)}"
         ${occupee || desactivee ? 'disabled' : ''}${
           indication ? ` aria-describedby="${echapper(id)}-indication"` : ''
         }>${echapper(occupee ? 'Envoi…' : engagement)}</button>`}

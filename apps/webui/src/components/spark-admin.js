@@ -49,6 +49,7 @@
  */
 
 import { formatBytes } from './tokens.js';
+import { badgeSla } from './sla-view.js';
 import { renderModale } from './modale.js';
 
 const echapper = (v) =>
@@ -1551,7 +1552,9 @@ export function renderSnapshotsPanel(spark, snapshots = [], ui = ADMIN_VIDE) {
         const bloque = ui.refusal?.panel === 'snapshot' && ui.refusal.snapshot === nom
           ? renderBlockedRestore(ui.refusal)
           : '';
-        return `<li><span class="technique">${echapper(nom)}</span>` +
+        // SPK-183 · SPK-DS-50 : la provenance se LIT (badge « SLA »), elle ne se déduit pas
+        // du nom. Un instantané manuel ne change pas.
+        return `<li><span class="technique">${echapper(nom)}</span>${badgeSla(s)}` +
           `<span class="absence"> — ${echapper(formatDate(s.created_at))}${echapper(taille)}</span>` +
           `<span class="actions-ligne">` +
           `<button type="button" class="bouton bouton--compact" data-restaure="${echapper(nom)}">Restaurer</button>` +

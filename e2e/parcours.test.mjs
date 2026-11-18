@@ -26,6 +26,8 @@
  *           docs/DAT.md §68 ; SPK-DS-44) ·
  *           docs/BACKLOG.md#SPK-179 (le domaine d'une route est un lien ouvert
  *           dans un nouvel onglet, docs/DAT.md §72 ; SPK-DS-49) ·
+ *           docs/BACKLOG.md#SPK-183 (le SLA des instantanés : la section de l'onglet
+ *           Instantanés et sa modale, docs/DAT.md §74.10 ; SPK-DS-50),
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -7438,4 +7440,130 @@ test('une page d’un autre site ne fait rien faire à la console, et un nom pi�
   } finally {
     piege.close();
   }
+});
+
+
+test('le SLA des instantanés se programme depuis l\u2019onglet Instantanés : fréquence courante, aperçu des suppressions, refus', async () => {
+  // SPK-183 · docs/DAT.md §74.10 · docs/DESIGN_SYSTEM_APP.md SPK-DS-50.
+  // Le parcours d'un exploitant : liste → Spark → Instantanés → SLA. Rien n'est atteint par une URL.
+  await parcours('sla-instantanes', async () => {
+    await ouvrir('crm-production', 'instantanes');
+    const section = page.locator('section[aria-labelledby="titre-sla"]');
+
+    // --- la section lit ce que le seed a posé, par le vrai planificateur --------------------
+    await section.waitFor({ timeout: 10000 });
+    assert.match(await section.textContent(), /Actif/);
+    assert.match(await section.textContent(), /Tous les jours à 02:00 UTC/);
+    assert.match(await section.textContent(), /7 jours · 5 instantanés au plus/);
+    assert.match(await section.textContent(), /5 instantanés/);
+    // La provenance se LIT : cinq badges « SLA », et les deux instantanés manuels n'en ont pas.
+    assert.equal(await page.locator('.liste-administrable .badge:has-text("SLA")').count(), 5);
+    assert.equal(await page.locator('.liste-administrable li:has-text("avant-deploiement") .badge:has-text("SLA")').count(), 0);
+    await capturer('spk183-sla-actif', { hauteur: 1000 });
+    await capturer('spk183-sla-actif-mobile', { largeur: 390, hauteur: 1300 });
+
+    // --- au CLAVIER : Entrée sur « Modifier » ouvre la modale, Échap la ferme et rend le focus ---
+    await page.locator('[data-ouvre="sla"]').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog#sla[open]', { timeout: 10000 });
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'sla-preset',
+      'le focus entre dans le premier contrôle modifiable');
+    await page.waitForSelector('#sla-phrase', { timeout: 10000 });
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog#sla', { state: 'detached', timeout: 10000 });
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-ouvre')), 'sla',
+      'le focus revient au déclencheur');
+
+    // --- à la souris : le menu ÉCRIT la chaîne, et l'aperçu suit ---------------------------------
+    await page.click('[data-ouvre="sla"]');
+    await page.waitForSelector('#sla-phrase', { timeout: 10000 });
+    await page.selectOption('#sla-preset', '0 */6 * * *');
+    assert.equal(await page.inputValue('#sla-schedule'), '0 */6 * * *');
+    await page.waitForFunction(() => /Toutes les 6 heures/.test(document.querySelector('#sla-phrase')?.textContent ?? ''),
+      null, { timeout: 10000 });
+
+    // Écrire une chaîne à la main repositionne le menu ; une fréquence trop serrée est refusée
+    // AVEC sa raison, et l'engagement reste présent mais désactivé (§9.9).
+    await page.fill('#sla-schedule', '*/5 * * * *');
+    await page.waitForFunction(() => /15 minutes/.test(document.querySelector('#sla-apercu')?.textContent ?? ''),
+      null, { timeout: 10000 });
+    assert.equal(await page.inputValue('#sla-preset'), '', 'chaîne inconnue du menu : « Personnalisée »');
+    assert.equal(await page.locator('#sla-apercu [role="alert"]').count(), 1);
+    assert.equal(await page.locator('[data-engage="sla"]').isDisabled(), true);
+    await capturer('spk183-sla-chaine-refusee', { hauteur: 1000 });
+
+    // Une chaîne qui correspond à une fréquence courante repositionne le menu sur elle.
+    await page.fill('#sla-schedule', '0 3 * * 0');
+    await page.waitForFunction(() => /dimanche/.test(document.querySelector('#sla-phrase')?.textContent ?? ''),
+      null, { timeout: 10000 });
+    assert.equal(await page.inputValue('#sla-preset'), '0 3 * * 0');
+    await page.selectOption('#sla-preset', '0 2 * * *');
+
+    // --- la suppression se montre AVANT : cinq instantanés tenus, deux conservés -------------------
+    await page.fill('#sla-count', '2');
+    await page.waitForFunction(() => /supprimerait 3\s+instantanés/.test(document.querySelector('#sla-apercu')?.textContent ?? ''),
+      null, { timeout: 10000 });
+    const bloc = await page.textContent('#sla-apercu');
+    assert.equal((bloc.match(/SLA_\d{8}-\d{6}/g) ?? []).length, 3, 'les trois instantanés sont NOMMÉS');
+    assert.match(bloc, /Cette suppression est définitive/);
+    const engagement = page.locator('[data-engage="sla"]');
+    assert.match(await engagement.textContent(), /Enregistrer et supprimer 3 instantanés/);
+    assert.match(await engagement.getAttribute('class'), /bouton--destructif/);
+    assert.equal(await engagement.isDisabled(), false);
+    // L'aperçu n'a RIEN supprimé.
+    const avant = await pile.lireSparkd('/v1/sparks/crm-production/snapshots');
+    assert.equal(avant.corps.snapshots.filter((x) => x.origin === 'sla').length, 5);
+    await capturer('spk183-sla-apercu-suppression', { hauteur: 1100 });
+    await capturer('spk183-sla-apercu-suppression-mobile', { largeur: 390, hauteur: 1500 });
+
+    // --- enregistrer : la suppression a lieu, et ce qui a été montré est ce qui est supprimé -------
+    await engagement.click();
+    await page.waitForSelector('dialog#sla', { state: 'detached', timeout: 15000 });
+    await page.waitForFunction(() => /7 jours · 2 instantanés au plus/.test(document.querySelector('section[aria-labelledby="titre-sla"]')?.textContent ?? ''),
+      null, { timeout: 15000 });
+    const apres = await pile.lireSparkd('/v1/sparks/crm-production/snapshots');
+    const slaRestes = apres.corps.snapshots.filter((x) => x.origin === 'sla').map((x) => x.incus_name);
+    assert.equal(slaRestes.length, 2, 'la rétention a supprimé trois instantanés');
+    assert.deepEqual(slaRestes, avant.corps.snapshots.filter((x) => x.origin === 'sla').slice(-2).map((x) => x.incus_name),
+      'les deux plus récents restent');
+    assert.deepEqual(apres.corps.snapshots.filter((x) => x.origin === 'manual').map((x) => x.incus_name),
+      ['avant-deploiement', 'apres-migration'], 'un instantané manuel n’est jamais supprimé par le SLA');
+    assert.equal(await page.locator('.liste-administrable .badge:has-text("SLA")').count(), 2);
+    await capturer('spk183-sla-apres-retention', { hauteur: 1000 });
+
+    // --- suspendre, reprendre : des gestes réparateurs, sans confirmation ---------------------------
+    await page.click('[data-sla-bascule="suspend"]');
+    await page.waitForFunction(() => /Suspendu : aucune prise prévue/.test(document.querySelector('section[aria-labelledby="titre-sla"]')?.textContent ?? ''),
+      null, { timeout: 15000 });
+    assert.equal((await pile.lireSparkd('/v1/sparks/crm-production/sla')).corps.enabled, false);
+    await capturer('spk183-sla-suspendu', { hauteur: 900 });
+    await page.click('[data-sla-bascule="resume"]');
+    await page.waitForFunction(() => /Actif/.test(document.querySelector('section[aria-labelledby="titre-sla"] dd')?.textContent ?? ''),
+      null, { timeout: 15000 });
+
+    // --- retirer demande une confirmation DANS LE FLUX, et les instantanés restent -----------------
+    await page.click('[data-sla-retrait]');
+    await page.waitForSelector('[data-sla-confirme-retrait]', { timeout: 10000 });
+    assert.match(await section.textContent(), /Les 2 instantanés déjà pris restent/);
+    await page.click('[data-sla-annule-retrait]');
+    assert.equal(await page.locator('[data-sla-confirme-retrait]').count(), 0);
+    assert.equal((await pile.lireSparkd('/v1/sparks/crm-production/sla')).corps.configured, true,
+      'annuler ne retire rien');
+
+    // --- le refus d'un Spark PROTÉGÉ se dit DANS la modale, et la saisie reste ---------------------
+    await ouvrir('analytics', 'instantanes');
+    await page.waitForSelector('section[aria-labelledby="titre-sla"]', { timeout: 10000 });
+    assert.match(await page.textContent('section[aria-labelledby="titre-sla"]'), /Aucun SLA/);
+    await page.click('[data-ouvre="sla"]');
+    await page.waitForSelector('#sla-phrase', { timeout: 10000 });
+    await page.fill('#sla-days', '3');
+    await page.waitForFunction(() => /Tous les jours/.test(document.querySelector('#sla-phrase')?.textContent ?? ''),
+      null, { timeout: 10000 });
+    await page.click('[data-engage="sla"]');
+    await page.waitForSelector('dialog#sla .refus[role="alert"]', { timeout: 10000 });
+    assert.match(await page.textContent('dialog#sla .refus'), /protégé|protection/i);
+    assert.equal(await page.inputValue('#sla-days'), '3', 'la saisie n’est pas perdue');
+    assert.equal((await pile.lireSparkd('/v1/sparks/analytics/sla')).corps.configured, false);
+    await capturer('spk183-sla-refus-protege', { hauteur: 1000 });
+  });
 });

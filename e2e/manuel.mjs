@@ -241,6 +241,13 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     // Le seed déclare l'émission en échec de `vip.boutique.example.com` : la
     // ligne porte, sous ses badges, ce que le proxy a écrit de ses tentatives.
     await ouvrir('crm-production', 'routes');
+    // La facette se REPEINT quand le relevé de Caddy arrive (SPK-130, §18.7) : défiler vers une
+    // ligne avant ce relevé la détache sous le geste — « Element is not attached to the DOM »,
+    // un échec intermittent du harnais, vu deux fois le 2026-11-18. Les parcours E2E attendent
+    // ce relevé ; celui-ci l'attend aussi.
+    await page.waitForFunction(() => /relevés à|non vérifiés/.test(
+      document.querySelector('section[aria-labelledby="titre-routes"]')?.textContent ?? ''),
+      null, { timeout: 20000 });
     await page.waitForSelector('li:has(> .emission)', { timeout: 20000 });
     await page.locator('li:has(> .emission)').scrollIntoViewIfNeeded();
     await capturer('m7-emission-echec', { hauteur: 900 });
@@ -398,11 +405,24 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     // --- M9 · Instantanés : le refus qui protège -----------------------------
     await ouvrir('crm-production', 'instantanes');
     await page.waitForSelector('#titre-instantanes');
+    // SPK-183 · §74.10 : le SLA, depuis la facette — la section, puis la modale dont l'aperçu
+    // NOMME ce qu'une rétention de deux instantanés supprimerait avant qu'on l'accepte.
+    await page.waitForSelector('section[aria-labelledby="titre-sla"]');
+    await capturer('m9-sla', { hauteur: 700 });
+    await page.click('[data-ouvre="sla"]');
+    await page.waitForSelector('#sla-phrase', { timeout: 10000 });
+    await page.fill('#sla-count', '2');
+    await page.waitForFunction(
+      () => /supprimerait 3/.test(document.querySelector('#sla-apercu')?.textContent ?? ''),
+      null, { timeout: 10000 });
+    await capturer('m9-sla-apercu', { hauteur: 1000 });
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog#sla', { state: 'detached', timeout: 10000 });
     await page.click('[data-restaure="avant-deploiement"]');
     await page.waitForSelector('[data-confirme-restauration]');
     await page.click('[data-confirme-restauration]');
     await page.waitForSelector('[data-accepte-perte]', { timeout: 10000 });
-    await capturer('m9-restauration-refusee', { hauteur: 800 });
+    await capturer('m9-restauration-refusee', { hauteur: 1400 });
 
     // --- M13 · Relier des Sparks entre eux (SPK-110, §58.5) -------------------
     // Le seed porte « backoffice », habité par crm-production et postgres-dedie ;

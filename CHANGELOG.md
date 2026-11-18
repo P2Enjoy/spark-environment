@@ -3,6 +3,20 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-183 — le SLA des instantanés dans la console : la section et sa modale.** Dans l'onglet
+  **Instantanés**, une section **« SLA des instantanés »** au-dessus de la liste dit l'état (actif ou
+  suspendu, en pastille **et** en texte), la fréquence en clair et sa chaîne crontab, la prochaine prise
+  **en UTC puis dans le fuseau du navigateur**, la dernière prise et son résultat (un échec avec la raison
+  du serveur), la rétention, et ce que le SLA tient. **Programmer** / **Modifier** ouvre une modale : un
+  **menu de fréquences courantes** qui écrit la chaîne (la chaîne seule est envoyée, et le menu se
+  repositionne sur « Personnalisée » quand elle n'est aucune des sept), la chaîne crontab, la rétention par
+  jours et/ou par nombre, « Actif ». Un **aperçu** suit la frappe : phrase lisible, trois prochaines prises,
+  chaîne refusée avec sa raison — et, quand la rétention saisie **supprimerait** des instantanés, **il les
+  nomme tous**, le bouton dit alors **« Enregistrer et supprimer N instantanés »** en variante destructive.
+  Suspendre et reprendre sont réparateurs, retirer demande une confirmation dans le flux et dit que les
+  instantanés restent. Chaque instantané d'origine SLA porte un badge « SLA ». Un Spark protégé refuse
+  l'enregistrement, et le refus se dit dans la modale sans perdre la saisie. `renderModale` accepte un
+  engagement `destructif`. Manuel M9, trois illustrations. DAT §74.10 ; SPK-DS-50.
 - **SPK-185 — la paire `health` / `health.?` : un agent propose une sonde.** Septième paire du fichier `.?`
   (DAT §55) : `/etc/spark/health` est régénéré depuis le registre — il porte chaque sonde et son **état au
   dernier relevé**, jamais la sortie d'un script — et `/etc/spark/health.?` est le seul endroit où la
