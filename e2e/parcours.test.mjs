@@ -28,6 +28,8 @@
  *           dans un nouvel onglet, docs/DAT.md §72 ; SPK-DS-49) ·
  *           docs/BACKLOG.md#SPK-183 (le SLA des instantanés : la section de l'onglet
  *           Instantanés et sa modale, docs/DAT.md §74.10 ; SPK-DS-50),
+ *           docs/BACKLOG.md#SPK-186 (l'onglet Santé : les sondes d'un Spark, leur
+ *           état, leur proposition `health.?`, docs/DAT.md §75.10 ; SPK-DS-51),
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -7565,5 +7567,190 @@ test('le SLA des instantanés se programme depuis l\u2019onglet Instantanés : f
     assert.equal(await page.inputValue('#sla-days'), '3', 'la saisie n’est pas perdue');
     assert.equal((await pile.lireSparkd('/v1/sparks/analytics/sla')).corps.configured, false);
     await capturer('spk183-sla-refus-protege', { hauteur: 1000 });
+  });
+});
+
+
+test('l\u2019onglet Santé montre les sondes d\u2019un Spark, relit leur proposition ligne par ligne, et règle une sonde par une modale', async () => {
+  // SPK-186 · docs/DAT.md §75.10 · docs/DESIGN_SYSTEM_APP.md SPK-DS-51.
+  // Le parcours d'un exploitant : liste → Spark → Santé. Rien n'est atteint par une URL.
+  await parcours('sante', async () => {
+    await ouvrir('crm-production', 'sante');
+    const facette = page.locator('section[aria-labelledby="titre-sante"]');
+    await facette.waitFor({ timeout: 10000 });
+
+    // --- l'état du seed, produit par le vrai fil : sain, instable, en panne ------------------------
+    const ligne = (nom) => page.locator(`[data-sante-sonde="${nom}"]`);
+    assert.match(await ligne('api').textContent(), /Saine/);
+    assert.match(await ligne('donnees').textContent(), /Saine/);
+    assert.match(await ligne('vitrine').textContent(), /Instable/);
+    assert.match(await ligne('vitrine').textContent(), /\d+ échecs? sur 20/);
+    assert.match(await ligne('sauvegarde').textContent(), /En panne/);
+    assert.match(await ligne('sauvegarde').textContent(), /\d+ échecs? consécutifs? · seuil 1/);
+    assert.match(await ligne('sauvegarde').textContent(), /code de sortie 2/);
+    // La frise : un équivalent textuel, et des formes distinctes pour le succès et l'échec.
+    assert.match(await ligne('api').locator('svg.frise').getAttribute('aria-label'), /\d+ relevés? réussis? sur les \d+ derniers/);
+    assert.ok(await ligne('vitrine').locator('path.frise__echec').count() >= 2);
+    assert.ok(await ligne('api').locator('circle.frise__ok').count() >= 10);
+    // La pile des parcours a un canal hors bande (SPK-62) : la facette ne dit donc RIEN de son
+    // absence, et ne dit pas non plus qu'elle n'a pas pu le lire. Le cas « aucun canal » est prouvé
+    // au rendu (`sante-view.test.js`) : cette pile ne peut pas le produire.
+    assert.equal(await page.locator('text=Aucun canal d’alerte n’est configuré').count(), 0);
+    assert.equal(await page.locator('text=Le canal d’alerte n’a pas pu être lu').count(), 0);
+    // Un script montre sa commande exacte ; une sonde HTTPS son adresse.
+    assert.match(await ligne('sauvegarde').textContent(), /Commande exécutée dans la cellule : exit 2/);
+    assert.match(await ligne('api').textContent(), /https:\/\/crm\.example\.com\/healthz/);
+    await capturer('spk186-sante-liste', { hauteur: 1300 });
+    await capturer('spk186-sante-liste-mobile', { largeur: 390, hauteur: 1800 });
+
+    // --- la proposition de la cellule : relue ligne par ligne, avec le verdict du serveur -------------
+    const proposition = page.locator('[data-proposition="health"]');
+    await proposition.waitFor({ timeout: 10000 });
+    assert.match(await proposition.textContent(), /3 sonde\(s\) proposée\(s\)/);
+    // Une proposition ne pose RIEN : aucune des trois n'existe encore.
+    const avant = (await pile.lireSparkd('/v1/sparks/crm-production/health')).corps.checks.map((c) => c.name);
+    for (const n of ['accueil', 'base', 'interne']) assert.ok(!avant.includes(n), `${n} ne doit pas exister avant l'acceptation`);
+    await proposition.locator('[data-sugg-ouvrir="health"]').click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-proposition="health"] .badge--danger').length > 0, null, { timeout: 15000 });
+    // La commande d'un script est montrée EXACTEMENT, avec le compte qui l'exécutera.
+    assert.equal((await proposition.locator('pre[aria-label="Commande exacte"]').textContent()).trim(),
+      'docker compose -f /srv/crm/compose.yml exec -T db pg_isready');
+    assert.match(await proposition.textContent(), /s’exécutera dans la cellule, sous le compte de la pile/);
+    assert.match(await proposition.textContent(), /1 ligne\(s\) script/);
+    // Le serveur refuse la ligne dont le domaine n'est pas une route du Spark — et le DIT.
+    assert.match(await proposition.textContent(), /« crm\.interne\.example » n.est pas une route de ce Spark/);
+    const ajouter = proposition.locator('[data-sugg-appliquer="health"]');
+    assert.equal(await ajouter.isDisabled(), true, '« Ajouter » est présent mais désactivé tant qu\u2019une ligne retenue est refusée');
+    assert.match(await proposition.textContent(), /1 ligne\(s\) refusée\(s\) par le produit :\s+interne/);
+    // Une chaîne crontab ne se coupe jamais sur deux lignes (vu en capture : « */10 * * * » puis « * »).
+    assert.equal(await proposition.locator('.cadence').first().evaluate((e) => getComputedStyle(e).whiteSpace), 'nowrap');
+    await capturer('spk186-sante-proposition', { hauteur: 1500 });
+    await capturer('spk186-sante-proposition-mobile', { largeur: 390, hauteur: 2400 });
+
+    // Décocher la ligne refusée libère « Ajouter » ; elle reste dans la cellule.
+    await proposition.locator('tr:has-text("interne") [data-sugg-garder="health"]').uncheck();
+    await page.waitForFunction(() => !document.querySelector('[data-sugg-appliquer="health"]')?.disabled, null, { timeout: 10000 });
+    assert.match(await ajouter.textContent(), /Ajouter les 2 retenue\(s\)/);
+    await ajouter.click();
+    await page.waitForFunction(() => document.querySelector('[data-sante-sonde="accueil"]') && document.querySelector('[data-sante-sonde="base"]'),
+      null, { timeout: 15000 });
+    const apres = (await pile.lireSparkd('/v1/sparks/crm-production/health')).corps.checks.map((c) => c.name);
+    assert.ok(apres.includes('accueil') && apres.includes('base'), 'les deux lignes retenues sont posées');
+    assert.ok(!apres.includes('interne'), 'la ligne écartée n\u2019est pas posée');
+    // Ce qui n'a pas été retenu RESTE dans la cellule, en attente : la proposition revient avec elle seule.
+    await page.waitForFunction(
+      () => /1 sonde\(s\) proposée\(s\)/.test(document.querySelector('[data-proposition="health"]')?.textContent ?? ''),
+      null, { timeout: 15000 });
+    assert.match(await page.locator('[data-proposition="health"]').textContent(), /appliquée en partie/);
+
+    // --- au CLAVIER : Entrée sur « Ajouter une sonde », Échap ferme et rend le focus ------------------
+    await page.locator('[data-ouvre="sante"]').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog#sante[open]', { timeout: 10000 });
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'sante-name');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog#sante', { state: 'detached', timeout: 10000 });
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-ouvre')), 'sante');
+
+    // --- une sonde SCRIPT : essayer n'écrit rien ---------------------------------------------------------
+    await page.click('[data-ouvre="sante"]');
+    await page.waitForSelector('#sante-phrase', { timeout: 10000 });
+    await page.fill('#sante-name', 'essai-e2e');
+    await page.selectOption('#sante-kind', 'script');
+    assert.equal(await page.locator('[data-sante-groupe="script"]').isVisible(), true);
+    assert.equal(await page.locator('[data-sante-groupe="http"]').isHidden(), true);
+    assert.match(await page.textContent('label[for="sante-expected"]'), /Code de sortie attendu/);
+    assert.match(await page.textContent('#sante-commande-aide'), /sous le compte de la pile/);
+    await page.fill('#sante-commande', 'true');
+    await page.waitForFunction(() => /Toutes les 5 minutes/.test(document.querySelector('#sante-phrase')?.textContent ?? ''), null, { timeout: 10000 });
+    await page.click('[data-sante-tester]');
+    await page.waitForFunction(() => /L’essai a réussi/.test(document.querySelector('#sante-test')?.textContent ?? ''), null, { timeout: 15000 });
+    assert.match(await page.textContent('#sante-test'), /Rien n’a été enregistré/);
+    await page.fill('#sante-commande', 'exit 3');
+    await page.waitForFunction(() => document.querySelector('#sante-test')?.textContent === '' || !/réussi/.test(document.querySelector('#sante-test')?.textContent ?? ''), null, { timeout: 10000 });
+    await page.waitForFunction(() => !document.querySelector('[data-sante-tester]')?.disabled, null, { timeout: 10000 });
+    await page.click('[data-sante-tester]');
+    await page.waitForFunction(() => /L’essai a échoué/.test(document.querySelector('#sante-test')?.textContent ?? ''), null, { timeout: 15000 });
+    assert.match(await page.textContent('#sante-test'), /code de sortie 3/);
+    assert.match(await page.textContent('#sante-test'), /aucune alerte n’est partie/);
+    await capturer('spk186-sante-modale-essai', { hauteur: 1500 });
+    const surLeServeur = (await pile.lireSparkd('/v1/sparks/crm-production/health')).corps.checks.map((c) => c.name);
+    assert.ok(!surLeServeur.includes('essai-e2e'), 'un essai n\u2019enregistre rien');
+
+    // --- une cadence trop serrée est refusée avec sa raison, l'engagement reste présent mais désactivé ---
+    await page.fill('#sante-schedule', '*/2 * * * *');
+    // On attend l'ALERTE elle-même : « 5 minutes » figurait déjà dans la phrase précédente.
+    await page.waitForSelector('#sante-apercu [role="alert"]', { timeout: 10000 });
+    assert.match(await page.textContent('#sante-apercu'), /5 minutes/);
+    assert.equal(await page.locator('#sante-apercu [role="alert"]').count(), 1);
+    assert.equal(await page.locator('[data-engage="sante"]').isDisabled(), true);
+    assert.equal(await page.inputValue('#sante-preset'), '', 'chaîne inconnue du menu : « Personnalisée »');
+    await page.selectOption('#sante-preset', '*/15 * * * *');
+    assert.equal(await page.inputValue('#sante-schedule'), '*/15 * * * *');
+    await page.waitForFunction(() => /15 minutes/.test(document.querySelector('#sante-phrase')?.textContent ?? ''), null, { timeout: 10000 });
+    await page.fill('#sante-commande', 'true');
+    await page.waitForFunction(() => document.querySelector('#sante-phrase') && !document.querySelector('#sante-apercu [role="alert"]'), null, { timeout: 10000 });
+
+    // --- enregistrer : la sonde est posée, et la liste la montre ---------------------------------------------
+    await page.waitForFunction(() => !document.querySelector('[data-engage="sante"]')?.disabled, null, { timeout: 10000 });
+    await page.click('[data-engage="sante"]');
+    await page.waitForSelector('dialog#sante', { state: 'detached', timeout: 15000 });
+    await page.waitForSelector('[data-sante-sonde="essai-e2e"]', { timeout: 15000 });
+    const posee = (await pile.lireSparkd('/v1/sparks/crm-production/health')).corps.checks.find((c) => c.name === 'essai-e2e');
+    assert.equal(posee.schedule, '*/15 * * * *');
+    assert.equal(posee.kind, 'script');
+
+    // --- une sonde HTTPS se CHOISIT parmi les routes du Spark : TLS, jamais un joker ---------------------
+    await page.click('[data-ouvre="sante"]');
+    await page.waitForSelector('#sante-phrase', { timeout: 10000 });
+    const options = await page.locator('#sante-route option').evaluateAll((o) => o.map((x) => x.value));
+    assert.deepEqual(options.sort(), ['crm.example.com', 'vip.boutique.example.com']);
+    assert.equal(await page.locator('#sante-route').evaluate((e) => e.tagName), 'SELECT', 'une adresse se choisit, elle ne se saisit pas');
+    await capturer('spk186-sante-modale-http', { hauteur: 1500 });
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog#sante', { state: 'detached', timeout: 10000 });
+
+    // --- suspendre, reprendre : réparateurs ; retirer demande une confirmation DANS le flux ---------------
+    await page.click('[data-sante-bascule="suspend"][data-sonde="essai-e2e"]');
+    await page.waitForFunction(() => /Suspendue/.test(document.querySelector('[data-sante-sonde="essai-e2e"]')?.textContent ?? ''), null, { timeout: 15000 });
+    assert.equal((await pile.lireSparkd('/v1/sparks/crm-production/health')).corps.checks.find((c) => c.name === 'essai-e2e').enabled, false);
+    await page.click('[data-sante-bascule="resume"][data-sonde="essai-e2e"]');
+    await page.waitForFunction(() => !/Suspendue/.test(document.querySelector('[data-sante-sonde="essai-e2e"]')?.textContent ?? ''), null, { timeout: 15000 });
+    await page.click('[data-sante-retrait="essai-e2e"]');
+    await page.waitForSelector('[data-sante-confirme-retrait="essai-e2e"]', { timeout: 10000 });
+    assert.match(await ligne('essai-e2e').textContent(), /Son historique disparaît avec elle/);
+    await page.click('[data-sante-annule-retrait]');
+    assert.equal(await page.locator('[data-sante-confirme-retrait]').count(), 0);
+    await page.click('[data-sante-retrait="essai-e2e"]');
+    await page.click('[data-sante-confirme-retrait="essai-e2e"]');
+    await page.waitForFunction(() => !document.querySelector('[data-sante-sonde="essai-e2e"]'), null, { timeout: 15000 });
+    assert.ok(!(await pile.lireSparkd('/v1/sparks/crm-production/health')).corps.checks.some((c) => c.name === 'essai-e2e'));
+
+    // --- un Spark ARRÊTÉ n'est pas malade ----------------------------------------------------------------------
+    await ouvrir('boutique', 'sante');
+    await page.waitForSelector('[data-sante-sonde="stock"]', { timeout: 10000 });
+    assert.match(await page.locator('[data-sante-sonde="stock"]').textContent(), /Arrêtée/);
+    await capturer('spk186-sante-arrete', { hauteur: 900 });
+
+    // --- le refus d'un Spark PROTÉGÉ se dit DANS la modale, la saisie reste ------------------------------------
+    await ouvrir('analytics', 'sante');
+    await page.waitForSelector('section[aria-labelledby="titre-sante"]', { timeout: 10000 });
+    assert.match(await page.textContent('section[aria-labelledby="titre-sante"]'), /Aucune sonde : rien ne surveille ce Spark/);
+    await page.click('[data-ouvre="sante"]');
+    await page.waitForSelector('dialog#sante[open]', { timeout: 10000 });
+    // « analytics » n'a qu'une route en clair : rien à sonder en HTTPS, et la modale le DIT.
+    assert.match(await page.textContent('dialog#sante'), /n’a aucune route servie en TLS/);
+    await page.fill('#sante-name', 'prive');
+    await page.selectOption('#sante-kind', 'script');
+    await page.fill('#sante-commande', 'true');
+    await page.waitForFunction(() => !document.querySelector('[data-engage="sante"]')?.disabled, null, { timeout: 10000 });
+    await page.click('[data-sante-tester]');
+    await page.waitForFunction(() => /protégé|protection/i.test(document.querySelector('#sante-test')?.textContent ?? ''), null, { timeout: 15000 });
+    await page.click('[data-engage="sante"]');
+    await page.waitForSelector('dialog#sante .refus[role="alert"]', { timeout: 10000 });
+    assert.match(await page.textContent('dialog#sante .refus'), /protégé|protection/i);
+    assert.equal(await page.inputValue('#sante-commande'), 'true', 'la saisie n\u2019est pas perdue');
+    assert.equal((await pile.lireSparkd('/v1/sparks/analytics/health')).corps.checks.length, 0);
+    await capturer('spk186-sante-refus-protege', { hauteur: 1500 });
   });
 });

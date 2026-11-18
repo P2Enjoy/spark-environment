@@ -18430,7 +18430,10 @@ texte), le dernier relevé et sa latence, depuis quand, les échecs consécutifs
 3 »), une frise des derniers résultats. Une bannière annonce les propositions de `health.?`. La modale
 règle une sonde (type, route et chemin ou commande, cadence avec son menu, seuil, attendu) et porte un
 bouton **« Tester »**. Quand aucun canal d'alerte n'est configuré, la facette le dit : sans canal, une
-panne ne se verrait qu'ici. Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-51.
+panne ne se verrait qu'ici. `POST …/health/validate` renvoie, avec la définition normalisée, la **phrase** et les
+**prochains relevés** : la modale les affiche sans réimplémenter la grammaire crontab. Une proposition ne se montre que
+dans la facette `sante` (liste des facettes de proposition) et reste relue ligne par ligne, avec le verdict du
+serveur. Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-51. Livrée, non prouvée sur une Forge réelle.
 
 ### 75.11 Décisions du rédacteur, à confirmer par le responsable
 

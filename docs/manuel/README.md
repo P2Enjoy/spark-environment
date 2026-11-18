@@ -29,6 +29,7 @@ n'existe plus. Voir [DAT §30](../DAT.md).
 | [M11 · Sécurité et limites](M11-securite.md) | surface d'exposition, ce qui n'est pas garanti |
 | [M12 · Annexes](M12-annexes.md) | variables d'environnement, journal d'audit, messages courants |
 | [M13 · Relier des Sparks entre eux](M13-reseaux-prives.md) | réseaux privés : créer, attacher, se joindre par nom, détacher |
+| [M14 · Surveiller la santé d'un Spark](M14-sante.md) | sondes HTTPS et scripts, états, seuil d'échecs, alerte, proposition depuis la cellule |
 
 ## Essayer sans serveur
 

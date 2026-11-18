@@ -15,7 +15,7 @@ l'apparence change.
 carte des chapitres et de leurs unités ; le contrat de fraîcheur — illustrations
 produites, lien vérifié dans les deux sens — est au §30 du [DAT](DAT.md).
 
-**Tous les chapitres sont rédigés (M1 à M13).** M2 l'a été avec SPK-26 ; il
+**Tous les chapitres sont rédigés (M1 à M14).** M2 l'a été avec SPK-26 ; il
 délimite explicitement ce qui n'est pas encore outillé — la mise en place des
 prérequis, et le repartitionnement du stockage qui attend un arbitrage (SPK-28).
 
@@ -167,3 +167,16 @@ pas. Les familles sans networkd, où la cellule reste à configurer. Ce que le
 journal garde.
 
 Unités : SPK-110, SPK-111 ; §58 et §59 du DAT.
+
+## M14 · Surveiller la santé d'un Spark
+
+Ce qu'est une sonde — HTTPS sur une route du Spark, ou script dans la cellule — et
+ce qu'elle ne garde pas. Lire la liste : états saine, instable, en panne, arrêtée,
+seuil d'échecs par sonde, frise des derniers relevés. Quand une alerte part (au
+passage d'un état, pas à chaque relevé) et ce que dit l'onglet sans canal. Ajouter
+une sonde, la cadence et son menu, « Tester » qui n'écrit rien. Suspendre, reprendre,
+retirer ; le Spark protégé. Proposer des sondes depuis la cellule par `health.?`,
+relues ligne par ligne avec le verdict du produit. Ce qui est garanti et ce qui ne
+l'est pas.
+
+Unités : SPK-184, SPK-185, SPK-186 ; §75 du DAT.

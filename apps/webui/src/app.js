@@ -15,6 +15,10 @@
  */
 
 import { renderSparksView } from './components/sparks-view.js';
+import { SANTE_VIDE, definitionDe as definitionSante, valeursDeSonde, presetPour as presetSante,
+         PERSONNALISEE as PERSONNALISEE_SANTE, renderZoneApercu as renderZoneApercuSante,
+         renderZoneTest as renderZoneTestSante } from './components/sante-view.js';
+import { definitionDe as definitionDeProposee } from './components/sante-import.js';
 import { SLA_VIDE, valeursDe as valeursSla, corpsDe as corpsSla, presetPour, PERSONNALISEE,
          renderZoneApercu, engagementSla, detruit as detruitSla } from './components/sla-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE, valeursDesQuotas,
@@ -97,6 +101,8 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null, forgeListe
                // SPK-183 · §74.10 : la modale du SLA a son propre état, comme les quotas — son
                // SUJET est la section, pas les panneaux d'administration (§6.27).
                sla: { ...SLA_VIDE, values: { ...SLA_VIDE.values } },
+               // SPK-186 · §75.10 : la modale des sondes a elle aussi son état propre.
+               sante: { ...SANTE_VIDE, values: { ...SANTE_VIDE.values } },
                // SPK-58 · §43 : l'état de la facette Environnement.
                envUi: { ...ENV_VIDE, values: { ...ENV_VIDE.values } },
                // SPK-97 · §43.10 : la modale d'import, partagée par l'écran de
@@ -371,6 +377,7 @@ function peindre() {
                             confirming: etat.confirming, frappe: etat.frappe,
                             admin: etat.admin, quotas: etat.quotas,
                             slaUi: etat.sla, fuseau: fuseauDuNavigateur(),
+                            santeUi: etat.sante,
                             envUi: etat.envUi, envImport: etat.envImport,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
@@ -672,6 +679,7 @@ function brancher() {
   });
   brancherPanneaux();
   brancherSla();
+  brancherSante();
   brancherTerminal();
   brancherAmorcage();
   // §6.27 : le contrat de la modale est tenu à UN SEUL endroit — focus entrant,
@@ -704,6 +712,10 @@ function brancher() {
       // « Échap » : la repeinte trouverait `open` encore posé et rappellerait `showModal()`.
       etat.sla.open = false;
       etat.sla.refusal = null;
+      // SPK-186 : la modale des sondes suit le MÊME contrat (même motif que ci-dessus).
+      etat.sante.open = false;
+      etat.sante.refusal = null;
+      etat.sante.test = null;
       // SPK-58 : la facette Environnement suit le MÊME contrat, et l'oublier
       // ici RÉOUVRAIT la modale — MESURÉ par le parcours E2E du refus :
       // `close()` s'exécutait, puis la repeinte trouvait `open` encore vrai et
@@ -3420,6 +3432,192 @@ function brancherSla() {
   });
 }
 
+// --- SPK-186 · la facette Santé (docs/DAT.md §75, SPK-DS-51) ------------------------------------------
+
+const urlSante = (suite = '') => `/v1/sparks/${encodeURIComponent(etat.spark.name)}/health${suite}`;
+
+/**
+ * Demande au serveur son verdict sur chaque ligne d'une proposition `health.?`. Le verdict est gardé AVEC
+ * l'empreinte du fichier lu : il ne vaut que pour cette version (SPK-186).
+ */
+async function validerPropositionSante(nom) {
+  const p = etat.propositions;
+  // Une COPIE : `PROPOSITIONS_VIDE.verdicts` est partagé par tous les états remis à zéro, et le
+  // muter ferait fuir un verdict d'un Spark vers le suivant.
+  p.verdicts = { ...(p.verdicts ?? {}) };
+  const suggestion = (p.items ?? []).find((s) => s.kind === 'health' && s.present);
+  if (!suggestion) { delete p.verdicts.health; return; }
+  if (p.verdicts.health?.sha === suggestion.sha256) return;
+  const { entrees } = comprendre(suggestion);
+  const parLigne = {};
+  for (const entree of entrees) {
+    const r = await appel('POST', `/v1/sparks/${encodeURIComponent(nom)}/health/validate`,
+                          definitionDeProposee(entree)).catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
+    parLigne[entree.ligne] = r.ok ? { ok: true } : { ok: false,
+      message: r.corps?.detail?.message ?? 'Le serveur a refusé cette ligne.' };
+  }
+  p.verdicts.health = { sha: suggestion.sha256, parLigne };
+}
+
+/** Met à jour SUR PLACE ce que l'aperçu change : la zone, « Tester » et l'engagement (§14.3). */
+function majZoneSante() {
+  const s = etat.sante;
+  const zone = racine.querySelector('#sante-apercu');
+  if (zone) zone.innerHTML = renderZoneApercuSante(s);
+  const test = racine.querySelector('#sante-test');
+  if (test) test.innerHTML = renderZoneTestSante(s);
+  const valide = !s.erreur && Boolean(s.apercu);
+  const bouton = racine.querySelector('[data-engage="sante"]');
+  if (bouton) bouton.disabled = s.busy || !valide;
+  const tester = racine.querySelector('[data-sante-tester]');
+  if (tester) tester.disabled = s.essai || !valide;
+}
+
+let rangApercuSante = 0;
+let minuteurApercuSante = null;
+
+async function majApercuSante() {
+  const s = etat.sante;
+  const rang = ++rangApercuSante;
+  s.chargement = true;
+  s.test = null;
+  majZoneSante();
+  const r = await appel('POST', urlSante('/validate'), definitionSante(s.values))
+    .catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
+  if (rang !== rangApercuSante || !s.open) return;
+  s.chargement = false;
+  if (r.ok) { s.apercu = r.corps; s.erreur = null; }
+  else { s.apercu = null; s.erreur = r.corps?.detail?.message ?? 'Saisie refusée.'; }
+  majZoneSante();
+}
+
+function planifierApercuSante() {
+  clearTimeout(minuteurApercuSante);
+  minuteurApercuSante = setTimeout(majApercuSante, 250);
+}
+
+async function essayerSante() {
+  const s = etat.sante;
+  s.essai = true; s.test = null;
+  majZoneSante();
+  const r = await appel('POST', urlSante('/test'), definitionSante(s.values))
+    .catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
+  s.essai = false;
+  s.test = r.ok ? r.corps : { ok: false, detail: r.corps?.detail?.message ?? 'Essai refusé.' };
+  majZoneSante();
+}
+
+async function enregistrerSante() {
+  const s = etat.sante;
+  s.busy = true; s.refusal = null;
+  peindre();
+  const nom = s.values.name;
+  const r = await appel('PUT', urlSante(`/${encodeURIComponent(nom)}`), definitionSante(s.values))
+    .catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
+  s.busy = false;
+  if (!r.ok) {
+    s.refusal = r.corps?.detail?.message ?? 'Le serveur a refusé ce geste.';
+    peindre();
+    return;
+  }
+  s.open = false; s.test = null;
+  await chargerDetail(etat.spark.name, etat.facette);
+  racine.querySelector('[data-ouvre="sante"]')?.focus();
+}
+
+/** Suspendre, reprendre, retirer : des gestes de LIGNE ; leur refus se dit en tête de la facette. */
+async function gesteSante(operation) {
+  const s = etat.sante;
+  s.refusGeste = null;
+  const r = await operation().catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
+  s.confirmingRetrait = null;
+  if (!r.ok) {
+    s.refusGeste = r.corps?.detail?.message ?? 'Le serveur a refusé ce geste.';
+    peindre();
+    return;
+  }
+  await chargerDetail(etat.spark.name, etat.facette);
+}
+
+function ouvrirSante(sonde) {
+  const s = etat.sante;
+  s.open = sonde ? sonde.name : 'neuve';
+  s.values = valeursDeSonde(sonde, etat.detail?.routes ?? []);
+  s.apercu = null; s.erreur = null; s.refusal = null; s.test = null; s.essai = false;
+  s.confirmingRetrait = null; s.refusGeste = null;
+  peindre();
+  majApercuSante();
+}
+
+function brancherSante() {
+  const s = etat.sante;
+  racine.querySelector('[data-ouvre="sante"]')?.addEventListener('click', () => ouvrirSante(null));
+  for (const bouton of racine.querySelectorAll('[data-sante-modifie]')) {
+    bouton.addEventListener('click', () => {
+      const sonde = (etat.detail?.health?.checks ?? []).find((c) => c.name === bouton.dataset.santeModifie);
+      if (sonde) ouvrirSante(sonde);
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-sante-bascule]')) {
+    bouton.addEventListener('click', () => gesteSante(() => appel(
+      'POST', urlSante(`/${encodeURIComponent(bouton.dataset.sonde)}/${bouton.dataset.santeBascule}`))));
+  }
+  for (const bouton of racine.querySelectorAll('[data-sante-retrait]')) {
+    bouton.addEventListener('click', () => {
+      s.confirmingRetrait = bouton.dataset.santeRetrait;
+      peindre();
+      racine.querySelector('[data-sante-confirme-retrait]')?.focus();
+    });
+  }
+  racine.querySelector('[data-sante-annule-retrait]')?.addEventListener('click', () => {
+    const nom = s.confirmingRetrait;
+    s.confirmingRetrait = null;
+    peindre();
+    racine.querySelector(`[data-sante-retrait="${CSS.escape(nom ?? '')}"]`)?.focus();
+  });
+  racine.querySelector('[data-sante-confirme-retrait]')?.addEventListener('click', (e) =>
+    gesteSante(() => appel('DELETE', urlSante(`/${encodeURIComponent(e.currentTarget.dataset.santeConfirmeRetrait)}`))));
+
+  const formulaire = racine.querySelector('[data-modale="sante"]');
+  if (!formulaire) return;
+  const menu = formulaire.querySelector('#sante-preset');
+  const chaine = formulaire.querySelector('#sante-schedule');
+  menu.addEventListener('change', () => {
+    if (menu.value === PERSONNALISEE_SANTE) return;
+    chaine.value = menu.value;
+    s.values.schedule = menu.value;
+    planifierApercuSante();
+  });
+  chaine.addEventListener('input', () => {
+    s.values.schedule = chaine.value;
+    menu.value = presetSante(chaine.value);
+    planifierApercuSante();
+  });
+  // Le type bascule les deux groupes SUR PLACE : repeindre arracherait le focus au sélecteur.
+  const type = formulaire.querySelector('#sante-kind');
+  type.addEventListener('change', () => {
+    s.values.kind = type.value;
+    for (const groupe of formulaire.querySelectorAll('[data-sante-groupe]')) {
+      groupe.hidden = groupe.dataset.santeGroupe !== type.value;
+    }
+    const attendu = formulaire.querySelector('label[for="sante-expected"]');
+    if (attendu) attendu.textContent = type.value === 'http' ? 'Statut HTTP attendu' : 'Code de sortie attendu';
+    s.values.expected = type.value === 'http' ? '200' : '0';
+    formulaire.querySelector('#sante-expected').value = s.values.expected;
+    planifierApercuSante();
+  });
+  for (const champ of formulaire.querySelectorAll('#sante-name, #sante-route, #sante-chemin, #sante-commande, #sante-expected, #sante-threshold')) {
+    const evenement = champ.tagName === 'SELECT' ? 'change' : 'input';
+    champ.addEventListener(evenement, () => { s.values[champ.name] = champ.value; planifierApercuSante(); });
+  }
+  formulaire.querySelector('[data-sante-tester]')?.addEventListener('click', essayerSante);
+  formulaire.addEventListener('submit', (evenement) => {
+    evenement.preventDefault();
+    if (s.busy || s.erreur || !s.apercu) return;
+    enregistrerSante();
+  });
+}
+
 async function prendreInstantane() {
   const resultat = await agir('snapshot', () => appel(
     'POST', `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots`,
@@ -3940,6 +4138,10 @@ async function chargerPropositions(nom) {
     const vues = await api(`/v1/sparks/${encodeURIComponent(nom)}/suggestions`);
     p.items = vues.suggestions ?? [];
     p.cellLue = Boolean(vues.cell_read);
+    // SPK-186 · §75.9 : ce que le SERVEUR dit de chaque ligne d'une proposition de sondes, AVANT que
+    // le propriétaire n'accepte. Il refait cette validation à l'acceptation ; celle-ci sert à nommer
+    // la ligne fautive, pas à décider à sa place.
+    await validerPropositionSante(nom);
     p.status = 'pret';
   } catch (erreur) {
     // §14.6 : ne pas avoir pu regarder n'est pas « aucune proposition ». On ne
@@ -4048,7 +4250,7 @@ async function chargerDetail(nom, facette = '') {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
            env, catalogue, forge, , isolation, reseauDuSpark, reseaux,
-           projets, sla] = await Promise.all([
+           projets, sla, health, canalAlerte] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -4089,9 +4291,13 @@ async function chargerDetail(nom, facette = '') {
       // SPK-183 · §74.10 : la politique de SLA. `null` si la lecture échoue : l'écran le DIT
       // plutôt que de montrer « aucun SLA » (§14.6).
       api(`/v1/sparks/${encodeURIComponent(nom)}/sla`).catch(() => null),
+      // SPK-186 · §75.10 : les sondes, et si un canal d'alerte est configuré. `null` dans les deux
+      // cas = « illisible », que l'écran DIT : ne pas avoir pu lire n'est pas « aucune sonde ».
+      api(`/v1/sparks/${encodeURIComponent(nom)}/health`).catch(() => null),
+      api('/v1/notify/channels').then((c) => Boolean(c?.live?.configured)).catch(() => null),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
-                    snapshots, audit, isolation, reseaux, projets, sla,
+                    snapshots, audit, isolation, reseaux, projets, sla, health, canalAlerte,
                     memberships: reseauDuSpark.memberships ?? [],
                     exposed: reseauDuSpark.exposed ?? [],
                     consumable: reseauDuSpark.consumable ?? [],
@@ -4129,7 +4335,9 @@ async function chargerDetail(nom, facette = '') {
   // SPK-105 · §55.9 : les propositions ne se lisent que sur les facettes qui
   // les montrent. Six lectures de la cellule n'ont rien à faire dans les six
   // autres facettes, et le §55.5 veut que cette lecture ne consomme rien.
-  if (['environnement', 'routes'].includes(facette) && etat.status === 'ready') {
+  // SPK-186 : la facette Santé montre les propositions de sondes (`health.?`) — sans elle dans cette liste,
+  // la bannière n'aurait jamais paru, et aucun test de rendu ne l'aurait dit (il peint un état donné).
+  if (['environnement', 'routes', 'sante'].includes(facette) && etat.status === 'ready') {
     await chargerPropositions(nom);
     peindre();
   } else if (!['environnement', 'routes'].includes(facette)) {

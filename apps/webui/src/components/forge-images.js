@@ -353,6 +353,10 @@ export const FACETTES_SPARK = [
   // se lisent, comme les infos ; la facette vient donc avant celles qui
   // s'emploient.
   ['mesures', 'Mesures'],
+  // SPK-186 · §75.10 : la santé de CE Spark. Elle suit les mesures — ce que consomme le Spark — et
+  // précède l'environnement : elle se lit, et se règle par une modale. Un onglet est une ADRESSE :
+  // une sonde en panne se met en favori et se partage.
+  ['sante', 'Santé'],
   // SPK-58 · §43 : ce que la pile du locataire RECEVRA. La facette vient après
   // les instantanés et avant le terminal : elle se lit, quand celui-ci s'emploie.
   ['environnement', 'Environnement'],

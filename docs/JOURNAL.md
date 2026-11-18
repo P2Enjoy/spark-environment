@@ -15939,3 +15939,22 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **Un défaut de forme repéré, non traité** : sur le doublon la taille des instantanés est nulle, donc « 0 o »
   s'affiche. Sur une vraie Forge la taille est relevée (`sync_sizes`).
 
+**SPK-186 : livraison de l'onglet Santé, le 2026-11-18.**
+
+- **Défauts trouvés à l'écran, pas par les tests** : (1) la facette ne s'affichait pas parmi les facettes de
+  proposition, la bannière restait invisible ; (2) `.champ` fixait son `display`, donc l'attribut `hidden` ne
+  cachait rien — le type « Script » montrait aussi les champs de la sonde HTTPS ; (3) la liste administrable est
+  un flex qui rangeait l'adresse à droite des boutons (`.sonde__corps`) ; (4) « 13 sur 1 » : le compteur d'une sonde
+  en panne continue au-delà du seuil, la phrase est devenue « N échecs consécutifs · seuil S » ; (5) une chaîne
+  crontab se coupait sur deux lignes — la règle `white-space: nowrap` ne s'appliquait **pas** : le commentaire qui
+  la précédait contenait une chaîne crontab, dont la séquence « étoile-barre » **fermait le commentaire** et
+  avalait la règle suivante. Trouvé parce que l'illustration du manuel montrait toujours la coupure ; une assertion
+  de style calculé l'épingle désormais dans le parcours E2E, et le commentaire met en garde.
+- **Validation côté serveur** : `POST …/health/validate` renvoie `description` et `next_runs`, comme le SLA, pour
+  que la modale montre la phrase et les prochains relevés sans réimplémenter la grammaire crontab.
+- **Preuves** : parcours E2E depuis l'accueil à la souris et au clavier (liste du seed, proposition, ajout des
+  lignes retenues, essai sans écriture, cadence refusée, suspension, retrait, Spark arrêté, Spark protégé) ;
+  tests de composant ; manuel M14 et trois illustrations.
+- **Non prouvé** : le cas « aucun canal d'alerte » est prouvé au rendu seulement (la pile des parcours a un canal) ;
+  rien contre une vraie Forge — Incus, Caddy et Docker réels.
+

@@ -38,6 +38,7 @@
  */
 
 import { analyser, renderEtiquette } from './env-import.js';
+import { lireProposition, definitionDe as definitionSonde } from './sante-import.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -56,6 +57,10 @@ export const PROPOSITIONS_VIDE = {
   valeurs: {},      // { [kind]: Map ligne -> valeur saisie } — §55.3.3
   busy: null,
   issue: null,      // { kind, ok, message }
+  // SPK-186 · §75.9 : ce que le SERVEUR dit de chaque ligne d'une proposition de sondes
+  // (`POST …/health/validate`), pour l'empreinte `sha` lue — un verdict d'une version périmée
+  // du fichier ne vaut plus rien.
+  verdicts: {},     // { health: { sha, parLigne: { [ligne]: { ok, message } } } }
 };
 
 /** Les libellés, en français. Une nature technique n'atteint pas l'écran (§14.7). */
@@ -123,6 +128,12 @@ export function analyserRoutes(texte) {
  */
 export function comprendre(suggestion) {
   if (!suggestion?.present) return { entrees: [], refus: [] };
+  if (suggestion.kind === 'health') {
+    // SPK-185 : la grammaire des sondes vit dans `sante-import.js`. `nom` est ajouté parce que
+    // `lignesAConserver` raisonne par nom (une ligne supplantée suit celle qui la supplante).
+    const lue = lireProposition(suggestion.body);
+    return { ...lue, entrees: lue.entrees.map((e) => ({ ...e, nom: e.name })) };
+  }
   return suggestion.kind === 'routes'
     ? analyserRoutes(suggestion.body)
     // Le chemin DIT la nature (§55.3), et l'écran la pré-coche en conséquence.
@@ -174,6 +185,8 @@ export const valeurAppliquee = (ui, kind, entree) =>
 export function entreesAppliquees(ui, kind, entrees) {
   const secrets = ui.secrets?.[kind] ?? null;
   const gardees = entrees.filter((e) => retenue(ui, kind, e.ligne));
+  // SPK-185 : une sonde part en définition structurée, jamais en texte (§55.8).
+  if (kind === 'health') return gardees.map(definitionSonde);
   return kind === 'routes'
     // §55.9.2 : la case TELLE QU'ELLE EST COCHÉE, pas ce que le fichier disait.
     ? gardees.map((e) => ({ domain: e.domaine, port: e.port,
@@ -226,9 +239,54 @@ export function enAttente(kind, entrees, ui) {
     && !valeurSaisie(ui, kind, e.ligne).trim());
 }
 
+/** Le verdict du serveur sur une ligne, ou `undefined` s'il n'en a pas (ou s'il date d'une autre version du fichier). */
+export function verdictDe(ui, suggestion, ligne) {
+  const v = ui.verdicts?.[suggestion?.kind];
+  return v && v.sha === suggestion.sha256 ? v.parLigne?.[ligne] : undefined;
+}
+
+/**
+ * Les lignes RETENUES que le serveur a refusées (SPK-186, DAT §75.9). Tant qu'il en reste, « Ajouter »
+ * est indisponible : l'acceptation validerait tout, refuserait tout, et ferait payer un aller-retour
+ * pour un fait déjà connu. Les décocher les laisse dans la cellule, pour que leur auteur les corrige.
+ */
+export function refusServeur(ui, suggestion, entrees) {
+  return entrees.filter((e) => retenue(ui, suggestion.kind, e.ligne)
+    && verdictDe(ui, suggestion, e.ligne)?.ok === false);
+}
+
+/** La cellule « vérification » d'une ligne de sonde : le verdict du serveur, en pastille ET en texte. */
+function verdictLigne(verdict) {
+  if (!verdict) return '<span class="badge badge--neutral">Vérification…</span>';
+  return verdict.ok
+    ? '<span class="badge badge--success"><span class="badge__point" aria-hidden="true"></span>Valide</span>'
+    : `<span class="badge badge--danger"><span class="badge__point" aria-hidden="true"></span>Refusée</span>
+       <p class="absence">${echapper(verdict.message)}</p>`;
+}
+
 /** Une ligne d'entrée, avec sa case de rétention et — pour l'env — sa case secret. */
-function ligneEntree(kind, entree, ui) {
+function ligneEntree(kind, entree, ui, suggestion = null) {
   const gardee = retenue(ui, kind, entree.ligne);
+  if (kind === 'health') {
+    // SPK-186 · §75.9 : une ligne `script` se montre avec sa commande EXACTE, jamais résumée :
+    // l'accepter autorise l'exécution répétée de ce texte. Une ligne http montre son adresse.
+    const etiquetteId = entree.commentaire ? `sugg-note-${kind}-${entree.ligne}` : null;
+    const cible = entree.kind === 'script'
+      ? `<pre class="technique bloc-cle" aria-label="Commande exacte">${echapper(entree.target)}</pre>
+         <p class="absence">s’exécutera dans la cellule, sous le compte de la pile</p>`
+      : `<span class="technique">${echapper(entree.target)}</span>
+         <p class="absence">statut attendu ${entree.expected}</p>`;
+    return `<tr>
+      <td><input type="checkbox" data-sugg-garder="${kind}" data-ligne="${entree.ligne}"
+        ${gardee ? 'checked' : ''} aria-label="Retenir la ligne ${entree.ligne}"></td>
+      <th scope="row" class="nom-cellule"><span class="technique">${echapper(entree.name)}</span>${
+        renderEtiquette(entree.commentaire, etiquetteId)}</th>
+      <td>${entree.kind === 'script' ? 'Script' : 'HTTPS'}<p class="absence technique cadence">${
+        echapper(entree.schedule)}</p><p class="absence">seuil : ${entree.threshold} échec(s)</p></td>
+      <td>${cible}</td>
+      <td>${verdictLigne(suggestion ? verdictDe(ui, suggestion, entree.ligne) : undefined)}</td>
+    </tr>`;
+  }
   if (kind === 'routes') {
     // SPK-112 · §55.9.2 : la mention dit ce que la proposition DEMANDE, pas
     // l'état de la case. Rien ne se repeint au clic (§14.3) : une phrase qui
@@ -278,7 +336,9 @@ function ligneEntree(kind, entree, ui) {
 function relecture(suggestion, ui) {
   const { kind } = suggestion;
   const { entrees, refus } = comprendre(suggestion);
-  const entetes = kind === 'routes'
+  const entetes = kind === 'health'
+    ? '<th>Retenir</th><th>Nom</th><th>Type et cadence</th><th>Cible</th><th>Vérification</th>'
+    : kind === 'routes'
     ? '<th>Retenir</th><th>Domaine</th><th>Port dans la cellule</th><th>TLS</th>'
     : '<th>Retenir</th><th>Nom</th><th>Valeur proposée</th><th>Secret</th>';
   const tableau = entrees.length
@@ -290,7 +350,7 @@ function relecture(suggestion, ui) {
         <p class="tableau-indice">Le tableau défile horizontalement.</p>
         <table>
         <thead><tr>${entetes}</tr></thead>
-        <tbody>${entrees.map((e) => ligneEntree(kind, e, ui)).join('')}</tbody>
+        <tbody>${entrees.map((e) => ligneEntree(kind, e, ui, suggestion)).join('')}</tbody>
       </table></div>`
     // §14.5 : rien de lisible n'est un FAIT, et il a un remède — corriger le
     // fichier. Le taire ferait croire à une panne de lecture.
@@ -306,6 +366,14 @@ function relecture(suggestion, ui) {
         .join(', '))}. Acceptée(s) ainsi, elle(s) publierai(en)t le site en
         http://, sans certificat. Cochez « TLS » pour la servir en https://.</p>`
     : '';
+  // SPK-186 · §75.5 : accepter une ligne `script`, c'est autoriser l'exécution répétée de sa commande.
+  const scripts = kind === 'health'
+    ? entrees.filter((e) => e.kind === 'script' && retenue(ui, kind, e.ligne)) : [];
+  const avertissementScript = scripts.length
+    ? `<p class="avertissement" role="status"><strong>${scripts.length} ligne(s) script</strong> :
+        les accepter autorise l’exécution répétée de ces commandes, <strong>telles qu’elles sont écrites
+        ci-dessus</strong>, dans la cellule, sous le compte de la pile. Relisez chaque commande.</p>`
+    : '';
   const fautives = refus.length
     ? `<div class="refus" role="alert">
         <p><strong>${refus.length} ligne(s) refusée(s)</strong>, et elles ne
@@ -315,7 +383,7 @@ function relecture(suggestion, ui) {
           <span class="technique">${echapper(r.texte)}</span> — ${echapper(r.raison)}</li>`).join('')}</ul>
       </div>`
     : '';
-  return avertissementTls + tableau + fautives;
+  return avertissementTls + avertissementScript + tableau + fautives;
 }
 
 /** Le bloc d'une nature : la bannière, puis la relecture quand on l'ouvre. */
@@ -331,6 +399,7 @@ function bloc(suggestion, ui) {
   // compte à côté. Un bouton actif qui refuserait ensuite ferait payer un
   // aller-retour pour un fait connu avant le clic.
   const attente = enAttente(kind, entrees, ui);
+  const refusees = kind === 'health' ? refusServeur(ui, suggestion, entrees) : [];
   return `<section class="carte bloc" data-proposition="${kind}"
     aria-labelledby="titre-sugg-${kind}">
     <h2 id="titre-sugg-${kind}">${echapper(libelle.titre)}</h2>
@@ -355,7 +424,7 @@ function bloc(suggestion, ui) {
         <button type="button" class="bouton bouton--primaire"
           data-sugg-appliquer="${kind}" data-sha="${echapper(suggestion.sha256)}"
           aria-describedby="sugg-attente-${kind}"
-          ${enCours || !gardees.length || attente.length ? 'disabled' : ''}>${
+          ${enCours || !gardees.length || attente.length || refusees.length ? 'disabled' : ''}>${
             enCours ? 'Application…' : `Ajouter les ${gardees.length} retenue(s)`}</button>
         <button type="button" class="bouton" data-sugg-refuser="${kind}"
           data-sha="${echapper(suggestion.sha256)}"
@@ -364,7 +433,10 @@ function bloc(suggestion, ui) {
       <p class="champ__aide" id="sugg-attente-${kind}" data-sugg-attente="${kind}">${
         attente.length ? `${attente.length} valeur(s) demandée(s) encore vide(s)
         : ${echapper(attente.map((e) => e.nom).join(', '))}. Complétez ces champs,
-        ou décochez ces lignes : elles resteront en attente dans la cellule.` : ''}</p>
+        ou décochez ces lignes : elles resteront en attente dans la cellule.` : ''}${
+        refusees.length ? `${refusees.length} ligne(s) refusée(s) par le produit :
+        ${echapper(refusees.map((e) => e.name).join(', '))}. Décochez-les : elles resteront dans
+        la cellule, pour que leur auteur les corrige.` : ''}</p>
       <p class="note">Ce que vous ajoutez sort du fichier de la cellule ;
       <strong>ce que vous ne retenez pas y reste, en attente</strong>, jusqu’à
       ce que vous l’ajoutiez ou choisissiez « Tout refuser ». C’est ainsi que

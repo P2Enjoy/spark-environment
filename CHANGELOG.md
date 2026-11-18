@@ -3,6 +3,19 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-186 — l'onglet « Santé » de la console.** Facette **Santé** de la fenêtre d'un Spark : par sonde, l'état
+  (**Saine / Instable / En panne / Arrêtée**, en pastille **et** en texte), le dernier relevé, sa latence, depuis
+  quand, « N échecs sur S » ou « N échecs consécutifs · seuil S », une **frise** des derniers résultats (rond
+  plein / croix, avec son équivalent texte), la commande exacte d'un script ou l'adresse d'une sonde HTTPS.
+  **Ajouter / Modifier** ouvre une modale : type, **route choisie** parmi celles du Spark servies en TLS (jamais
+  saisie), chemin ou commande, attendu, menu de cadences qui écrit la chaîne crontab, seuil ; l'aperçu suit la
+  frappe (phrase, prochains relevés, refus avec sa raison) et **« Tester »** exécute la sonde sans rien
+  enregistrer ni alerter. Suspendre, reprendre, retirer avec confirmation dans le flux ; un Spark protégé refuse
+  et le dit. Une **bannière de proposition** relit `health.?` ligne par ligne avec le **verdict du serveur** et
+  la commande exacte d'un script ; « Ajouter » reste présent mais inactif tant qu'une ligne retenue est refusée,
+  et ce qui n'est pas retenu reste dans la cellule. Sans canal d'alerte, la facette le dit. `POST
+  …/health/validate` renvoie aussi la phrase et les prochains relevés. Manuel **M14** et trois illustrations.
+  DAT §75.10 ; SPK-DS-51.
 - **SPK-183 — le SLA des instantanés dans la console : la section et sa modale.** Dans l'onglet
   **Instantanés**, une section **« SLA des instantanés »** au-dessus de la liste dit l'état (actif ou
   suspendu, en pastille **et** en texte), la fréquence en clair et sa chaîne crontab, la prochaine prise
@@ -26,7 +39,7 @@
   l'accepter valide **toutes** les lignes avant d'en poser une, par le chemin normal, et un refus du
   produit **ne vide pas** le fichier. `POST …/health/validate` valide sans exécuter ni écrire. La grammaire
   est lue par la console (`sante-import.js`). Une proposition de trois lignes (une page, un script, un
-  domaine étranger refusable) au seed. **L'écran (SPK-186) n'est pas livré.** DAT §75.9.
+  domaine étranger refusable) au seed. L'écran est SPK-186 (ci-dessus). DAT §75.9.
 - **SPK-184 — la santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes.** Un Spark
   peut porter jusqu'à vingt sondes. Une sonde **HTTPS** part de la Forge **par la boucle locale**
   (127.0.0.1:443, le nom en SNI) : elle ne peut viser qu'un **domaine non joker, servi en TLS, que le
@@ -39,8 +52,8 @@
   au seuil, `health.up` une fois au rétablissement, par le canal hors bande — ajoutées à sa liste fermée,
   avec une exception nommée pour la classe `runtime`. Historique borné à 100 relevés ; un « test » exécute
   une définition sans rien écrire ; un Spark protégé refuse toute écriture, mais ses relevés continuent.
-  Migration 024, cinq routes, cinq sondes au seed (sain, instable, en panne, arrêté). **L'écran (SPK-186) et
-  la paire `health.?` (SPK-185) ne sont pas livrés** : les sondes se règlent par l'API. DAT §75 ; SCHEMA §8
+  Migration 024, cinq routes, cinq sondes au seed (sain, instable, en panne, arrêté). La paire `health.?`
+  est SPK-185 et l'écran SPK-186 (ci-dessus). DAT §75 ; SCHEMA §8
   quater ; `docs/PROD_MIGRATIONS.md` OP-47.
 - **SPK-182 — le SLA des instantanés dans `sparkd` : prise automatique et rétention.** Un Spark
   peut porter une politique : une fréquence en **chaîne crontab à cinq champs** (UTC, écart minimal

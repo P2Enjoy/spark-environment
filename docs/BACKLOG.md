@@ -9380,10 +9380,10 @@ proposition `/etc/spark/health.?`, comme les six paires du DAT §55.
   **vide** le fichier ; une ligne refusable refuse **tout**, laisse la première **non posée** et **ne
   consomme pas** la proposition ; accepter ne retire rien et remplace par nom ; `validate` sans écriture,
   ouvert sur un Spark protégé ; le brief nomme `health.?` ; la grammaire console (15 tests : cible
-  jusqu'à la fin de ligne, refus nommés, nom doublé dit, étiquette). **Non fait ici, c'est SPK-186** :
-  l'écran qui montre la proposition avec la commande exacte d'un script, et ses refus ligne par ligne.
+  jusqu'à la fin de ligne, refus nommés, nom doublé dit, étiquette). L'écran qui montre la proposition
+  avec la commande exacte d'un script, et ses refus ligne par ligne, est SPK-186 (livré).
 
-### [ ] SPK-186 · L'onglet « Santé » dans la console
+### [~] SPK-186 · L'onglet « Santé » dans la console
 
 Suite de SPK-184 et SPK-185 : la facette « Santé » de la fenêtre d'un Spark.
 
@@ -9397,6 +9397,13 @@ Suite de SPK-184 et SPK-185 : la facette « Santé » de la fenêtre d'un Spark.
 - DoD : tests unitaires de composant ; E2E depuis l'accueil, à la souris et au clavier ; captures
   observées (desktop, mobile, sans sonde, sain, instable, en panne, arrêté, proposition) ; manuel,
   seed et changelog à jour.
+
+**État (2026-11-18) : livré, `[~]`.** Prouvé : tests de composant (`sante-view.test.js`,
+`sante-import.test.js`, `spark-suggestions-sante.test.js`), parcours E2E depuis l'accueil à la souris et au clavier
+(liste du seed saine / instable / en panne, Spark arrêté, proposition relue ligne par ligne, ajout partiel, essai
+sans écriture, cadence refusée, suspendre / reprendre / retirer, Spark protégé), captures desktop et mobile
+observées, manuel M14. **Non prouvé** : le cas « aucun canal d'alerte » en E2E (la pile des parcours a un canal ;
+prouvé au rendu) ; rien contre une vraie Forge.
 
 ---
 

@@ -375,6 +375,23 @@ tbody tr:hover { background: var(--color-hover); }
 .actions-section { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0 0; }
 .champ--case label { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--size-target); }
 
+/* --- La facette Santé : la frise des derniers relevés (SPK-186, SPK-DS-51) --------------------
+   Un rond PLEIN pour un succès, une CROIX pour un échec : la forme porte ce que la couleur dit déjà. */
+/* `hidden` doit CACHER : `.champ` fixe son propre `display`, qui l'emportait sur la règle du navigateur.
+   Vu en capture le 2026-11-18 — le type « Script » montrait aussi les champs de la sonde HTTPS. */
+.champ[hidden] { display: none; }
+/* Le corps d'une sonde occupe sa propre ligne sous l'en-tête (nom, état, gestes) : sans cela, la liste
+   administrable, qui est un flex, rangeait l'adresse À DROITE des boutons — vu en capture. */
+.sonde__corps { flex: 1 0 100%; }
+/* Une chaîne crontab ne se coupe jamais : sur deux lignes, elle ne se lit plus (vu en capture le 2026-11-18).
+   Piège : n'écrire aucune chaîne crontab dans ce commentaire, « étoile-barre » y fermerait le commentaire. */
+.cadence { white-space: nowrap; }
+.frise-ligne { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin: var(--space-2) 0 0; }
+.frise { display: block; max-width: 100%; }
+.frise__ok { fill: var(--color-success); }
+.frise__echec { fill: none; stroke: var(--color-danger); stroke-width: 2; stroke-linecap: round; }
+.frise__texte { font-size: var(--text-compact); color: var(--color-text-2); }
+
 /* --- États systématiques (§6.13) ----------------------------------------- */
 .etat-vue {
   padding: var(--space-12) var(--space-4);

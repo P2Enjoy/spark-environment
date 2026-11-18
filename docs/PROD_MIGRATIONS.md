@@ -162,9 +162,9 @@ Retour arrière: réinstaller la build précédente ; la migration 024 se défai
 Risques       : un script s'exécute dans la cellule sans qu'une personne regarde,
                 sous le compte de la pile : il consomme le quota du Spark. La
                 sortie d'un script n'est ni stockée ni envoyée. Si la Forge
-                tombe, plus aucune sonde ni alerte ne part (DAT §75.7). L'écran
-                (SPK-186) n'est PAS livré : sans lui les sondes se règlent par
-                l'API, et une proposition health.? ne se lit que par l'API.
+                tombe, plus aucune sonde ni alerte ne part (DAT §75.7). L'onglet
+                Santé de la console (SPK-186) règle les sondes et relit les
+                propositions health.? ; il n'a pas été vu sur une Forge réelle.
 ```
 
 ### OP-46 · Le SLA des instantanés dans `sparkd` : migration 023 et planificateur (SPK-182)

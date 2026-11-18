@@ -32,6 +32,7 @@ import { facetteOffertes, renderOngletsSpark } from './forge-images.js';
 import { renderProjetsSpark } from './sparks-projets.js';
 import { renderModale } from './modale.js';
 import { SLA_VIDE, renderSlaSection } from './sla-view.js';
+import { SANTE_VIDE, renderSanteFacette } from './sante-view.js';
 import { renderSupervisionSpark, SUPERVISION_VIDE } from './supervision.js';
 import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
 import { IMPORT_VIDE } from './env-import.js';
@@ -1019,6 +1020,9 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     // SPK-183 · §74.10 : la politique de SLA (`null` si sa lecture a
                                     // échoué — l'écran le dit, il ne rend pas une absence) et sa modale.
                                     sla = null, slaUi = SLA_VIDE, fuseau = null,
+                                    // SPK-186 · §75.10 : les sondes (`null` si leur lecture a échoué),
+                                    // leur modale, et si un canal d'alerte est configuré (`null` : illisible).
+                                    health = null, santeUi = SANTE_VIDE, canalAlerte = null,
                                     catalogue = [], pools = null, cores = null,
                                     // SPK-109 · §57.3 : l'isolation, lue dans Incus.
                                     isolation = undefined,
@@ -1077,6 +1081,10 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     // SPK-93 · §52.11 : la meme lecture que l'ecran de Forge, bornee a CE Spark
     // et comparee a SES quotas.
     mesures: () => renderSupervisionSpark(mesures),
+    // SPK-186 · SPK-DS-51 : la proposition de sondes vient EN TÊTE — c'est une décision en
+    // attente (§6.13) —, puis la liste, qui se règle par une modale.
+    sante: () => renderPropositions(propositions, ['health'])
+                 + renderSanteFacette(health, santeUi, { routes, canal: canalAlerte }),
     environnement: () => renderPropositions(propositions, ['variables', 'secrets'])
                          + renderEnvPanel(spark, env, envUi, renderModale, catalogue,
                                           envImport),

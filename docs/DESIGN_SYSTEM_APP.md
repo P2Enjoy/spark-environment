@@ -336,15 +336,23 @@ Date : 2026-11-18 · `docs/DAT.md` §75 · `docs/DESIGN_SYSTEM.md` §1.3, §1.5,
 qualifient la sonde sans former des colonnes comparables. Chaque ligne porte :
 
 - le **nom** et le **type** (« HTTPS » ou « Script ») ;
-- l'**état**, en pastille **et en texte** (§1.5) : « Sain » (`success`), « Instable » (`accent` :
-  un retard, pas une panne), « En panne » (`danger`), « Arrêté » et « Suspendu » (`neutral` : un
-  Spark arrêté n'est pas malade), « Jamais relevé » (`neutral`, §14.6) ;
-- pour une sonde instable, les **échecs sur le seuil** (« 2 échecs sur 3 ») ;
+- l'**état**, en pastille **et en texte** (§1.5), accordé avec « sonde » : « Saine » (`success`), « Instable »
+  (`accent` : un retard, pas une panne), « En panne » (`danger`), « Arrêtée » (`neutral` : un Spark
+  arrêté n'est pas malade), « Jamais relevée » (`neutral`, §14.6) ; une sonde suspendue le dit en texte ;
+- pour une sonde instable, les **échecs sur la fenêtre** (« 3 échecs sur 20 ») ; pour une sonde en panne,
+  « N échecs consécutifs · seuil S » — le compteur continue au-delà du seuil, on n'écrit donc jamais
+  « 13 sur 1 » ;
 - le **dernier relevé**, sa **latence**, et **depuis quand** l'état dure ;
 - le **motif court** de la dernière erreur, tel que le serveur le donne ;
 - une **frise** des derniers relevés : une suite de repères, **ronds pleins pour un succès, croix pour
   un échec** — la forme porte ce que la couleur dit déjà (§1.5), et la frise a un équivalent textuel
   (« 18 réussis sur les 20 derniers »).
+
+**Une chaîne crontab ne se coupe jamais** (classe `.cadence`, `white-space: nowrap`) : sur deux lignes,
+elle ne se lit plus. Un commentaire CSS ne doit contenir aucune chaîne crontab — sa séquence « étoile-barre »
+le fermerait et annulerait la règle suivante (vu le 2026-11-18). La **proposition** de `health.?` est un
+tableau relu ligne par ligne, avec une colonne « Vérification » (pastille « Valide » / « Refusée » et la
+raison du serveur) ; « Ajouter » y reste présent mais inactif tant qu'une ligne retenue est refusée.
 
 **Ce que la facette ne fait pas.** Aucune alerte sonore, aucun clignotement, aucune bannière rouge plein
 cadre : la panne se lit, elle ne crie pas. Les alertes partent par le canal hors bande, pas par l'écran.

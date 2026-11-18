@@ -469,6 +469,24 @@ export async function produireIllustrations({ silencieux = false } = {}) {
       null, { timeout: 10000 });
     await capturer('m13-lien', { hauteur: 900 });
     await page.keyboard.press('Escape');
+
+    // --- M14 · La santé d'un Spark (SPK-186, §75.10) ---------------------------------------------
+    // Depuis l'accueil, par le dossier du Spark : la liste des sondes du seed (saine, instable,
+    // en panne), la fenêtre d'une sonde HTTPS, puis la proposition de la cellule relue ligne par ligne.
+    await ouvrir('crm-production', 'sante');
+    await page.waitForSelector('[data-sante-sonde="sauvegarde"]', { timeout: 15000 });
+    await capturer('m14-sante', { hauteur: 1300 });
+    await page.click('[data-ouvre="sante"]');
+    await page.waitForSelector('#sante-phrase', { timeout: 10000 });
+    await page.fill('#sante-name', 'accueil-public');
+    await page.fill('#sante-chemin', '/healthz');
+    await page.waitForFunction(() => /Toutes les 5 minutes/.test(document.querySelector('#sante-phrase')?.textContent ?? ''), null, { timeout: 10000 });
+    await capturer('m14-sante-modale', { hauteur: 1500 });
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog#sante', { state: 'detached', timeout: 10000 });
+    await page.locator('[data-proposition="health"] [data-sugg-ouvrir="health"]').click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-proposition="health"] .badge--danger').length > 0, null, { timeout: 15000 });
+    await capturer('m14-sante-proposition', { hauteur: 1500 });
     // --- M12 · Le journal de tous les Sparks (SPK-39) ------------------------
     // On y va par la navigation : Forge, puis l'onglet Journal. Le relevé de la
     // chaîne est déclenché, sinon l'illustration montrerait « pas encore

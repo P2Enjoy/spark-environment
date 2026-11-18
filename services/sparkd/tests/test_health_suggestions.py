@@ -216,6 +216,17 @@ def test_refuser_vide_le_fichier_sans_rien_poser(client):
 
 # --- valider sans exécuter ni écrire -------------------------------------------------------------------------------
 
+def test_valider_dit_la_cadence_en_clair_et_les_trois_prochains_releves(client):
+    """SPK-186 · §75.10 : l'écran montre ce que le serveur calcule, jamais une seconde grammaire."""
+    nom = creer(client)
+    r = client.post(f"/v1/sparks/{nom}/health/validate", json={
+        k: v for k, v in sonde(schedule="0 */6 * * *").items() if k != "name"})
+    assert r.status_code == 200, r.text
+    assert r.json()["description"] == "Toutes les 6 heures (UTC)"
+    assert len(r.json()["next_runs"]) == 3
+    assert r.json()["next_runs"] == sorted(r.json()["next_runs"])
+
+
 def test_valider_rend_la_definition_normalisee_sans_rien_ecrire(client):
     nom = creer(client)
     r = client.post(f"/v1/sparks/{nom}/health/validate", json={

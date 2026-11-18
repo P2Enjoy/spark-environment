@@ -54,6 +54,7 @@ from . import veilleur as veilleur_service
 from . import snapshots as snapshot_service
 from . import sla as sla_service
 from . import health as health_service
+from . import cron as cron_service
 from . import protection as protection_service
 from . import isolation as isolation_service
 from . import systeme as systeme_service
@@ -2007,8 +2008,16 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             try:
                 spark = service.by_name(connection, name)
-                return {"valid": True, **health_service.valider(
-                    connection, spark, {"name": "essai", **body})}
+                sonde = health_service.valider(connection, spark, {"name": "essai", **body})
+                # SPK-186 · §75.10 : l'écran dit la cadence en clair et les trois prochains
+                # relevés — le même calcul que le serveur fera, jamais une seconde grammaire.
+                horaire = cron_service.analyser(
+                    sonde["schedule"], ecart_minimal=health_service.ECART_MINUTES)
+                maintenant = datetime.now(timezone.utc)
+                return {"valid": True, **sonde,
+                        "description": cron_service.decrire(horaire),
+                        "next_runs": [o.isoformat(timespec="seconds")
+                                      for o in horaire.occurrences(maintenant, 3)]}
             except (service.NotFound, health_service.SanteError) as erreur:
                 raise _erreurs_sante(erreur) from erreur
 
