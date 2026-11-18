@@ -555,8 +555,10 @@ function brancher() {
   const formulairePlanForge = racine.querySelector('#formulaire-plan-forge');
   if (formulairePlanForge) {
     for (const controle of formulairePlanForge.querySelectorAll('input')) {
-      controle.addEventListener('input', () => {
-        etat.forge.installer.values[controle.name] = controle.value;
+      // SPK-176 · §70.6 : une case porte son état coché, pas sa valeur « on ».
+      const lire = () => (controle.type === 'checkbox' ? controle.checked : controle.value);
+      controle.addEventListener(controle.type === 'checkbox' ? 'change' : 'input', () => {
+        etat.forge.installer.values[controle.name] = lire();
       });
     }
     formulairePlanForge.addEventListener('submit', planifierForge);

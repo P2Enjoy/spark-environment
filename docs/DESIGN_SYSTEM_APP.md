@@ -1059,6 +1059,28 @@ L'onglet *Mises à jour* suit *Supervision* dans les sections de la Forge. Il es
 
 Preuves observées le 2026-11-18 : `e2e/captures/spk171-mises-a-jour`, `-mobile`.
 
+### SPK-DS-47 · La mise à niveau ZFS : une case décochée, irréversible et dite
+
+**Date** : 2026-11-18 · SPK-176 · `DAT.md` §70.6 · `DESIGN_SYSTEM.md` §1.2, §6.9,
+§6.10, §6.23 · SPK-DS-12, SPK-DS-39
+
+Dans le formulaire du plan d'installation, sous la décision de stockage, une case
+`.case` (case de 24 px, ligne de 40 px, le libellé étend la cible) :
+
+- elle n'est rendue **que** si le diagnostic montre des fonctionnalités à activer
+  sur le zpool que le plan garde ou adopte. Sinon il n'y a rien à proposer (§14.4) ;
+- elle est **décochée à l'ouverture**, comme toute option qui ajoute une écriture
+  (SPK-DS-39) ;
+- son aide, liée par `aria-describedby`, commence par « **Irréversible :** », puis
+  nomme le pool, le nombre et la liste des fonctionnalités, et finit par « Aucune
+  donnée n'est touchée ». Les fonctionnalités `(*)`, que `zpool upgrade` n'active
+  pas, n'y figurent pas : on ne promet pas ce que le geste ne fait pas ;
+- le geste est sensible (difficilement réversible, §6.23), mais non destructif. La
+  confirmation du plan, qui le redit (« — irréversible »), en tient lieu. La frappe
+  d'« EFFACER » reste réservée à la création du miroir.
+
+Preuves observées : `e2e/captures/spk176-installation-zfs`, `-coche`, `-mobile`.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

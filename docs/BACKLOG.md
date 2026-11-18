@@ -10084,7 +10084,7 @@ fait échouer `grub-efi-amd64-signed` sur une machine BIOS. Déplacé à la main
   - **La procédure du runbook (§A.5)** est celle jouée à la main le matin même pour la
     vraie montée.
 
-### [ ] SPK-176 · L'installation de la Forge propose la mise à niveau du pool ZFS, sans l'imposer
+### [~] SPK-176 · L'installation de la Forge propose la mise à niveau du pool ZFS, sans l'imposer
 
 **Demandé par le responsable le 2026-11-18** : « dans l'amorce UI de la forge pense à
 proposer le zfs upgrade comme optionnel quand disponible ». Sur `spark-010`, montée en
@@ -10100,6 +10100,21 @@ upgrade` est irréversible, et n'a pas été lancé.
 - Dépend de : SPK-68.
 - DoD : test unitaire du relevé et du plan ; test de la phase `storage` ; E2E de l'écran
   d'installation ; vérification visuelle ; manuel à jour.
+- **Codé le 2026-11-18.**
+  - **Relevé** : le filtre du script fermé est joué par le vrai `awk` sur la sortie
+    réelle de `spark-010`, et chaque ligne devient un pool (fonctionnalités `(*)` à
+    part).
+  - **Plan** : sans demande, aucune clé ; demandé et justifié, `zfsUpgrade: true` et
+    la phase de stockage rouverte ; demandé sans relevé, refusé
+    (`zfs_upgrade_unavailable`).
+  - **Écran** : case absente sans relevé, décochée par défaut, plan relu qui dit
+    « irréversible ».
+  - **Exécuteur** : `zfsUpgrade` vaut `true` seulement, et il est refusé sur un pool
+    qu'on crée. `mettre_a_niveau_zfs` relit, lance, puis vérifie ; un pool déjà à
+    niveau n'est pas touché, et un pool encore listé après le geste est un échec.
+  - **Documentation** : manuel M2, SPK-DS-47, OP-43.
+  - **Reste** : l'écran joué sur `spark-010` depuis l'accueil (case présente et
+    décochée, plan composé avec et sans elle, **sans l'exécuter**).
 ---
 
 ## Lot 9 — La sauvegarde externe des instantanés

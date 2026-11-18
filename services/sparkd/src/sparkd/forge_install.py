@@ -5,7 +5,9 @@
       docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (Caddy porté par
       `caddy-api.service`, jamais par le `Caddyfile`) · docs/BACKLOG.md#SPK-135
       · docs/DAT.md §5.3 bis (le débit déclaré, facultatif dans le plan) ·
-      docs/PROD_MIGRATIONS.md
+      docs/BACKLOG.md#SPK-170, docs/DAT.md §70.2 (un zpool importable non sain
+      n'est pas importé) · docs/BACKLOG.md#SPK-176, docs/DAT.md §70.6 (la mise
+      à niveau ZFS, facultative et demandée) · docs/PROD_MIGRATIONS.md
 
 Le navigateur ne fournit jamais une commande. Il fournit le plan versionné du
 §50.4 ; ce module revalide chaque valeur et chaque invariant sur la Forge avant
@@ -158,6 +160,15 @@ def validate_envelope(envelope: object) -> dict[str, Any]:
 
     if storage.get("poolName") != pool or storage.get("driver") != "zfs":
         raise ForgeInstallationError("le stockage ne correspond pas à la configuration")
+    # SPK-176 · §70.6 : `zfsUpgrade` est FACULTATIF et ne vaut que `true` quand
+    # il est présent — la console ne l'envoie que coché. On le retire avant de
+    # comparer chaque disposition à sa liste fermée.
+    if "zfsUpgrade" in storage:
+        if storage["zfsUpgrade"] is not True:
+            raise ForgeInstallationError("la mise à niveau ZFS ne s'envoie que demandée (true)")
+        if storage.get("kind") == "native":
+            raise ForgeInstallationError("un pool qu'on crée n'a rien à mettre à niveau")
+        storage = {k: v for k, v in storage.items() if k != "zfsUpgrade"}
     kind = storage.get("kind")
     confirmation = envelope.get("confirmation")
     if kind == "reuse":
@@ -312,6 +323,40 @@ def _etat_importable(nom: str) -> str | None:
     return None
 
 
+def _zpool_du_pool(pool: str) -> str:
+    """Le zpool que le pool Incus désigne (`zfs.pool_name`), sinon son nom."""
+    resultat = _run(["incus", "storage", "get", pool, "zfs.pool_name"], check=False)
+    nom = resultat.stdout.strip() if not resultat.returncode else ""
+    return nom or pool
+
+
+def _a_mettre_a_niveau(zpool: str) -> bool:
+    """`zpool upgrade` SANS argument liste les pools à mettre à niveau."""
+    resultat = _run(["zpool", "upgrade"], check=False)
+    if resultat.returncode or "POOL  FEATURE" not in resultat.stdout:
+        return False
+    liste = resultat.stdout.split("POOL  FEATURE", 1)[1].splitlines()
+    return any(ligne.strip() == zpool and not ligne[:1].isspace() for ligne in liste)
+
+
+def mettre_a_niveau_zfs(pool: str) -> dict[str, object]:
+    """Active les fonctionnalités ZFS disponibles du zpool de ce pool.
+
+    @spec docs/BACKLOG.md#SPK-176 · docs/DAT.md §70.6
+
+    Relit avant d'agir : un pool déjà à niveau n'est pas touché, et le dit.
+    Vérifie après : un zpool encore listé est un échec, pas un succès supposé.
+    """
+    zpool = _zpool_du_pool(pool)
+    if not _a_mettre_a_niveau(zpool):
+        return {"zfsUpgrade": "deja", "zpool": zpool}
+    _run(["zpool", "upgrade", zpool], timeout=300)
+    if _a_mettre_a_niveau(zpool):
+        raise ForgeInstallationError(
+            f"le zpool « {zpool} » a encore des fonctionnalités à activer après zpool upgrade")
+    return {"zfsUpgrade": "fait", "zpool": zpool}
+
+
 def _pool_driver(pool: str) -> str | None:
     result = _run(["incus", "storage", "show", pool], check=False)
     if result.returncode:
@@ -394,7 +439,13 @@ def phase_storage(plan: dict[str, Any]) -> dict[str, object]:
     if arc_runtime.read_text(encoding="utf-8").strip() != str(arc):
         arc_runtime.write_text(f"{arc}\n", encoding="utf-8")
         changed = True
-    return {"changed": changed, "pool": pool, "arcMaxBytes": arc}
+    resultat: dict[str, object] = {"changed": changed, "pool": pool, "arcMaxBytes": arc}
+    # SPK-176 · §70.6 : seulement demandée, et une fois le pool en place.
+    if storage.get("zfsUpgrade") is True:
+        niveau = mettre_a_niveau_zfs(pool)
+        resultat.update(niveau)
+        resultat["changed"] = changed or niveau["zfsUpgrade"] == "fait"
+    return resultat
 
 
 def _network_exists(name: str) -> bool:

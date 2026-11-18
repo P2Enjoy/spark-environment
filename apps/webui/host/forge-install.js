@@ -2,7 +2,9 @@
  * Plan fermé d'installation distante d'une Forge.
  *
  * @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.3-§50.5 ·
- *       docs/DESIGN_SYSTEM_APP.md#SPK-DS-12
+ *       docs/DESIGN_SYSTEM_APP.md#SPK-DS-12 · docs/BACKLOG.md#SPK-176,
+ *       docs/DAT.md §70.6 (la mise à niveau ZFS, seulement demandée et
+ *       seulement si le relevé la justifie)
  *
  * Cette tranche ne lance encore aucune écriture. Elle transforme un NOUVEAU
  * diagnostic réel en un plan validé : l'étape suivante pourra ainsi exécuter
@@ -91,8 +93,9 @@ export function phaseStatuses(report, config, storagePlan) {
     // Un pool ZFS listé prouve la pile ZFS ; Incus, Caddy et Python sont relevés.
     dependencies: ok('incus') && ok('caddy') && ok('pool') && Boolean(report?.runtimes?.python)
       ? 'done' : 'pending',
-    // Adopter reste une écriture : le pool Incus n'existe pas encore.
-    storage: storagePlan.kind === 'reuse' ? 'done' : 'pending',
+    // Adopter reste une écriture : le pool Incus n'existe pas encore. Une mise à
+    // niveau ZFS demandée en est une aussi (SPK-176, §70.6).
+    storage: storagePlan.kind === 'reuse' && !storagePlan.zfsUpgrade ? 'done' : 'pending',
     foundation: ok('bridge') ? 'done' : 'pending',
     control: ok('package') && ok('unit') && configUnchanged ? 'done' : 'pending',
     verification: ok('healthz') && ok('readyz') ? 'done' : 'pending',
@@ -170,6 +173,21 @@ export function createInstallPlan(diagnostic, input = {}) {
       devices: requested.map((device) => `/dev/${device}`), destructive: true };
   }
 
+  // SPK-176 · §70.6 : la mise à niveau ZFS n'est jamais un défaut. Elle n'entre
+  // au plan que DEMANDÉE, et seulement si le relevé montre des fonctionnalités à
+  // activer sur ce zpool — une demande que rien ne justifie est refusée, pas
+  // ignorée.
+  if (input.zfsUpgrade === true || input.zfsUpgrade === 'true') {
+    const zpool = storagePlan.kind === 'adopt' ? storagePlan.zpool : poolName;
+    const releve = (report.zfsUpgradable ?? []).find((pool) => pool.pool === zpool);
+    if (storagePlan.kind === 'native' || !releve) {
+      throw new ForgeInstallError('zfs_upgrade_unavailable',
+        `Le relevé ne montre aucune fonctionnalité ZFS à activer sur « ${zpool} » : ` +
+        'la mise à niveau n’est pas proposée.');
+    }
+    storagePlan = { ...storagePlan, zfsUpgrade: true };
+  }
+
   const config = { poolName, bridgeName, cpuReserve, memoryReserveGib, arcMaxGib,
     reservedPorts: [...defauts.reservedPorts] };
   // Les statuts viennent du relevé : une Forge déjà conforme montre ses phases
@@ -180,7 +198,8 @@ export function createInstallPlan(diagnostic, input = {}) {
     ['dependencies', 'Dépendances et runtimes'],
     ['storage', { reuse: `Conserver le pool « ${poolName} »`,
       adopt: `Adopter le pool ZFS « ${poolName} » déjà présent`,
-      native: `Créer le pool « ${poolName} »` }[storagePlan.kind]],
+      native: `Créer le pool « ${poolName} »` }[storagePlan.kind]
+      + (storagePlan.zfsUpgrade ? ', puis activer ses fonctionnalités ZFS' : '')],
     ['foundation', `Socle réseau « ${bridgeName} » et durcissement`],
     ['control', 'Paquet sparkd et unités systemd'],
     ['verification', 'Préflight, healthz, readyz et topologie'],

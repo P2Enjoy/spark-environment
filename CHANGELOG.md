@@ -14,6 +14,15 @@
   à la main sur la Forge le 2026-10-30 (OP-41 étape 1).
 
 ### Ajouté
+- **SPK-176 — l'installation de la Forge propose la mise à niveau ZFS, sans l'imposer.**
+  Le diagnostic lit `zpool upgrade`, qui ne fait que lister. Quand le pool gardé ou
+  adopté a des fonctionnalités à activer, le formulaire du plan porte une case
+  **décochée**. Elle dit son irréversibilité et la liste des fonctionnalités ; celles
+  marquées `(*)` sont écartées. Le plan ne porte `storage.zfsUpgrade` que si la case est
+  cochée et que le relevé le justifie, sinon il refuse. `forge_install` relit le pool
+  avant de lancer `zpool upgrade`, puis vérifie qu'il n'y a plus rien à activer.
+  L'amorce et la montée de version ne le lancent jamais. DAT §70.6, SPK-DS-47,
+  manuel M2, OP-43. Aucune migration, aucune variable d'environnement.
 - **SPK-171 — un onglet Forge → Mises à jour.** Il montre, en lecture seule :
   - la version d'Ubuntu et le noyau ;
   - les mises à jour en attente, celles de sécurité en tête, avec la date de la liste

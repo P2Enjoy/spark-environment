@@ -101,6 +101,24 @@ faire, pas une installation entière à rejouer.
 **Vérifier et composer le plan** relance d'abord le diagnostic : le plan affiché
 ne repose donc pas sur un relevé resté ouvert dans un onglet.
 
+### Activer les fonctionnalités ZFS disponibles
+
+Après une montée de version d'Ubuntu, ZFS est plus récent que le pool : de
+nouvelles fonctionnalités existent, que le pool n'a pas encore activées. Le
+diagnostic les relève, et seulement dans ce cas, le formulaire porte une case
+**Activer les fonctionnalités ZFS disponibles (`zpool upgrade`)**, avec la liste.
+
+Elle est **décochée**, et le restera tant que vous ne la cochez pas : la mise à
+niveau est **irréversible**. Une fois faite, le pool ne s'importe plus avec un ZFS
+plus ancien — celui d'un système de secours, ou de l'installateur de l'hébergeur
+qui réinstallerait la machine. Elle n'efface aucune donnée, et ne demande donc pas
+de recopier `EFFACER`. Rien ne presse : le pool fonctionne sans elle.
+
+Cochée, le plan l'écrit (« puis activer les fonctionnalités ZFS disponibles —
+irréversible »), la phase *Stockage* repasse à faire, et l'exécution relit le pool
+avant d'agir puis vérifie qu'il n'a plus rien à activer. L'onglet **Forge → Mises
+à jour** montre aussi, sans rien proposer, les pools qui en ont (manuel M8).
+
 Relisez ensuite chaque phase et cochez la confirmation du plan. La création d'un
 miroir demande en plus de recopier les deux supports qui seront effacés — c'est
 la seule écriture destructive du parcours. Le bouton reste désactivé tant que

@@ -3,6 +3,9 @@
  *
  * @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.1-§50.4 ·
  *       docs/DESIGN_SYSTEM_APP.md#SPK-DS-12
+ * @spec docs/BACKLOG.md#SPK-176 · docs/DAT.md §70.6 · docs/DESIGN_SYSTEM.md
+ *       §6.10, §6.23 · docs/DESIGN_SYSTEM_APP.md SPK-DS-47 — pour
+ *       `caseMiseANiveauZfs` et le texte du plan qui la reprend
  */
 
 const echapper = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -221,6 +224,31 @@ function resultView(result, reuse) {
   l’installation, ne crée pas de pool et ne change aucun service.</p>`;
 }
 
+/**
+ * La mise à niveau ZFS : une case DÉCOCHÉE, seulement quand le relevé montre des
+ * fonctionnalités à activer sur le zpool que le plan garde ou adopte (§70.6).
+ *
+ * Elle est irréversible et le dit, avec la liste ; elle n'efface rien, donc ne
+ * demande pas la frappe d'« EFFACER » — la case est le choix explicite.
+ */
+export function caseMiseANiveauZfs(report, decision, coche = false) {
+  if (!decision || !['reuse', 'adopt'].includes(decision.kind)) return '';
+  const releve = (report?.zfsUpgradable ?? []).find((pool) => pool.pool === decision.zpool);
+  if (!releve) return '';
+  return `<div class="champ">
+      <label class="case" for="installation-zfs-upgrade">
+        <input type="checkbox" id="installation-zfs-upgrade" name="zfsUpgrade"
+          aria-describedby="installation-zfs-upgrade-aide"${coche ? ' checked' : ''}>
+        Activer les fonctionnalités ZFS disponibles (<span class="technique">zpool upgrade</span>)
+      </label>
+      <p class="champ__aide" id="installation-zfs-upgrade-aide"><strong>Irréversible :</strong>
+        le pool « ${echapper(releve.pool)} » ne s’importera plus avec un ZFS plus ancien.
+        ${releve.features.length} fonctionnalité${releve.features.length > 1 ? 's' : ''} :
+        <span class="technique">${releve.features.map(echapper).join(', ')}</span>.
+        Aucune donnée n’est touchée.</p>
+    </div>`;
+}
+
 function planForm(installer) {
   const result = installer.result;
   const values = { ...INSTALLER_VIDE.values, ...(installer.values ?? {}) };
@@ -258,6 +286,9 @@ function planForm(installer) {
         value="${echapper(values.arcMaxGib)}" required></label>
     </div>
     ${storageChoice}
+    ${caseMiseANiveauZfs(result.report, decision?.kind === 'reuse'
+      ? { ...decision, zpool: values.poolName } : decision,
+      values.zfsUpgrade === true || values.zfsUpgrade === 'true')}
     <button type="submit" class="bouton"${installer.status === 'planning' ? ' disabled' : ''}>${
       installer.status === 'planning' ? 'Nouveau relevé…' : 'Vérifier et composer le plan'}</button>
   </form>`;
@@ -277,6 +308,9 @@ function planView(plan, installer) {
       ? `adopter le zpool « ${plan.storage.zpool} » déjà présent${
         plan.storage.imported ? '' : ', après l’avoir importé'} — aucune donnée n’est touchée`
       : `créer le miroir sur ${plan.storage.devices.join(' et ')}`;
+  // SPK-176 · §70.6 : le plan relu redit le choix, et son irréversibilité.
+  const miseANiveau = plan.storage.zfsUpgrade
+    ? ', puis activer les fonctionnalités ZFS disponibles — irréversible' : '';
   const expected = expectedConfirmation(plan);
   const confirmation = expected ? `
     <label for="confirmation-stockage-forge">Confirmation séparée du stockage
@@ -287,7 +321,7 @@ function planView(plan, installer) {
   const confirmed = installer.accepted && (!expected || installer.confirmation === expected);
   return `<section class="progression" aria-labelledby="titre-plan-valide">
     <h3 id="titre-plan-valide">Plan vérifié sur un nouveau relevé</h3>
-    <p><strong>Stockage :</strong> ${echapper(storageText)}.</p>
+    <p><strong>Stockage :</strong> ${echapper(storageText + miseANiveau)}.</p>
     <ol>${plan.phases.map((phase) => `<li><strong>${echapper(phase.label)}</strong> — ${
       phase.status === 'done' ? 'terminée' : 'à faire'}</li>`).join('')}</ol>
     <div class="confirmation confirmation--sensible" role="group" aria-labelledby="titre-confirmation-plan">

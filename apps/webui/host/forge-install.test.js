@@ -159,3 +159,28 @@ test('un bridge absent rouvre le socle réseau, et lui seul', () => {
   assert.equal(statuses.dependencies, 'done');
   assert.equal(statuses.storage, 'done');
 });
+
+// --- SPK-176 · §70.6 : la mise à niveau ZFS, proposée, jamais imposée -------
+// @verifies docs/BACKLOG.md#SPK-176 · docs/DAT.md §70.6 (le plan ne porte
+//           zfsUpgrade que demandé ET justifié par le relevé)
+
+const A_NIVEAU = `${CONFORME}\nzfs_a_niveau\tspark:fast_dedup,longname,dynamic_gang_header(*)`;
+
+test('sans demande, le plan ne porte AUCUNE mise à niveau, même si elle est disponible', () => {
+  const plan = createInstallPlan(diagnostic(A_NIVEAU), {});
+  assert.equal('zfsUpgrade' in plan.storage, false);
+  assert.equal(plan.phases.find((p) => p.id === 'storage').status, 'done');
+});
+
+test('demandée et justifiée, elle entre au plan et rouvre la phase de stockage', () => {
+  const plan = createInstallPlan(diagnostic(A_NIVEAU), { zfsUpgrade: true });
+  assert.equal(plan.storage.zfsUpgrade, true);
+  const stockage = plan.phases.find((p) => p.id === 'storage');
+  assert.equal(stockage.status, 'pending');
+  assert.match(stockage.label, /activer ses fonctionnalités ZFS/);
+});
+
+test('demandée sans relevé qui la justifie, elle est REFUSÉE, pas ignorée', () => {
+  assert.throws(() => createInstallPlan(diagnostic(CONFORME), { zfsUpgrade: true }),
+                (e) => e instanceof ForgeInstallError && e.code === 'zfs_upgrade_unavailable');
+});

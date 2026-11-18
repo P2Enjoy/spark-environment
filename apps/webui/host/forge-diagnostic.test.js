@@ -302,3 +302,58 @@ test('le zpool et le pool Incus sont DEUX objets : la décision les distingue', 
   assert.equal(poolDecision(parseDiagnostic('os\tubuntu 26.04'), 'spark'), null);
   assert.equal(poolDecision(zpoolSeul, 'tank'), null, 'un AUTRE nom n’est pas adopté');
 });
+
+// --- SPK-176 · §70.6 : le relevé de « zpool upgrade » ---------------------
+// @verifies docs/BACKLOG.md#SPK-176 · docs/DAT.md §70.6
+
+import { execFileSync } from 'node:child_process';
+import { parseZfsUpgrade, DIAGNOSTIC_SCRIPT as SCRIPT_176 } from './forge-diagnostic.js';
+
+/** Sortie RÉELLE de `zpool upgrade` sur `spark-010`, le 2026-11-18. */
+const ZPOOL_UPGRADE_REEL = `This system supports ZFS pool feature flags.
+
+All pools are formatted using feature flags.
+
+
+Some supported features are not enabled on the following pools. Once a
+feature is enabled the pool may become incompatible with software
+that does not support the feature. See zpool-features(7) for details.
+
+Note that the pool 'compatibility' feature can be used to inhibit
+feature upgrades.
+
+Features marked with (*) are not applied automatically on upgrade, and
+must be applied explicitly with zpool-set(7).
+
+POOL  FEATURE
+---------------
+spark
+      redaction_list_spill
+      raidz_expansion
+      fast_dedup
+      longname
+      large_microzap
+      dynamic_gang_header(*)
+      block_cloning_endian
+      physical_rewrite
+`;
+
+test('le filtre du script fermé rend une ligne par pool, sur la sortie RÉELLE', () => {
+  const awk = /awk '\n([\s\S]*?)' \| head -n 16 \|\n\s*while IFS= read -r ligne; do dit zfs_a_niveau/.exec(SCRIPT_176);
+  assert.ok(awk, 'le filtre de zpool upgrade est dans le script');
+  const sortie = execFileSync('awk', [awk[1]], { input: ZPOOL_UPGRADE_REEL }).toString().trim();
+  assert.equal(sortie, 'spark:redaction_list_spill,raidz_expansion,fast_dedup,longname,'
+    + 'large_microzap,dynamic_gang_header(*),block_cloning_endian,physical_rewrite');
+  const aJour = 'This system supports ZFS pool feature flags.\n\nEvery feature flags pool has all supported and requested features enabled.\n';
+  assert.equal(execFileSync('awk', [awk[1]], { input: aJour }).toString(), '');
+});
+
+test('une ligne de relevé devient un pool, ses fonctionnalités, et les manuelles à part', () => {
+  assert.deepEqual(parseZfsUpgrade('spark:fast_dedup,longname,dynamic_gang_header(*)'),
+    { pool: 'spark', features: ['fast_dedup', 'longname'], manual: ['dynamic_gang_header'] });
+  assert.equal(parseZfsUpgrade('spark:dynamic_gang_header(*)'), null, 'rien à activer par upgrade');
+  assert.equal(parseZfsUpgrade('<b>:x'), null);
+  assert.deepEqual(parseZfsUpgrade('spark:ok,<script>').features, ['ok']);
+  const report = parseDiagnostic('os\tubuntu 26.04\nzfs_a_niveau\tspark:longname\nzfs_a_niveau\tbruit');
+  assert.deepEqual(report.zfsUpgradable, [{ pool: 'spark', features: ['longname'], manual: [] }]);
+});

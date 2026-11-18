@@ -2,7 +2,8 @@
 
 @verifies docs/BACKLOG.md#SPK-170 · docs/DAT.md §70.2 (un zpool importable qui
           n'est pas sain n'est jamais importé, par la console non plus) · §50.3
-          (l'adoption d'un zpool existant)
+          (l'adoption d'un zpool existant) · docs/BACKLOG.md#SPK-176 · docs/DAT.md
+          §70.6 (la mise à niveau ZFS, facultative et vérifiée)
 
 Aucune de ces preuves ne touche la machine : `_run` est remplacé par un double
 qui rend, commande par commande, la sortie qu'une Forge rendrait, et qui
@@ -107,3 +108,83 @@ def test_l_etat_importable_se_lit_pool_par_pool(monkeypatch):
     assert forge_install._etat_importable("tank") == "ONLINE"
     assert forge_install._etat_importable("spark") == "DEGRADED"
     assert forge_install._etat_importable("absent") is None
+
+
+# --- SPK-176 · §70.6 : la mise à niveau ZFS, facultative et demandée --------
+#
+# @verifies docs/BACKLOG.md#SPK-176 · docs/DAT.md §70.6 (la clé zfsUpgrade ;
+#           relire avant, vérifier après)
+
+ZPOOL_UPGRADE_A_FAIRE = "This system supports ZFS pool feature flags.\n\nPOOL  FEATURE\n---------------\nspark\n      longname\n"
+ZPOOL_UPGRADE_FAIT = "This system supports ZFS pool feature flags.\n\nEvery feature flags pool has all supported and requested features enabled.\n"
+
+
+def _enveloppe(storage: dict) -> dict:
+    return {"plan": {"version": 1, "system": {"os": "ubuntu 26.04", "architecture": "x86_64"},
+                     "storage": storage,
+                     "config": {"poolName": "spark", "bridgeName": "sparkbr0", "cpuReserve": 0.5,
+                                "memoryReserveGib": 2, "arcMaxGib": 16, "reservedPorts": [22, 80, 443]},
+                     "phases": [{"id": p, "label": p, "status": "pending"}
+                                for p in forge_install.PHASES]},
+            "confirmation": ""}
+
+
+REUSE = {"kind": "reuse", "poolName": "spark", "driver": "zfs", "destructive": False}
+
+
+@pytest.mark.parametrize("valeur", [False, "true", 1, None])
+def test_zfsUpgrade_ne_s_envoie_que_true(monkeypatch, valeur):
+    monkeypatch.setattr(forge_install, "_memory_total", lambda: 64 * 1024**3)
+    with pytest.raises(ForgeInstallationError, match="ne s'envoie que demandée"):
+        forge_install.validate_envelope(_enveloppe({**REUSE, "zfsUpgrade": valeur}))
+
+
+def test_zfsUpgrade_est_refuse_sur_un_pool_qu_on_cree(monkeypatch):
+    monkeypatch.setattr(forge_install, "_memory_total", lambda: 64 * 1024**3)
+    natif = {"kind": "native", "poolName": "spark", "driver": "zfs",
+             "devices": ["/dev/sda5", "/dev/sdb5"], "destructive": True, "zfsUpgrade": True}
+    with pytest.raises(ForgeInstallationError, match="rien à mettre à niveau"):
+        forge_install.validate_envelope(_enveloppe(natif))
+
+
+def test_zfsUpgrade_true_passe_la_liste_fermee_de_la_reutilisation(monkeypatch):
+    """La clé est retirée avant la comparaison à la liste fermée : le refus qui
+    suit, s'il y en a un, ne parle plus du stockage."""
+    monkeypatch.setattr(forge_install, "_memory_total", lambda: 64 * 1024**3)
+    try:
+        forge_install.validate_envelope(_enveloppe({**REUSE, "zfsUpgrade": True}))
+    except ForgeInstallationError as refus:
+        assert "stockage" not in str(refus) and "réutilisation" not in str(refus) \
+            and "ZFS" not in str(refus), refus
+
+
+def test_la_mise_a_niveau_relit_lance_puis_VERIFIE(monkeypatch):
+    sorties = iter([ZPOOL_UPGRADE_A_FAIRE, ZPOOL_UPGRADE_FAIT])
+    machine = Machine({"incus storage get spark zfs.pool_name": (0, "spark\n")})
+
+    def run(command, **kw):
+        if command == ["zpool", "upgrade"]:
+            machine.appels.append("zpool upgrade (liste)")
+            return subprocess.CompletedProcess(command, 0, next(sorties), "")
+        return machine(command, **kw)
+
+    monkeypatch.setattr(forge_install, "_run", run)
+    assert forge_install.mettre_a_niveau_zfs("spark") == {"zfsUpgrade": "fait", "zpool": "spark"}
+    assert machine.appels == ["incus storage get spark zfs.pool_name", "zpool upgrade (liste)",
+                              "zpool upgrade spark", "zpool upgrade (liste)"]
+
+
+def test_un_pool_deja_a_niveau_n_est_pas_touche(monkeypatch):
+    machine = Machine({"incus storage get spark zfs.pool_name": (0, "spark\n"),
+                       "zpool upgrade": (0, ZPOOL_UPGRADE_FAIT)})
+    monkeypatch.setattr(forge_install, "_run", machine)
+    assert forge_install.mettre_a_niveau_zfs("spark")["zfsUpgrade"] == "deja"
+    assert "zpool upgrade spark" not in machine.appels
+
+
+def test_un_pool_encore_liste_apres_la_mise_a_niveau_est_un_ECHEC(monkeypatch):
+    machine = Machine({"incus storage get spark zfs.pool_name": (0, "spark\n"),
+                       "zpool upgrade": (0, ZPOOL_UPGRADE_A_FAIRE)})
+    monkeypatch.setattr(forge_install, "_run", machine)
+    with pytest.raises(ForgeInstallationError, match="encore des fonctionnalités"):
+        forge_install.mettre_a_niveau_zfs("spark")

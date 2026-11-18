@@ -120,7 +120,7 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169 à SPK-172, SPK-175)
+### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169 à SPK-172, SPK-175, SPK-176)
 
 ```
 État          : EN ATTENTE sur la Forge de test (51.158.54.202) — à jouer sur
@@ -137,7 +137,11 @@ Objectif      : - préflight à 19 contrôles : STO-MIROIR (zpool status) et
                   /etc/sparkd/allowed_signers, et la console y pose sa ligne
                   console/<serveur> à la connexion — DAT §70.3 ;
                 - GET /v1/forge/systeme (lecture seule) et l'onglet Forge →
-                  Mises à jour de la console — DAT §70.5.
+                  Mises à jour de la console — DAT §70.5 ;
+                - la mise à niveau ZFS proposée, décochée, dans l'installation
+                  de la Forge (forge_install accepte storage.zfsUpgrade) — DAT
+                  §70.6. Elle n'est PAS jouée par cette opération : c'est un
+                  choix irréversible, laissé au responsable.
                 Aucune migration de schéma. Aucune variable nouvelle : le défaut
                 d'une variable existante change, et une valeur posée l'emporte.
 Dépend de     : rien.

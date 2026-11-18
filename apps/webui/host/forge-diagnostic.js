@@ -3,7 +3,10 @@
  *
  * @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.1 (transport distinct du
  *       plan de contrôle), §50.2 (contrat fermé), §50.3 (stockage sans choix
- *       implicite) · docs/DESIGN_SYSTEM_APP.md#SPK-DS-12
+ *       implicite) · docs/DESIGN_SYSTEM_APP.md#SPK-DS-12 ·
+ *       docs/BACKLOG.md#SPK-176, docs/DAT.md §70.6 (les pools qui ont des
+ *       fonctionnalités ZFS à activer, lus par « zpool upgrade » qui ne fait
+ *       que lister)
  *
  * Le navigateur ne fournit qu'un NOM de serveur déjà validé par l'inventaire.
  * Il ne fournit ni commande ni argument distant : ce fichier possède le seul
@@ -130,6 +133,15 @@ if command -v zpool >/dev/null 2>&1; then
   admin zpool import 2>/dev/null | head -n 200 |
     sed -n 's/^[[:space:]]*pool:[[:space:]]*\(.*\)$/\1/p' | head -n 16 |
     while IFS= read -r ligne; do dit zpool_importable "$ligne"; done
+  # SPK-176 · §70.6 : « zpool upgrade » SANS argument ne fait que lister les pools
+  # qui ont des fonctionnalités à activer. Une ligne par pool : nom:f1,f2,…
+  admin zpool upgrade 2>/dev/null | head -n 200 | awk '
+    /^POOL  FEATURE/ { liste = 1; next }
+    !liste || /^-+$/ || NF == 0 { next }
+    /^[^ \t]/ { if (pool != "") print pool ":" f; pool = $1; f = ""; next }
+    { f = f (f == "" ? "" : ",") $1 }
+    END { if (pool != "") print pool ":" f }' | head -n 16 |
+    while IFS= read -r ligne; do dit zfs_a_niveau "$ligne"; done
 fi
 
 # Configuration RÉELLE de la Forge, et elle seule : cinq clés nommées une à une.
@@ -254,6 +266,7 @@ export function parseDiagnostic(output) {
   const configLines = [];
   const zpools = [];
   const importable = [];
+  const aNiveau = [];
   for (const line of String(output ?? '').split('\n')) {
     const index = line.indexOf('\t');
     if (index < 1) continue;
@@ -272,6 +285,9 @@ export function parseDiagnostic(output) {
       if (POOL_NAME.test(name ?? '')) zpools.push({ name, health: health || null });
     } else if (key === 'zpool_importable') {
       if (POOL_NAME.test(value)) importable.push(value);
+    } else if (key === 'zfs_a_niveau') {
+      const pool = parseZfsUpgrade(value);
+      if (pool) aNiveau.push(pool);
     } else if (/^[a-z_]+$/.test(key)) {
       values[key] = value || null;
     }
@@ -296,10 +312,36 @@ export function parseDiagnostic(output) {
     // d'écrire sur des supports qui portent déjà le pool (docs/DAT.md §50.3).
     zpools,
     importableZpools: [...new Set(importable)],
+    // SPK-176 · §70.6 : seulement les pools qui ont au moins une fonctionnalité
+    // que « zpool upgrade » active ; celles marquées (*) restent à part.
+    zfsUpgradable: aNiveau,
     networks,
     config: parseForgeConfig(configLines, values.arc_max),
     blocks,
   };
+}
+
+/** Un nom de fonctionnalité ZFS : minuscules, chiffres, `_`, `:` ou `.`. */
+const FEATURE = /^[a-z0-9_.:]{1,64}$/;
+
+/**
+ * « pool:f1,f2,f3(*) » devient `{ pool, features, manual }`, ou `null`.
+ *
+ * @spec docs/BACKLOG.md#SPK-176 · docs/DAT.md §70.6
+ */
+export function parseZfsUpgrade(value) {
+  const index = String(value ?? '').indexOf(':');
+  if (index < 1) return null;
+  const pool = String(value).slice(0, index);
+  if (!POOL_NAME.test(pool)) return null;
+  const features = [];
+  const manual = [];
+  for (const brut of String(value).slice(index + 1).split(',')) {
+    const nom = brut.trim().replace(/\(\*\)$/, '');
+    if (!FEATURE.test(nom)) continue;
+    (brut.trim().endsWith('(*)') ? manual : features).push(nom);
+  }
+  return features.length ? { pool, features, manual } : null;
 }
 
 function numberOrNull(value) {

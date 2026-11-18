@@ -4,7 +4,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderForgeInstaller, observedValues, poolReutilise } from './forge-installer.js';
+import { renderForgeInstaller, observedValues, poolReutilise, INSTALLER_VIDE } from './forge-installer.js';
+
+const INSTALLER_VIDE_VALUES = INSTALLER_VIDE.values;
 
 test('le panneau explique le diagnostic sans promettre une installation', () => {
   const html = renderForgeInstaller();
@@ -240,4 +242,38 @@ test('pas encore su : rien n’est affirmé avant le relevé', () => {
   const html = renderForgeInstaller(undefined, { sparkd: null });
   assert.doesNotMatch(html, /sans encore porter|Forge en service/);
   assert.match(html, /data-action="diagnostiquer-forge"/);
+});
+
+// --- SPK-176 · §70.6 : la case de mise à niveau ZFS --------------------------
+// @verifies docs/BACKLOG.md#SPK-176 · docs/DAT.md §70.6 · docs/DESIGN_SYSTEM.md
+//           §6.10 · docs/DESIGN_SYSTEM_APP.md SPK-DS-47
+
+const A_NIVEAU = { ...CONFORME, report: { ...CONFORME.report,
+  zfsUpgradable: [{ pool: 'spark', features: ['fast_dedup', 'longname'], manual: ['dynamic_gang_header'] }] } };
+
+test('la case n’apparaît que si le relevé montre des fonctionnalités à activer', () => {
+  assert.doesNotMatch(renderForgeInstaller({ status: 'ready', result: CONFORME }),
+                      /installation-zfs-upgrade/);
+  const html = renderForgeInstaller({ status: 'ready', result: A_NIVEAU });
+  assert.match(html, /<label class="case" for="installation-zfs-upgrade">/);
+  assert.match(html, /Activer les fonctionnalités ZFS disponibles/);
+  assert.match(html, /Irréversible/);
+  assert.match(html, /fast_dedup, longname/);
+  assert.doesNotMatch(html, /dynamic_gang_header/, 'une fonctionnalité (*) n’est pas promise');
+  assert.match(html, /aria-describedby="installation-zfs-upgrade-aide"/);
+});
+
+test('la case est DÉCOCHÉE par défaut, et cochée seulement si on l’a demandé', () => {
+  const defaut = renderForgeInstaller({ status: 'ready', result: A_NIVEAU });
+  assert.doesNotMatch(defaut, /name="zfsUpgrade"[^>]*checked/);
+  const coche = renderForgeInstaller({ status: 'ready', result: A_NIVEAU,
+    values: { ...INSTALLER_VIDE_VALUES, zfsUpgrade: true } });
+  assert.match(coche, /name="zfsUpgrade"[\s\S]*?checked>/);
+});
+
+test('le plan relu redit la mise à niveau et son irréversibilité', () => {
+  const plan = { ...PLAN, storage: { kind: 'reuse', poolName: 'spark', driver: 'zfs',
+    destructive: false, zfsUpgrade: true } };
+  const html = renderForgeInstaller({ status: 'planned', result: A_NIVEAU, plan });
+  assert.match(html, /activer les fonctionnalités ZFS disponibles — irréversible/);
 });
