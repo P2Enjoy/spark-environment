@@ -16071,3 +16071,15 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **Hors de la plage demandée** : SPK-182 (rattrapage après un arrêt réel de `sparkd`) reste `[~]`.
 - **État de spark-010** : `magiline-mcp` seul, sans sonde ni trace d'essai ; canal courriel actif vers `martino@p2enjoy.studio`.
 
+**SPK-187 : le dossier de l'agent rattrape le SLA et la santé — contrat écrit le 2026-11-19, avant le code.**
+
+- **Question du responsable** : le dossier pour un agent décrit-il les nouvelles fonctions ? Le projet consigne-t-il de le tenir à
+  jour ? **Constat** : non aux deux. `briefing.py` n'a rien sur les sondes ni sur les instantanés ; seule la paire `health.?` y est
+  (par `PAIRES`, énumérée) avec sa grammaire. Aucune règle (`CLAUDE.md` §17, DAT §44.4) n'exigeait de toucher au briefing :
+  la définition de terminé listait README, DAT, design system, manuel, variables, changelog — pas ce que l'agent lit.
+- **Décision de forme** : le briefing porte des **définitions et des limites**, jamais un état (§44.4) ; l'état d'une sonde se
+  **commande** (`cat /etc/spark/health`). Pour les instantanés l'agent n'a aucune commande : on dit la politique et où lire l'état.
+- **Le compte des scripts vient du mode relevé à l'amorçage**, pas de la ligne du Spark : lire ailleurs est le défaut que la
+  Forge réelle a montré sur SPK-184. Le briefing ne doit pas le répéter.
+- **La règle** est inscrite à `CLAUDE.md` §17 (à la demande du responsable) et au DAT §44.12.
+

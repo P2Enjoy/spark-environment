@@ -227,6 +227,13 @@ La documentation fait partie du produit.
 
 Une tâche n'est pas terminée si le code et la documentation ne décrivent plus le même fonctionnement.
 
+Fonctions exposées aux agents (règle du responsable, 2026-11-19)
+
+Ce qu'un agent lit — briefing, dossier de déploiement, fichiers `.?`, runbook — est la seule description du produit qu'il
+possède : ce qui n'y figure pas n'existe pas pour lui. Toute fonction qui touche une cellule, ou qu'un agent doit connaître
+pour déployer, proposer ou opérer, met à jour ces textes DANS LE MÊME CHANGEMENT que le code. Ils portent des définitions et
+des limites, jamais un état qui périme : un état se commande, il ne se copie pas.
+
 Traçabilité obligatoire entre spécification, backlog et code
 
 Toute ligne de code maintenue dans le dépôt doit être couverte par un commentaire
@@ -903,6 +910,8 @@ Une tâche n'est terminée que lorsque toutes les conditions applicables sont sa
 - le DAT a été mis à jour si nécessaire ;
 - le design system a été mis à jour si nécessaire ;
 - le manuel utilisateur a été mis à jour si nécessaire ;
+- le briefing et le dossier de déploiement lus par un agent, et le runbook agent, ont été mis à jour si la
+  fonction est visible d'un agent ou lui est utile — avec un test qui prouve que le texte rendu la nomme ;
 - toute variable d'environnement introduite ou modifiée figure dans un fichier d'exemple commenté ET dans la documentation ;
 - le changelog a été mis à jour sous "[Non publié]" ;
 - le contrat de déploiement a été mis à jour si nécessaire ;

@@ -9475,6 +9475,24 @@ sans écriture, cadence refusée, suspendre / reprendre / retirer, Spark protég
 observées, manuel M14. Le cas « aucun canal d'alerte » est prouvé au rendu (la pile des parcours a un canal) ; sur la
 Forge réelle, il disparaît dès que le canal courriel est actif.
 
+### [ ] SPK-187 · Le briefing d'un Spark dit la surveillance et les instantanés
+
+**Demandé le 2026-11-19** par le responsable : « est-ce que le dossier pour un agent a ajouté les descriptions des nouvelles
+fonctionnalités ? est-ce que le projet consigne de garder les fonctionnalités exposées aux agents à jour ? devons-nous
+rattraper ? » — réponse : non, et non. Le SLA (SPK-182/183) et la santé (SPK-184 à 186) ne sont pas dans le briefing, sauf la
+paire `health.?` qui s'y inscrit par construction ; aucune règle ne l'exigeait.
+
+- Spécification : `docs/DAT.md` **§44.12** · §44.4 (un état se commande, ne se copie pas), §44.6 (un fait, jamais une
+  autorisation), §44.8 (le modèle unique) · §74, §75 · `docs/AGENT_RUNBOOK.md`.
+- Dépend de : SPK-60 (le briefing), SPK-185 (`health.?`), SPK-182 (le SLA).
+- Portée : les clés `health` et `snapshots` du modèle ; les sections « Surveillance de ce Spark » et « Instantanés » de
+  `BRIEFING.md` ; la section « 7 bis » du dossier ; la réécriture du briefing après tout geste de sonde et de SLA ; une
+  rubrique du runbook agent ; la règle inscrite à `CLAUDE.md` §17 et au DAT.
+- Hors périmètre : le canal d'alerte, l'image par défaut (réglages de la Forge, pas d'un agent) ; tout état de sonde.
+- DoD : preuve rouge avant (le briefing actuel ne nomme ni les sondes ni le SLA) ; tests de modèle, de rendu et d'API contre
+  le vrai registre ; **une cellule réelle** relue après une sonde et un SLA posés par la console ; briefing, dossier, runbook,
+  DAT, changelog et manuel à jour ; la règle de `CLAUDE.md` en place.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

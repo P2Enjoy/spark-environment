@@ -11994,6 +11994,68 @@ entrée, pas d'un bout à l'autre.
   l'agent rend.
 
 
+### 44.12 Ce que le briefing dit de la surveillance et des instantanés (SPK-187)
+
+*Contrat écrit le 2026-11-19, avant le code. Aucune migration, aucune variable d'environnement.*
+
+**Le constat.** Le SLA des instantanés (§74) et la santé d'un Spark (§75) sont arrivés sans toucher au briefing, sauf la
+paire `health` / `health.?`, qui s'y inscrit par construction (`PAIRES`, §55). Un agent qui prépare un déploiement ne
+savait donc ni quelles sondes surveillent déjà sa cellule, ni ce qu'une sonde a le droit de faire, ni que les instantanés
+`SLA_…` existent, sont gérés par la Forge et consomment son quota disque. **Le briefing est la seule chose qu'il lit** :
+ce qu'il ne dit pas n'existe pas pour lui.
+
+**Le principe, hérité du §44.4.** Le briefing porte les **définitions** et les **limites**, jamais un **état** : un état
+(« sain », « en panne », « dernier instantané à 03:00 ») périme avant d'être lu. Il le **commande** : `cat
+/etc/spark/health`, que le plan de contrôle réécrit à chaque relevé et à chaque geste (§75.9). Pour les instantanés,
+l'agent n'a aucune commande — il ne lit que la politique ; l'état se lit à la console, ce que le texte dit.
+
+**Le modèle** gagne deux clés, rendues par les deux présentations (jamais deux collectes, §44.8) :
+
+- `health` : `{ "file": "/etc/spark/health", "proposals": "/etc/spark/health.?", "limits": { "max_checks": 20,
+  "min_gap_minutes": 5, "script_timeout_s": 60, "threshold_min": 1, "threshold_max": 20 }, "script_account": "root" |
+  "spark-docker", "checks": [ { "name", "kind", "target", "expected", "schedule", "description", "threshold",
+  "enabled" } ] }`. Les limites viennent des **constantes du service** (`health.py`), pas d'une seconde copie dans le
+  briefing. `script_account` vient du **mode Docker relevé** (§42.2 quater) — et non de la ligne du Spark : lire
+  ailleurs a déjà été le défaut mesuré sur spark-010 (SPK-184). `target` d'un script est sa commande, déjà lisible dans
+  `/etc/spark/health` par le même groupe.
+- `snapshots` : `{ "sla": null | { "enabled", "schedule", "description", "retention_days", "retention_count" },
+  "naming": "SLA_AAAAMMJJ-HHMMSS", "shares_disk_quota": true }`.
+
+**Les présentations.** `BRIEFING.md` : deux sections, « Surveillance de ce Spark » et « Instantanés », avant
+« Proposer un changement ». Le dossier de déploiement : « 7 bis. Surveillance et instantanés » (la numérotation des
+sections 8 à 10 ne change pas : des tests et des renvois la citent).
+
+**Ce que la section Surveillance dit** : les sondes en place (nom, type, cible, cadence en clair, seuil) ; `cat
+/etc/spark/health` pour l'état frais ; les limites — un script s'exécute **dans la cellule, sous le compte de la pile**
+(`root`, ou `spark-docker` en rootless), 60 s au plus, **seul le code de sortie compte**, sa sortie n'est ni gardée ni
+envoyée ; deux relevés ne sont jamais espacés de moins de 5 minutes ; 20 sondes au plus ; une sonde HTTPS ne vise que
+une **route TLS de ce Spark**, sans joker ; une sonde en panne **alerte le propriétaire**, une fois, puis au
+rétablissement ; **pour proposer une sonde, `/etc/spark/health.?`** — une proposition ne pose rien, le propriétaire la
+relit. Sans sonde : « Aucune sonde : rien ne surveille ce Spark » — une absence nommée (§14.5).
+
+**Ce que la section Instantanés dit** : la politique en clair (cadence, rétention) ou « Aucun SLA » ; les instantanés
+`SLA_…` sont pris et supprimés **par la Forge**, jamais par la cellule ; un instantané ne protège ni de la perte du pool
+ni de celle de la machine ; il **consomme le quota disque** du Spark ; l'état se lit à la console.
+
+**Ce que ni l'une ni l'autre ne portent** : aucun état de sonde, aucun « dernier passage », aucun nom d'instantané ;
+**rien du canal d'alerte** (webhook, SMTP, destinataire) — c'est un réglage de la Forge, que le §44.3 range parmi ce qui
+ne doit pas figurer. Le briefing énonce des faits et des conditions, jamais une autorisation (§44.6) : « proposez » est
+une invitation à demander, pas une permission d'agir.
+
+**Quand il est réécrit.** `_apply_briefing` — le projecteur unique — rejoue après **tout geste de sonde** (poser,
+suspendre, reprendre, retirer, accepter une proposition) et **tout geste de SLA** (programmer, suspendre, reprendre,
+retirer), par `_rattraper_briefing` : une projection en retard est reprise au démarrage, elle n'annule jamais un
+registre déjà écrit (§44.8).
+
+**La règle qui évite de recommencer.** Toute fonction **visible d'un agent ou utile à lui** met à jour, dans le même
+changement : le modèle du briefing, ses deux présentations, `docs/AGENT_RUNBOOK.md` s'il s'agit d'opérer la Forge, et le
+test qui prouve que le texte rendu **nomme** la fonction. Elle est inscrite à la définition de terminé de `CLAUDE.md` (§17).
+
+**Preuves attendues.** Modèle : les deux clés, vides et remplies, limites tirées de `health.py`, compte rootless lu dans
+l'observation. Rendu : chaque section, absence nommée, aucun état, aucun mot du canal d'alerte, aucune valeur de secret.
+API contre le vrai registre : le briefing d'une cellule change après chaque geste de sonde et de SLA. Une cellule **réelle**
+(spark-010) : `/etc/spark/BRIEFING.md` relu dans la cellule après une sonde et un SLA posés par la console.
+
 ## 45. Modèle de menace des actions sensibles (SPK-35)
 
 **Instruction rendue le 2026-08-20.** Cette section n'implémente rien : elle
