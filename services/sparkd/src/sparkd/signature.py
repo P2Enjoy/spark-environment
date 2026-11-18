@@ -144,8 +144,10 @@ def verifier(octets: bytes, signature: str, identite: str,
     if fichier is None:
         raise SignatureError(
             "Aucun fichier de signataires autorisés n'est configuré sur cette "
-            "Forge : une signature ne peut être rattachée à personne, et "
-            "l'inscrire affirmerait une preuve qu'elle n'a pas. Réglez "
+            f"Forge ({allowed_signers or 'aucun chemin'}) : une signature ne peut être "
+            "rattachée à personne, et l'inscrire affirmerait une preuve qu'elle "
+            "n'a pas. La console le pose à sa connexion quand le serveur déclare "
+            "une clé de signature (docs/DAT.md §70.3) ; sinon réglez "
             "SPARKD_ALLOWED_SIGNERS, ou n'envoyez pas de signature.",
             "signataires_absents")
 

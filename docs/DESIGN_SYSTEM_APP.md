@@ -1006,6 +1006,30 @@ accès : « quels secrets cette cellule reçoit-elle ? ».
   de sortir de l'état vide qu'il a causé — c'est l'exception que le §14.4 nomme.
 
 
+### SPK-DS-45 · La pose des signataires se lit sur la ligne du serveur
+
+**Date** : 2026-11-18 · SPK-172 · `DAT.md` §70.3 · `DESIGN_SYSTEM.md` §1.3, §1.5,
+§6.8, §6.14, §12.5, §14.5, §14.7
+
+Le catalogue des serveurs porte une colonne **Signature**, entre *Tunnel* et
+*Actions*. Elle dit ce que la console a fait de la clé de signature du serveur à la
+connexion :
+
+- **vert** seulement sur un état que la Forge a **confirmé** : la ligne y est, qu'elle
+  vienne d'être posée, remplacée ou qu'elle y fût déjà (§1.3). Le libellé dit
+  lequel ;
+- **rouge** pour une pose impossible ou en échec, avec le motif en texte à la suite
+  du badge. **Accent** pour une Forge dont `sparkd` est à mettre à jour : l'écart
+  se corrige depuis l'écran *Forge*, ce n'est pas une panne ;
+- **sans badge**, en note, les deux absences qui ne sont pas des états de la
+  Forge : « gestes non signés » (aucune clé déclarée) et « en attente de
+  connexion » (le tunnel n'a pas encore été prêt) (§14.5) ;
+- un état inconnu reçu de l'hôte devient « état inconnu », neutre (§14.7).
+
+La correspondance entre jeton et libellé vit dans `tokens.js`
+(`SIGNATAIRES_ETATS`), à côté de celle du tunnel (§12.5). Le manuel M12 donne le
+sens de chaque état ; l'écran ne porte que son nom (§1.5 bis).
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

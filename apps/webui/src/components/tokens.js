@@ -66,6 +66,34 @@ export function tunnelOf(value) {
 }
 
 /**
+ * Ce que la carte d'un serveur dit de la pose de ses signataires autorisés.
+ *
+ * @spec docs/BACKLOG.md#SPK-172 · docs/DAT.md §70.3 (ce qui se voit) ·
+ *       docs/DESIGN_SYSTEM.md §6.8, §12.5 (une seule correspondance), §14.7 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-45
+ *
+ * Les jetons voyagent depuis l'hôte ; la phrase vit ici, une fois. Le vert ne
+ * s'écrit que sur un état que la Forge a CONFIRMÉ — la ligne y est —, jamais sur
+ * une pose tentée.
+ */
+export const SIGNATAIRES_ETATS = {
+  deja: { label: 'clé reconnue par la Forge', token: 'success' },
+  pose: { label: 'clé posée à la connexion', token: 'success' },
+  remplace: { label: 'clé remplacée à la connexion', token: 'success' },
+  sans_droit: { label: 'pose impossible : ni root ni sudo sans invite', token: 'danger' },
+  sans_sparkd: { label: 'pose impossible : sparkd absent', token: 'danger' },
+  sparkd_ancien: { label: 'pose impossible : sparkd à mettre à jour', token: 'accent' },
+  refus: { label: 'clé déclarée refusée', token: 'danger' },
+  echec: { label: 'pose en échec', token: 'danger' },
+};
+
+/** `null` : rien n'a été tenté (pas de clé, Forge locale, tunnel jamais prêt). */
+export function signatairesOf(resultat) {
+  if (!resultat) return null;
+  return SIGNATAIRES_ETATS[resultat.etat] ?? { label: 'état inconnu', token: 'neutral' };
+}
+
+/**
  * Ce qu'on peut DIRE d'un tunnel qui n'est pas ouvert.
  *
  * @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §22.3 (une panne se signale avec

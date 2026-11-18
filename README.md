@@ -505,7 +505,7 @@ défaut, pas une commodité.
 | `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | non | `spark` |
 | `SPARKD_NETWORK_BRIDGE` | pont réseau auquel les cellules sont rattachées — **écrit par l'écran d'installation de la Forge**, champ *Bridge* (`docs/DAT.md` §50) | nom d'interface | non | `sparkbr0` |
 | `SPARKD_STORAGE_DATASET` | jeu de données ZFS dont la compression est vérifiée | nom | non | la valeur de `SPARKD_STORAGE_POOL` |
-| `SPARKD_ALLOWED_SIGNERS` | fichier `allowed_signers` d'OpenSSH — clés **publiques** autorisées à signer un geste (`docs/DAT.md` §36.10) | chemin absolu | non | vide, la vérification est désactivée |
+| `SPARKD_ALLOWED_SIGNERS` | fichier `allowed_signers` d'OpenSSH — clés **publiques** autorisées à signer un geste (`docs/DAT.md` §36.10). **Posé par la console** à la connexion, pour la ligne `console/<serveur>` (`docs/DAT.md` §70.3) | chemin absolu | non | `/etc/sparkd/allowed_signers` ; absent ou vide, la vérification est désactivée |
 | `SPARKD_SECRET_KEY_FILE` | clé de chiffrement des **secrets d'environnement** — 32 octets, `0600`, créée si absente et jamais remplacée (`docs/DAT.md` §43.9.2) | chemin absolu | non | `secret.key` **à côté du registre** |
 | `SPARKD_NOTIFY_URL` | **REPLI seulement** — le canal d'alerte se règle désormais au registre, depuis l'onglet de la Forge (`docs/DAT.md` §47.3). Cette variable ne sert plus qu'aux Forges dont la configuration n'a pas encore été reprise, et le **registre l'emporte** dès qu'un canal y est posé | URL | non | vide |
 | `SPARKD_NOTIFY_TEMPLATE` | **REPLI seulement**, même règle que ci-dessus | JSON avec des `{champ}` | non | vide |
@@ -583,7 +583,9 @@ La **clé de signature** d'un serveur se déclare dans l'écran *Serveurs*, cham
 la clé privée. Vide, les gestes de ce serveur partent non signés — un état
 normal, que la console dit sans le traiter comme une panne (`docs/DAT.md`
 §36.10.8, §36.10.9). Côté Forge, `SPARKD_ALLOWED_SIGNERS` décide quelles clés
-sont recevables.
+sont recevables. **La console y pose elle-même sa clé**, à la première ouverture du
+tunnel, par SSH et `python -m sparkd.signataires poser`, et l'écran *Serveurs* dit
+le résultat dans sa colonne *Signature* (`docs/DAT.md` §70.3).
 
 ### Restreindre la clé d'accès du responsable
 

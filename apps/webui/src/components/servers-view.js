@@ -15,7 +15,7 @@
  */
 
 import { renderModale } from './modale.js';
-import { tunnelOf } from './tokens.js';
+import { signatairesOf, tunnelOf } from './tokens.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -187,13 +187,35 @@ function champs(ui) {
     </div>${champAdressePublique(v)}${champSignature(v)}`;
 }
 
+/**
+ * La cellule « Signature » : la clé déclarée, et ce que la Forge en a fait.
+ *
+ * @spec docs/BACKLOG.md#SPK-172 · docs/DAT.md §70.3 · docs/DESIGN_SYSTEM.md
+ *       §1.5 (jamais la couleur seule), §6.14 (cellule vide quand rien
+ *       n'existe), §14.5 · docs/DESIGN_SYSTEM_APP.md SPK-DS-45
+ *
+ * Sans clé déclarée, la console ne signe pas pour ce serveur : c'est un état
+ * normal (§36.10.8), dit en neutre. Avec une clé, tant que le tunnel n'a pas
+ * été prêt, rien n'a été tenté et la cellule le dit. Le motif d'un échec suit
+ * le badge, en texte.
+ */
+function celluleSignature(serveur, tunnel) {
+  if (!serveur.signingKey) return '<span class="note">gestes non signés</span>';
+  const etat = signatairesOf(tunnel?.signataires);
+  if (!etat) return '<span class="note">en attente de connexion</span>';
+  const motif = tunnel.signataires.message
+    ? `<span class="note"> ${echapper(tunnel.signataires.message)}</span>` : '';
+  return `<span class="badge badge--${etat.token}"><span class="badge__point" aria-hidden="true"></span>${
+    echapper(etat.label)}</span>${motif}`;
+}
+
 function ligne(serveur, courant, tunnels, ui) {
   const tunnel = tunnels.find((t) => t.name === serveur.name);
   const { label, token } = tunnelOf(tunnel?.state ?? 'closed');
   const estCourant = serveur.name === courant;
 
   const confirme = ui.confirming === serveur.name
-    ? `<tr><td colspan="5">
+    ? `<tr><td colspan="6">
        <div class="confirmation" role="group" aria-label="Confirmer le retrait">
          <p><strong>Retirer « ${echapper(serveur.name)} » de la console ?</strong></p>
          <p class="confirmation__consequence">Son tunnel sera fermé et la
@@ -213,6 +235,7 @@ function ligne(serveur, courant, tunnels, ui) {
   <td class="technique cellule-dense" title="${echapper(designation(serveur))}">${
     echapper(designation(serveur))}</td>
   <td><span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span></td>
+  <td>${celluleSignature(serveur, tunnel)}</td>
   <td><span class="actions-ligne">${estCourant ? '' :
       `<button type="button" class="bouton bouton--compact" data-bascule="${echapper(serveur.name)}">Regarder</button>`}
     <button type="button" class="bouton bouton--compact" data-modifie-serveur="${echapper(serveur.name)}">Modifier</button>
@@ -267,7 +290,7 @@ export function renderServeurs({ status = 'loading', servers = [], tunnels = [],
       <thead><tr>
         <th scope="col">Nom</th><th scope="col">Genre</th>
         <th scope="col">Ce qu’il désigne</th><th scope="col">Tunnel</th>
-        <th scope="col">Actions</th>
+        <th scope="col">Signature</th><th scope="col">Actions</th>
       </tr></thead>
       <tbody>${servers.map((s) => ligne(s, current, tunnels, ui)).join('')}</tbody>
     </table>

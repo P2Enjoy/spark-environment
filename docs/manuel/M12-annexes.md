@@ -112,6 +112,24 @@ Pour que vos gestes soient signés, il faut deux choses :
 Aucun secret n'est jamais copié : la console demande la signature à votre agent,
 qui ne rend jamais la clé privée.
 
+Le serveur, lui, doit savoir que cette clé est la vôtre. **La console le lui dit
+elle-même, à la connexion** : la première fois que le tunnel vers ce serveur est
+prêt, elle pose sa clé publique sur la Forge, sous le nom `console/<serveur>`, et
+la remplace si vous avez changé de clé. Vous n'avez rien à copier à la main.
+L'écran **Serveurs** dit, dans la colonne **Signature**, ce qui s'est passé :
+
+| Signature | Sens |
+|---|---|
+| **clé posée à la connexion** · **clé remplacée à la connexion** · **clé reconnue par la Forge** | la Forge connaît votre clé : vos gestes seront vérifiés |
+| **en attente de connexion** | le tunnel n'a pas encore été prêt depuis le démarrage de la console |
+| **gestes non signés** | aucune clé de signature n'est déclarée pour ce serveur |
+| **pose impossible : ni root ni sudo sans invite** | votre compte SSH sur la Forge ne peut pas écrire ce fichier ; un geste signé sera refusé tant que la clé n'y est pas |
+| **pose impossible : sparkd à mettre à jour** | la Forge a une version de `sparkd` antérieure à cette fonction : mettez-la à jour depuis l'écran **Forge**, puis redémarrez la console |
+| **pose en échec** · **clé déclarée refusée** | le motif suit le badge |
+
+Un échec de pose **n'empêche aucun geste** : il dit seulement pourquoi les gestes
+signés seront refusés par cette Forge.
+
 ### Quand la console n'a pas pu signer
 
 Elle vous le dit, dans la barre de gauche, sous le nom du serveur :

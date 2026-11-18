@@ -528,3 +528,41 @@ test("une VRAIE erreur reste rapportée, elle", async () => {
   assert.equal(t.lastError, 'Permission denied (publickey).');
   await t.close();
 });
+
+// --- SPK-172 · §70.3 : la pose des signataires à la première ouverture -------
+// @verifies docs/BACKLOG.md#SPK-172 · docs/DAT.md §70.3
+
+test('la pose des signataires part UNE fois, au premier passage à prêt, et se décrit', async () => {
+  const appels = [];
+  const etats = [];
+  const t = tunnel({
+    poserSignataires: async (serveur) => { appels.push(serveur.name); return { etat: 'pose' }; },
+    onChange: (d) => etats.push(d.signataires?.etat ?? null),
+  });
+  assert.equal(t.describe().signataires, null, 'rien tant que le geste n’a pas eu lieu');
+  await t.open();
+  await new Promise((r) => setImmediate(r));
+  await t.probe();
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(appels, ['prod'], 'une seule pose, même après une nouvelle sonde');
+  assert.deepEqual(t.describe().signataires, { etat: 'pose' });
+  assert.ok(etats.includes('pose'), 'le changement est publié');
+  t.close();
+});
+
+test('une pose qui lève devient un état d’échec, et le tunnel reste prêt', async () => {
+  const t = tunnel({ poserSignataires: async () => { throw new Error('sudo refusé'); } });
+  await t.open();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(t.state, READY);
+  assert.deepEqual(t.describe().signataires, { etat: 'echec', message: 'sudo refusé' });
+  t.close();
+});
+
+test('sans fonction de pose, ou quand elle ne s’applique pas, rien n’est décrit', async () => {
+  const t = tunnel({ poserSignataires: async () => null });
+  await t.open();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(t.describe().signataires, null);
+  t.close();
+});

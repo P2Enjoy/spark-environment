@@ -46,6 +46,10 @@ DEFAULT_CPU_RESERVE = 0.5
 #: quelques kibioctets ; le defaut est large de trois ordres de grandeur parce
 #: qu'une marge trop juste rendrait le remede intermittent, donc pire qu'absent.
 DEFAULT_STORAGE_METADATA_MARGIN = "64MiB"
+#: SPK-172 · docs/DAT.md §70.3 : le fichier que la console tient à jour. Absent ou
+#: vide, la vérification se désactive (§36.10.5) : ce défaut ne change rien à une
+#: Forge qui n'en a pas, et épargne le redémarrage quand la console le pose.
+DEFAULT_ALLOWED_SIGNERS = "/etc/sparkd/allowed_signers"
 DEFAULT_LOG_LEVEL = "info"
 #: SPK-93 · §52.2 : cadence de l'historien d'usage. 15 s est deux ordres de
 #: grandeur au-dessus de la fenetre minimale du §20 (0,5 s) : le taux n'est
@@ -325,7 +329,7 @@ def load(env: dict[str, str] | None = None) -> Config:
             source.get("SPARKD_NETWORK_BRIDGE", DEFAULT_NETWORK_BRIDGE).strip()
             or DEFAULT_NETWORK_BRIDGE
         ),
-        allowed_signers=source.get("SPARKD_ALLOWED_SIGNERS", ""),
+        allowed_signers=source.get("SPARKD_ALLOWED_SIGNERS", DEFAULT_ALLOWED_SIGNERS),
         secret_key_file=_cle_par_defaut(source),
         notify_url=source.get("SPARKD_NOTIFY_URL", "").strip(),
         notify_template=source.get("SPARKD_NOTIFY_TEMPLATE", "").strip(),

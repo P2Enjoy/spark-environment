@@ -9989,7 +9989,7 @@ rien dans la console ne le montrait.
 - DoD : test unitaire du relevé, test d'API, E2E de l'onglet depuis le parcours
   canonique, vérification visuelle, manuel à jour.
 
-### [ ] SPK-172 · Les signataires autorisés d'une Forge se posent sans geste manuel
+### [~] SPK-172 · Les signataires autorisés d'une Forge se posent sans geste manuel
 
 **Constaté le 2026-11-18 sur `spark-010`.** La console signe les gestes avec la clé
 déclarée pour le serveur, et la Forge refuse une signature qu'elle ne peut rattacher à
@@ -10010,6 +10010,19 @@ avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS
 - Dépend de : SPK-40.
 - DoD : preuve qu'une Forge neuve accepte la première signature de la console sans geste
   manuel ; refus d'une clé non déclarée toujours prouvé ; runbook à jour.
+- **Codé le 2026-11-18.** Ce qui est en place :
+  - `sparkd.signataires`, avec 20 preuves : pose, remplacement, refus de forme, et
+    vérification par la Forge à travers le fichier posé ;
+  - le défaut de `SPARKD_ALLOWED_SIGNERS` ;
+  - le script fermé de la console (`forge-signataires.js`) et la pose une fois par
+    tunnel, au premier passage à prêt ;
+  - la colonne *Signature* de l'écran *Serveurs* (SPK-DS-45) ;
+  - le manuel M12 et OP-43.
+
+  Les suites passent : sparkd 1 961, webui 1 687. Le refus d'une clé non déclarée reste
+  prouvé (`test_signature_route.py`, `test_signataires.py`). **Reste** : la preuve sur
+  `spark-010` (la ligne retirée revient à la connexion, et l'ajout d'une image est
+  signé) et la vérification visuelle de la colonne.
 
 ### [x] SPK-175 · Une Forge survit à la montée de version majeure d'Ubuntu
 

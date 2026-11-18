@@ -39,8 +39,10 @@ def atelier(tmp_path):
 
 def _client(atelier: Path, signataires: str | None = "signataires"):
     reglages = {"SPARKD_DB": str(atelier / "a.db"), "SPARKD_DRIVER": "fake"}
-    if signataires:
-        reglages["SPARKD_ALLOWED_SIGNERS"] = str(atelier / signataires)
+    # SPK-172 : sans valeur posée, le défaut (/etc/sparkd/allowed_signers)
+    # s'appliquerait et la preuve dépendrait du poste. Un fichier ABSENT désigné
+    # explicitement est le cas « pas de signataires ».
+    reglages["SPARKD_ALLOWED_SIGNERS"] = str(atelier / (signataires or "absent"))
     return TestClient(create_app(load(reglages)))
 
 

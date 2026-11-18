@@ -85,6 +85,8 @@ export class Tunnel {
    * `fetch`, qui n'apprend rien à personne.
    */
   #motifSsh = null;
+  /** SPK-172 · §70.3 : la pose des signataires est tentée UNE fois par tunnel. */
+  #signatairesTentes = false;
 
   constructor(server, options = {}) {
     this.server = server;
@@ -103,6 +105,12 @@ export class Tunnel {
     this.probeIntervalMs = options.probeIntervalMs ?? PROBE_INTERVAL_MS;
     this.openTimeoutMs = options.openTimeoutMs ?? OPEN_TIMEOUT_MS;
     this.onChange = options.onChange ?? (() => {});
+    // SPK-172 · docs/DAT.md §70.3 : à la première ouverture PRÊTE du tunnel, la
+    // console pose sa ligne dans `allowed_signers`. Injecté, pour que le tunnel
+    // s'éprouve sans SSH ; absent, rien n'est tenté.
+    this.poserSignataires = options.poserSignataires ?? null;
+    /** Le résultat du dernier geste — `null` tant qu'il n'a pas eu lieu. */
+    this.signataires = null;
   }
 
   /** Argument de `ssh`. Aucun secret : la configuration du poste fait foi. */
@@ -403,6 +411,7 @@ export class Tunnel {
       lastError: this.lastError,
       staleSeconds:
         this.lastHealthyAt === null ? null : Math.round((Date.now() - this.lastHealthyAt) / 1000),
+      signataires: this.signataires,
     };
   }
 
@@ -410,6 +419,28 @@ export class Tunnel {
     if (this.state === etat) return;
     this.state = etat;
     this.onChange(this.describe());
+    if (etat === READY) this.#poserSignatairesUneFois();
+  }
+
+  /**
+   * La pose des signataires, une fois par tunnel, sans jamais bloquer.
+   *
+   * @spec docs/BACKLOG.md#SPK-172 · docs/DAT.md §70.3 · §36.10.8
+   *
+   * Elle ne retarde ni l'ouverture ni la première requête : un geste signé
+   * envoyé avant la fin de la pose est refusé comme avant, et le motif le dit.
+   */
+  #poserSignatairesUneFois() {
+    if (this.#signatairesTentes || !this.poserSignataires) return;
+    this.#signatairesTentes = true;
+    Promise.resolve()
+      .then(() => this.poserSignataires(this.server))
+      .catch((erreur) => ({ etat: 'echec', message: String(erreur?.message ?? erreur) }))
+      .then((resultat) => {
+        if (resultat === null || resultat === undefined) return;
+        this.signataires = resultat;
+        this.onChange(this.describe());
+      });
   }
 }
 

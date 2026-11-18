@@ -21,6 +21,7 @@ import {
 } from './inventory.js';
 import { sshHosts, probeServer } from './discovery.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
+import { poserSignataires } from './forge-signataires.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
 import { comparer as comparerBuild, etatDepot, resoudreCommit,
@@ -85,7 +86,9 @@ export function createConsoleHost(options = {}) {
   // NOUVEAU processus, et non par la fin d'une attente.
   const instance = options.instance ?? randomUUID();
   let relanceEnCours = false;
-  const tunnels = options.tunnels ?? new TunnelManager();
+  // SPK-172 · §70.3 : à la première ouverture prête, la console pose sa ligne
+  // dans `allowed_signers` sur la Forge.
+  const tunnels = options.tunnels ?? new TunnelManager({ poserSignataires });
   // SPK-43 · §37.1 : les sessions de terminal vivent ICI, sur le poste. Le plan
   // de contrôle n'est pas dans ce chemin et n'en gagne aucun pouvoir.
   // SPK-100 · §53.3 : relevé UNE fois, au démarrage. Hors `SPARK_EPREUVE=1`,

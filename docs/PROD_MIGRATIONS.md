@@ -22,7 +22,7 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-30, après O
 | Système | Ubuntu **26.04.1 LTS**, noyau **7.0.0-15**, cgroup v2 |
 | Disposition disque | 2 × 6 To. `md0` RAID1 → `/boot`, `md1` RAID1 200 Gio → `/`, et **`sda5` + `sdb5` libres pour le pool** |
 | Incus | **7.4** installé depuis le dépôt amont Zabbly. Les dépôts Ubuntu sont **inutilisables**, voir §2.0 |
-| Pool de stockage | pool ZFS `spark`, **miroir ZFS natif** sur `sda5`+`sdb5` — 5,25 Tio, `ONLINE`. La disposition sur fichier a été retirée (SPK-28) |
+| Pool de stockage | pool ZFS `spark`, **miroir ZFS natif** sur `sda5`+`sdb5` — 5,25 Tio. **`DEGRADED` au relevé du 2026-11-18** : `sdb5` FAULTED (6 erreurs de lecture, 283 d'écriture), et `sdb3`, `sdb4` sortis de `md0`, `md1` — la Forge tourne sur le seul disque `sda`, le disque `sdb` est à faire remplacer par l'hébergeur. La disposition sur fichier a été retirée (SPK-28) |
 | `zfs_arc_max` | **16 Gio**, persisté dans `/etc/modprobe.d/zfs.conf` |
 | Bridge `sparkbr0` | créé, `10.77.0.1/24`, NAT actif, DNS sur `10.77.0.1:53` |
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
@@ -119,6 +119,48 @@ Ne copiez pas le fichier à la main : il est en WAL, et une copie perd en silenc
 ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
+
+### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169, SPK-170, SPK-172, SPK-175)
+
+```
+État          : EN ATTENTE sur la Forge de test (51.158.54.202) — à jouer sur
+                instruction du responsable. `spark-010` porte déjà la part sparkd
+                de SPK-169 (build 7c5b1b176, posée par le rejeu de l'amorce le
+                2026-11-18) ; la suite s'y pose par la mise à jour de la console.
+Objectif      : - préflight à 19 contrôles : STO-MIROIR (zpool status) et
+                  SYS-RAID (/proc/mdstat) — DAT §70.1 ;
+                - l'amorce et forge_install n'importent plus un pool importable
+                  qui n'est pas sain — DAT §70.2 ;
+                - l'amorce reconstruit l'environnement Python de sparkd après une
+                  montée d'Ubuntu — DAT §70.4, runbook §A.5 ;
+                - SPARKD_ALLOWED_SIGNERS vaut par défaut
+                  /etc/sparkd/allowed_signers, et la console y pose sa ligne
+                  console/<serveur> à la connexion — DAT §70.3.
+                Aucune migration de schéma. Aucune variable nouvelle : le défaut
+                d'une variable existante change, et une valeur posée l'emporte.
+Dépend de     : rien.
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2, ou le bloc « Code déployé »
+                   de la console) ;
+                3. relancer la console (`sparkui stop`, puis `sparkui`) : à la
+                   première ouverture du tunnel, elle pose sa ligne.
+Vérification  : - préflight : 19 contrôles. Sur la Forge de test, STO-MIROIR et
+                  SYS-RAID sont SIGNALÉS tant que le disque sdb n'est pas
+                  remplacé (relevé du 2026-11-18 : sdb5 FAULTED, sdb3 et sdb4
+                  sortis de md0 et md1) — c'est le défaut que SPK-169 rend
+                  visible, pas une régression ;
+                - écran Serveurs, colonne Signature : « clé reconnue par la
+                  Forge » (la ligne posée à la main le 2026-09-14 est la même) ;
+                - un geste signé (armer puis lever une protection) entre au
+                  journal « signée ».
+Retour arrière: réinstaller la build précédente (runbook A.2). Le fichier
+                allowed_signers reste en place ; la ligne posée par la console
+                est celle qu'OP-09 posait à la main.
+Risques       : faibles. Le changement de défaut ne touche pas une Forge qui pose
+                déjà la variable (c'est le cas de la Forge de test). Sur une
+                Forge sans la variable ni le fichier, rien ne change : la
+                vérification reste désactivée jusqu'à la première pose.
+```
 
 ### OP-42 · L'identité d'un Spark rootless est posée pour le compte rootless : `sparkd` seul (SPK-167) — **APPLIQUÉ le 2026-11-10**
 

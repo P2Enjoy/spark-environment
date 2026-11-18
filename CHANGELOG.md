@@ -14,6 +14,20 @@
   à la main sur la Forge le 2026-10-30 (OP-41 étape 1).
 
 ### Ajouté
+- **SPK-172 — la console pose elle-même sa clé de signature sur la Forge.** Aucune étape
+  du produit n'écrivait `allowed_signers`, et sur une Forge neuve le premier geste signé
+  (l'ajout d'une image au catalogue) était refusé. Désormais :
+  - à la première ouverture du tunnel vers un serveur qui déclare une *clé de
+    signature*, la console pose par SSH la ligne `console/<serveur>`, via
+    `python -m sparkd.signataires poser` ;
+  - elle remplace cette ligne si la clé a changé, et garde les autres ;
+  - `SPARKD_ALLOWED_SIGNERS` vaut par défaut `/etc/sparkd/allowed_signers`, ce qui
+    évite un redémarrage de sparkd ;
+  - l'écran *Serveurs* gagne une colonne *Signature*, qui dit le résultat ;
+  - un échec ne bloque aucun geste.
+
+  DAT §70.3, SPK-DS-45, manuel M12, `docs/PROD_MIGRATIONS.md` OP-43. Aucune
+  migration ; le défaut d'une variable existante change.
 - **SPK-173 — la liste des Sparks montre Mémoire et Disque en anneau, et un total face
   à la Forge.** À gauche des chiffres de chaque cellule Mémoire et Disque, un anneau dit
   la part de la limite occupée ; il passe au rouge à partir de 90 % (constante

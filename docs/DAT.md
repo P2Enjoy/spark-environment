@@ -17525,14 +17525,17 @@ forme, et aucun texte ne vient du navigateur. Le module :
 - **remplace** la ligne du même principal si la clé a changé, et garde toutes les
   autres (une autre console, une autre personne) ;
 - écrit le fichier de façon atomique, en `0644`, propriété de root ;
-- rend `deja`, `pose` ou `remplace`.
+- rend `deja`, `pose` ou `remplace`, ou `refus` pour une valeur hors forme.
 
 Un serveur sans `signingKey` ne déclenche rien, puisque la console ne signe pas pour
 lui. Une Forge locale non plus : elle n'a pas de transport SSH.
 
 **Ce qui se voit.** L'état du dernier geste voyage avec la description du tunnel :
 `deja`, `pose`, `remplace`, `sans_droit` (pas de sudo sans invite), `sans_sparkd`
-(paquet absent) ou `echec`, avec un message. La vue *Serveurs* le montre sur la carte
+(paquet absent), `sparkd_ancien` (paquet antérieur à ce module : la Forge est à
+mettre à jour), `refus` (clé déclarée hors forme) ou `echec`, avec un message. Le
+geste part une fois par tunnel, au premier passage à l'état prêt, sans retarder
+l'ouverture. La vue *Serveurs* le montre sur la carte
 du serveur. Un échec ne bloque rien (§36.10.8) : il dit seulement pourquoi les gestes
 signés seront refusés.
 

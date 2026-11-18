@@ -265,3 +265,59 @@ test('la valeur deja declaree revient dans le champ en MODIFICATION', () => {
   });
   assert.match(html, /value="\/home\/x\/\.ssh\/id_ed25519\.pub"/);
 });
+
+/* --- La pose des signataires, vue sur la carte (SPK-172) ------------------- */
+// @verifies docs/BACKLOG.md#SPK-172 · docs/DAT.md §70.3 (ce qui se voit) ·
+//           docs/DESIGN_SYSTEM.md §1.5, §14.5 · docs/DESIGN_SYSTEM_APP.md SPK-DS-45
+
+const SIGNE = { name: 'spark-010', kind: 'ssh', host: '203.0.113.10', user: 'ubuntu',
+                port: 22, remotePort: 9876, signingKey: '~/.ssh/id_ed25519.pub' };
+
+function celluleDe(html) {
+  // La sixième colonne d'en-tête est « Signature » ; la cellule est la 5e <td>.
+  const ligne = html.split('<tbody>')[1].split('</tr>')[0];
+  return ligne.split('<td')[5] ?? '';
+}
+
+test('la colonne Signature existe et dit chaque état en toutes lettres', () => {
+  for (const [etat, attendu, token] of [
+    ['pose', 'clé posée à la connexion', 'success'],
+    ['deja', 'clé reconnue par la Forge', 'success'],
+    ['sans_droit', 'ni root ni sudo sans invite', 'danger'],
+    ['sparkd_ancien', 'sparkd à mettre à jour', 'accent'],
+  ]) {
+    const html = renderServeurs({ status: 'ready', servers: [SIGNE], current: 'spark-010',
+      tunnels: [{ name: 'spark-010', state: 'ready', signataires: { etat } }] });
+    assert.match(html, /<th scope="col">Signature<\/th>/);
+    const cellule = celluleDe(html);
+    assert.match(cellule, new RegExp(attendu), etat);
+    assert.match(cellule, new RegExp(`badge--${token}`), etat);
+  }
+});
+
+test('le motif d’un échec suit le badge, échappé', () => {
+  const html = renderServeurs({ status: 'ready', servers: [SIGNE], current: 'spark-010',
+    tunnels: [{ name: 'spark-010', state: 'ready',
+                signataires: { etat: 'echec', message: '<b>délai</b> dépassé' } }] });
+  const cellule = celluleDe(html);
+  assert.match(cellule, /pose en échec/);
+  assert.match(cellule, /&lt;b&gt;délai&lt;\/b&gt; dépassé/);
+});
+
+test('sans clé, ou avant la connexion, la cellule nomme l’absence sans badge', () => {
+  const sansCle = celluleDe(renderServeurs({ status: 'ready', current: 'spark-010',
+    servers: [{ ...SIGNE, signingKey: '' }], tunnels: [] }));
+  assert.match(sansCle, /gestes non signés/);
+  assert.doesNotMatch(sansCle, /badge/);
+  const attente = celluleDe(renderServeurs({ status: 'ready', current: 'spark-010',
+    servers: [SIGNE], tunnels: [{ name: 'spark-010', state: 'connecting', signataires: null }] }));
+  assert.match(attente, /en attente de connexion/);
+});
+
+test('un état inconnu reçu de l’hôte devient un libellé neutre, jamais undefined', () => {
+  const cellule = celluleDe(renderServeurs({ status: 'ready', servers: [SIGNE], current: 'spark-010',
+    tunnels: [{ name: 'spark-010', state: 'ready', signataires: { etat: 'nouveau' } }] }));
+  assert.match(cellule, /état inconnu/);
+  assert.match(cellule, /badge--neutral/);
+  assert.doesNotMatch(cellule, /undefined/);
+});
