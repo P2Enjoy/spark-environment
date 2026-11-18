@@ -5,7 +5,9 @@
           docs/BACKLOG.md#SPK-157 · docs/DAT.md §65.3 (les options IPv4 rejetees
           des le premier demarrage) · docs/BACKLOG.md#SPK-159 · docs/DAT.md §66.2
           points 5 a 7, §66.4, §66.5 (les reglages en arguments nommes ; le pool
-          cree seulement sur --pool-source, par creer-pool.sh)
+          cree seulement sur --pool-source, par creer-pool.sh) ·
+          docs/BACKLOG.md#SPK-170 · docs/DAT.md §70.2 (un pool importable non
+          sain n'est jamais importe)
 
 Le script vivait auparavant SEULEMENT sur la machine, produit par le `user_data`
 du serveur : ni versionne, ni relisible en revue, ni testable. Ces preuves
@@ -71,9 +73,13 @@ def test_l_amorce_ne_formate_RIEN_elle_meme_et_n_appelle_jamais_zpool_create():
     assert "zpool import" in texte, "le pool s'importe s'il n'est pas monte"
     assert '"kind": "reuse"' in texte
     assert '"destructive": False' in texte
+    # SPK-170 · §70.2 : le refus d'un pool importable non sain NOMME les gestes
+    # d'effacement pour que l'exploitant les joue lui-meme. Une ligne `echo` les
+    # ecrit, elle ne les appelle pas : on cherche les APPELS.
+    appels = "\n".join(l for l in texte.splitlines() if not l.lstrip().startswith("echo "))
     for destructeur in ("zpool create", "mkfs", "sgdisk", "wipefs", "parted",
                         "zpool destroy", "zpool labelclear"):
-        assert destructeur not in texte, f"l'amorce ne doit jamais appeler {destructeur}"
+        assert destructeur not in appels, f"l'amorce ne doit jamais appeler {destructeur}"
 
 
 def test_l_amorce_est_IDEMPOTENTE_sur_chacun_de_ses_gestes():
@@ -83,7 +89,8 @@ def test_l_amorce_est_IDEMPOTENTE_sur_chacun_de_ses_gestes():
     monte, ou redemanderait a Incus un stockage qu'il connait deja.
     """
     texte = source()
-    assert re.search(r'zpool list "\$POOL" >/dev/null 2>&1 \|\| zpool import', texte)
+    # SPK-170 : un pool deja importe s'adopte AVANT toute lecture de l'importable.
+    assert re.search(r'zpool list "\$POOL" >/dev/null 2>&1 && return 0', texte)
     assert re.search(r'^if ! pool_present; then$', texte, re.M), \
         "un pool present ou importable n'est JAMAIS recree"
     assert re.search(r'incus storage show "\$POOL" >/dev/null 2>&1 \\\n\s*\|\| incus storage create', texte)
@@ -305,15 +312,32 @@ def _bloc_pool() -> tuple[str, str]:
     return refuser.group(0), bloc.group(0)
 
 
+#: SPK-170 : la forme de `zpool import` sans argument — il LISTE, il n'importe rien.
+#: L'etat `DEGRADED` et `sdb5 FAULTED` sont ceux du pool qu'une installation ratee
+#: avait laisse sur `spark-010` le 2026-11-18.
+def _liste_importable(etat: str) -> str:
+    membre = "FAULTED" if etat != "ONLINE" else "ONLINE"
+    return (f"   pool: spark\n     id: 1234567890\n  state: {etat}\n"
+            " action: The pool can be imported despite missing or damaged devices.\n"
+            " config:\n\n"
+            f"\tspark       {etat}\n\t  mirror-0  {etat}\n"
+            f"\t    sda5    ONLINE\n\t    sdb5    {membre}\n")
+
+
 def _jouer_bloc_pool(tmp_path: Path, *, present: bool, importable: bool,
-                     pool_source: str, creer_pool_present: bool = True):
+                     pool_source: str, creer_pool_present: bool = True,
+                     etat: str = "ONLINE"):
     refuser, bloc = _bloc_pool()
     binaire, journal = _doublons(tmp_path, noms=("modprobe",))
-    # `zpool list` et `zpool import` : deux verdicts commandes par le test.
+    liste = tmp_path / "zpool-import.txt"
+    liste.write_text(_liste_importable(etat) if importable else "no pools available to import\n")
+    # `zpool list`, `zpool import` (la liste) et `zpool import -f` : trois verdicts
+    # commandes par le test.
     (binaire / "zpool").write_text(
         "#!/bin/sh\n"
         f'echo "zpool $*" >> "{journal}"\n'
-        f'case "$1" in list) exit {0 if present else 1} ;; import) exit {0 if importable else 1} ;; esac\n'
+        f'case "$1" in list) exit {0 if present else 1} ;;\n'
+        f'  import) [ $# -eq 1 ] && {{ cat "{liste}"; exit 0; }}; exit {0 if importable else 1} ;; esac\n'
         "exit 0\n")
     (binaire / "zpool").chmod(0o755)
     creer = tmp_path / "creer-pool.sh"
@@ -388,3 +412,39 @@ def test_la_creation_ne_passe_que_par_creer_pool_et_sous_la_garde_de_pool_source
     assert len(appels) == 1, f"un seul appel de creer-pool.sh attendu : {appels}"
     garde = texte.index('[ -z "$POOL_SOURCE" ]')
     assert garde < texte.index(appels[0]), "l'appel vient apres la garde, jamais avant"
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_un_pool_IMPORTABLE_mais_DEGRADE_n_est_JAMAIS_importe(tmp_path):
+    """SPK-170 · §70.2 — la preuve rouge du 2026-11-18 : un pool laisse par une
+    installation ratee, degrade, etait importe et confie a Incus en silence."""
+    vu, appels = _jouer_bloc_pool(tmp_path, present=False, importable=True,
+                                  pool_source="/dev/sda5,/dev/sdb5", etat="DEGRADED")
+    assert vu.returncode == 1, (vu.returncode, vu.stderr)
+    assert "zpool import -f" not in appels, "un pool non sain ne s'importe pas"
+    assert "creer-pool" not in appels, "et rien n'est cree a sa place"
+    assert "FIN" not in vu.stdout
+    assert "DEGRADED" in vu.stderr and "sdb5" in vu.stderr, "l'etat et le membre sont dits"
+    # Les deux issues, et aucune n'est jouee par l'amorce.
+    assert "sudo zpool import -f spark" in vu.stderr
+    assert "labelclear" in vu.stderr and "wipefs" in vu.stderr
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_un_pool_IMPORTABLE_et_SAIN_est_adopte_et_l_amorce_le_DIT(tmp_path):
+    """La reinstallation qui garde ses disques reste possible (SPK-73, §50.3)."""
+    vu, appels = _jouer_bloc_pool(tmp_path, present=False, importable=True,
+                                  pool_source="/dev/sda5,/dev/sdb5", etat="ONLINE")
+    assert vu.returncode == 0, vu.stderr
+    assert "zpool import -f spark" in appels
+    assert "n'a pas ete cree par cette installation" in vu.stdout
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_un_pool_DEJA_importe_est_adopte_quel_que_soit_son_etat(tmp_path):
+    """Le rejeu d'une Forge en service : sa sante est l'affaire du preflight."""
+    vu, appels = _jouer_bloc_pool(tmp_path, present=True, importable=True,
+                                  pool_source="", etat="DEGRADED")
+    assert vu.returncode == 0, vu.stderr
+    assert "zpool import" not in appels
+

@@ -199,6 +199,16 @@
   aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
 
 ### Corrigé
+- **SPK-170 — l'amorce n'importe plus en silence un pool qui n'est pas sain.**
+  L'installateur de l'hébergeur n'efface pas les partitions. Le 2026-11-18, l'amorce
+  avait importé le pool dégradé d'une installation ratée et l'avait confié à Incus.
+  - Elle lit désormais l'état du pool importable (`zpool import`, qui ne fait que
+    lister). S'il n'est pas `ONLINE`, elle s'arrête sans rien effacer, nomme l'état et
+    les membres en cause, et donne les deux issues.
+  - Un pool importable sain reste adopté, et elle le dit.
+  - `forge_install` applique la même règle quand la console adopte un pool.
+
+  DAT §70.2, README. Aucune migration, aucune variable d'environnement.
 - **SPK-169 — le préflight lit l'état du miroir, et plus seulement son pilote.** Deux
   contrôles de plus, et la série passe de 17 à 19.
   - `STO-MIROIR` lit `zpool status` : un miroir dégradé est **signalé**, avec le support

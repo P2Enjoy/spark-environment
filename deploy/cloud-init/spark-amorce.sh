@@ -11,7 +11,9 @@
 #       docs/BACKLOG.md#SPK-159, docs/DAT.md §66.2 points 5 a 7, §66.4 (les
 #       reglages en arguments nommes ; le pool cree sur demande explicite) ·
 #       docs/BACKLOG.md#SPK-158, docs/DAT.md §66.8 (le pool est declare a
-#       l'hebergeur et adopte ; la creation devient un repli)
+#       l'hebergeur et adopte ; la creation devient un repli) ·
+#       docs/BACKLOG.md#SPK-170, docs/DAT.md §70.2 (un pool importable qui n'est
+#       pas sain n'est jamais importe)
 #
 # La machine est livree avec le schema de partitionnement que produit
 # `scripts/preparer-forge.py` : l'hebergeur y cree le pool miroir « spark » sur les
@@ -212,8 +214,33 @@ apt-get install -y incus zfsutils-linux
 # qu'a une machine sans pool, et la creation passe par creer-pool.sh, qui REFUSE un
 # support portant deja une signature — y compris celle d'un pool non importe.
 modprobe zfs
+# SPK-170 · docs/DAT.md §70.2 : l'installateur de l'hebergeur n'efface pas les
+# partitions, et un pool laisse par une installation ratee est IMPORTABLE. Son etat
+# se lit dans « zpool import » SANS argument, qui ne fait que lister.
+etat_importable() {
+  zpool import 2>/dev/null | awk -v p="$POOL" '
+    $1 == "pool:" { courant = $2 }
+    $1 == "state:" && courant == p { print $2; exit }'
+}
 pool_present() {
-  zpool list "$POOL" >/dev/null 2>&1 || zpool import -f "$POOL" >/dev/null 2>&1
+  # Deja importe : c'est le rejeu d'une Forge en service. Il est adopte quel que
+  # soit son etat — la sante du pool est l'affaire du preflight (STO-MIROIR).
+  zpool list "$POOL" >/dev/null 2>&1 && return 0
+  etat=$(etat_importable)
+  [ -n "$etat" ] || return 1
+  if [ "$etat" != ONLINE ]; then
+    # Un pool importable qui n'est pas sain n'est JAMAIS importe en silence :
+    # rien n'est efface, les deux issues sont dites.
+    echo "amorce: un pool « $POOL » est importable mais $etat : il n'est pas importe." >&2
+    zpool import 2>/dev/null | awk -v p="$POOL" '
+      $1 == "pool:" { garder = ($2 == p) } garder { print "amorce:   " $0 }' >&2
+    echo "amorce: pour garder ses donnees : sudo zpool import -f $POOL, puis rejouez l'amorce." >&2
+    echo "amorce: reste d'une installation ratee : zpool labelclear -f puis wipefs -a sur ses" >&2
+    echo "amorce: deux partitions, puis rejouez avec --pool-source." >&2
+    exit 1
+  fi
+  zpool import -f "$POOL" >/dev/null 2>&1 || return 1
+  echo "amorce: pool « $POOL » importable et sain : adopte ; il n'a pas ete cree par cette installation."
 }
 if ! pool_present; then
   if [ -z "$POOL_SOURCE" ]; then

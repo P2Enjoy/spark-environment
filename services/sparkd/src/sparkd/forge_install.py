@@ -296,6 +296,22 @@ def _zpools_importables() -> set[str]:
     }
 
 
+def _etat_importable(nom: str) -> str | None:
+    """L'état d'un zpool IMPORTABLE, tel que `zpool import` le liste.
+
+    @spec docs/BACKLOG.md#SPK-170 · docs/DAT.md §70.2
+    """
+    resultat = _run(["zpool", "import"], check=False, timeout=300)
+    courant = None
+    for ligne in resultat.stdout.splitlines() if not resultat.returncode else ():
+        champs = ligne.split()
+        if len(champs) == 2 and champs[0] == "pool:":
+            courant = champs[1]
+        elif len(champs) == 2 and champs[0] == "state:" and courant == nom:
+            return champs[1]
+    return None
+
+
 def _pool_driver(pool: str) -> str | None:
     result = _run(["incus", "storage", "show", pool], check=False)
     if result.returncode:
@@ -322,6 +338,17 @@ def phase_storage(plan: dict[str, Any]) -> dict[str, object]:
             if zpool not in _zpools_importables():
                 raise ForgeInstallationError(
                     f"le zpool « {zpool} » n'est ni importé ni importable")
+            # SPK-170 · §70.2 : un zpool importable qui n'est pas sain n'est
+            # jamais importé en silence — c'est peut-être le reste d'une
+            # installation ratée, et rien n'est effacé pour autant.
+            etat = _etat_importable(zpool)
+            if etat != "ONLINE":
+                raise ForgeInstallationError(
+                    f"le zpool « {zpool} » est importable mais {etat or 'dans un état illisible'} : "
+                    f"il n'est pas importé. Pour garder ses données, l'importer à la main "
+                    f"(sudo zpool import -f {zpool}) puis reprendre ; s'il est le reste "
+                    f"d'une installation ratée, effacer ses partitions (zpool labelclear, "
+                    f"wipefs) puis reprendre (docs/DAT.md §70.2)")
             _run(["zpool", "import", zpool], timeout=900)
             if not _zpool_importe(zpool):
                 raise ForgeInstallationError(f"l'importation du zpool « {zpool} » a échoué")

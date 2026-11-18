@@ -314,8 +314,11 @@ télécharge les scripts. Pour une offre nouvelle dont l'installation bloque,
 `partitionnement --defaut <FICHIER> --sans-zfs` donne le repli ; le cloud-init est le même.
 
 **Une machine réinstallée garde ses partitions.** L'installateur de l'hébergeur ne les
-efface pas, et l'amorce importe un pool `spark` laissé par une installation précédente
-(journal du 2026-11-18, SPK-170). Après l'installation, `sudo zpool status spark` doit
+efface pas, et un pool `spark` laissé par une installation précédente reste importable.
+L'amorce n'importe un tel pool **que s'il est sain** (`ONLINE`), et le dit. Sinon elle
+s'arrête sans rien effacer et donne les deux issues : l'importer à la main pour garder
+ses données, ou effacer ses partitions puis rejouer avec `--pool-source` (SPK-170,
+`docs/DAT.md` §70.2). Après l'installation, `sudo zpool status spark` doit
 montrer les deux moitiés `ONLINE`. Le préflight le vérifie : `STO-MIROIR` signale un
 miroir dégradé avec le support en cause, et `SYS-RAID` un RAID du système qui a perdu
 un membre (SPK-169, `docs/DAT.md` §70.1).

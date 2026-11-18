@@ -9940,7 +9940,7 @@ qui n'en a plus qu'une moitié ne tient pas cette promesse, et l'écran le dit v
   - **Documentation** : manuel M2, `docs/PROD_MIGRATIONS.md`, runbook (19 contrôles) et
     la limite retirée du README.
 
-### [ ] SPK-170 · L'amorce n'adopte pas en silence un pool qu'elle n'a pas créé
+### [x] SPK-170 · L'amorce n'adopte pas en silence un pool qu'elle n'a pas créé
 
 **Constaté le 2026-11-18** (SPK-159, première machine livrée). Lancée avec
 `--pool-source` sur un schéma sans pool déclaré, l'amorce a importé un pool `spark` laissé
@@ -9958,6 +9958,19 @@ l'hébergeur n'efface pas les partitions entre deux installations.
 - DoD : preuve rouge avant correction (le bloc du pool de l'amorce joué sur un pool
   importable étranger et dégradé) ; création par `creer-pool.sh` éprouvée sur une machine
   livrée aux partitions vierges.
+- **Fait le 2026-11-18.**
+  - **Preuve rouge, puis verte** : le bloc du pool de l'amorce, joué avec un `zpool`
+    doublé qui liste le pool dégradé de `spark-010`, échouait sur l'amorce précédente (le
+    pool était importé). L'amorce corrigée s'arrête en code 1, nomme `DEGRADED` et
+    `sdb5`, et n'importe ni ne crée rien. Un pool importable sain est adopté et l'amorce
+    le dit ; un pool déjà importé est adopté sans lecture.
+  - **La console** : `forge_install` refuse d'importer un zpool importable non sain. La
+    preuve est jouée sur un `_run` doublé (`test_forge_install.py`), rouge sur l'ancien
+    exécuteur.
+  - **Création par `creer-pool.sh`** : éprouvée sur la machine livrée aux partitions
+    effacées le 2026-11-18 (SPK-159).
+  - **Rejeu sur `spark-010`** : la nouvelle amorce adopte le pool déjà importé, sans
+    refus, code 0 ; la recette rend 19 contrôles.
 
 
 ### [ ] SPK-171 · Un onglet de la Forge suit les mises à jour du système (apt)
