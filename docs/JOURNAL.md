@@ -15675,3 +15675,36 @@ Ces sorties deviennent les jeux d'essai des contrôles.
 
 **Ce qui reste ouvert** : SPK-158, avec deux obstacles écrits au backlog (le banc et la
 mémoire du poste, puis les machines NVMe et UEFI à commander), et SPK-177.
+
+## 2026-11-18 · Un jeton GitHub pour poser la clé du Spark : un Spark, un dépôt (SPK-178)
+
+**Demande.** Un jeton GitHub porté par les Forges, comme le jeton DNS, pour associer
+l'identité d'un Spark à plusieurs dépôts en posant sa clé en *deploy key*.
+
+**Observations.** Le modèle existe : le jeton DNS vit dans le `.env` de l'hôte console
+(§38.1) et l'identité du Spark est lisible par la console (SPK-74, SPK-167). Le registre
+ne porte aucun champ « dépôt ». SPK-177 était déjà pris : l'unité est SPK-178.
+
+**Obstacle.** GitHub refuserait la même clé publique en *deploy key* sur deux dépôts
+(« Key is already in use »). C'est une connaissance de l'API, **non mesurée ici**. Elle
+rend « une identité, plusieurs dépôts » impossible en *deploy keys*.
+
+**Options présentées** : une paire par couple (Spark, dépôt) avec alias SSH ; la clé sur un
+compte GitHub dédié ; un jeton poussé dans la cellule.
+
+**Décision du responsable** : on reste sur **un Spark, un dépôt**. L'identité unique de
+SPK-74 suffit, sans alias ni paire supplémentaire.
+
+**Décisions prises sans arbitrage** (écrites au DAT §71, à renverser si besoin) :
+
+- variable `SPARK_GITHUB_DEPLOY_TOKEN` et non `GITHUB_TOKEN`, que `gh` et les CI lisent
+  déjà : un jeton ambiant aux droits larges serait repris en silence ;
+- clé posée en lecture seule par défaut ;
+- dépôt saisi au geste, non conservé : pas de colonne au registre, donc ni migration ni
+  changement de `sparkd`. Option écartée : la colonne, pour voir l'état dans la liste.
+
+**Conséquences.** Une unité console seule. Elle ajoute une variable de production et un
+sixième doublon d'épreuve (`SPARK_GITHUB_BASE_URL`, sous `SPARK_EPREUVE=1`).
+
+**Reste à faire** : la preuve réelle sur deux dépôts jetables demande le jeton du
+responsable.

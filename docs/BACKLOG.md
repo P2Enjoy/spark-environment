@@ -10166,6 +10166,34 @@ est porté par `caddy-api.service` et `caddy.service` est **masqué** depuis SPK
   - **Sur `spark-010`**, depuis l'accueil, avec *Diagnostiquer la Forge* : « Caddy
     actif » conforme, détail `caddy-api.service : active · caddy.service : inactive`
     (`e2e/forge-reelle/spk171-176-systeme.mjs`).
+
+### [ ] SPK-178 · La console pose la clé du Spark en deploy key sur son dépôt GitHub
+
+**Demandé le 2026-11-18** par le responsable : un jeton GitHub porté par la console,
+comme le jeton DNS, pour associer l'identité d'un Spark à son dépôt sans copier la clé
+à la main. **Périmètre tranché par lui : un Spark, un dépôt.**
+
+- Spécification : `docs/DAT.md` §71 (écrite le 2026-11-18) — jeton `SPARK_GITHUB_DEPLOY_TOKEN`
+  dans le `.env` du poste, jamais sur la Forge (§71.2) ; gestes *Vérifier*, *Poser*
+  (lecture seule par défaut), *Retirer* par frappe (§71.3) ; réponses de GitHub (§71.4) ·
+  `docs/DAT.md` §17.5 (l'identité présentée), §38.1 et §38.5 (le modèle du jeton et de la
+  garde) · `docs/DESIGN_SYSTEM_APP.md` (la section, à écrire avec le code) ·
+  `docs/manuel/M6-*` (l'identité).
+- Dépend de : SPK-74, SPK-167, SPK-47.
+- Aucune migration, aucun changement de `sparkd` (§71.5).
+- **Point ouvert à mesurer, pas à supposer** : GitHub refuserait la même clé en deploy key
+  sur deux dépôts. Le contrat repose dessus ; la mesure sur deux dépôts jetables est une
+  **action humaine** (jeton du responsable), §71.8.
+- **Pris sans arbitrage du responsable** (à renverser s'il le veut) : nom de variable
+  propre au produit plutôt que `GITHUB_TOKEN` ; lecture seule par défaut ; dépôt saisi au
+  geste et non conservé au registre.
+- Variables : `SPARK_GITHUB_DEPLOY_TOKEN` ; `SPARK_GITHUB_BASE_URL` (épreuve seulement,
+  sous `SPARK_EPREUVE=1`). Les deux au `.env.example`, au README et au §53.3, avec le test
+  de garde.
+- DoD : tests unitaire, d'API de l'hôte et E2E depuis l'accueil ; captures desktop et
+  mobile observées ; README, `.env.example`, manuel M6, design system, changelog ; preuve
+  réelle sur deux dépôts jetables. Sans cette dernière, l'unité reste `[~]`.
+
 ---
 
 ## Lot 9 — La sauvegarde externe des instantanés

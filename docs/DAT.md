@@ -17651,3 +17651,137 @@ pourquoi : c'est la phase *Socle* de l'installation qui la fait passer à
 **Vérification.** Le relevé de `spark-010` sert de jeu d'essai : le test échoue avant
 correction et passe après. Le diagnostic rejoué sur `spark-010` depuis l'écran rend
 « Caddy actif » conforme.
+
+## 71. La console pose la clé du Spark chez GitHub : contrat (SPK-178)
+
+Demandé le 2026-11-18 par le responsable : un **jeton GitHub** porté par la console,
+comme le jeton DNS, pour que la clé d'identité d'un Spark (§17.5) soit posée en *deploy
+key* sans que l'exploitant la copie à la main. Le responsable a ensuite tranché :
+**un Spark, un dépôt**. Les points marqués « pris sans arbitrage » ne l'ont pas été par
+lui ; ils sont écrits avec leur raison pour qu'il puisse les renverser.
+
+### 71.1 Un Spark, un dépôt, et pourquoi
+
+**Hypothèse à mesurer (pas encore un fait)** : GitHub refuse la même clé publique en
+*deploy key* sur deux dépôts (« Key is already in use »). Si c'est exact, l'identité unique
+d'un Spark (SPK-74) ne peut servir qu'**un** dépôt, et c'est précisément le périmètre
+choisi. La mesure se fait sur deux dépôts jetables, avec le jeton du responsable (§71.8).
+Tant qu'elle n'est pas faite, le refus 422 est traité comme le dit le §71.4, sans que le
+produit prétende l'expliquer plus loin.
+
+**Options écartées**, pour le cas où le besoin « plusieurs dépôts » reviendrait :
+
+- une paire par couple (Spark, dépôt), avec un alias dans `~/.ssh/config` : garde le
+  moindre privilège par dépôt, mais change l'URL du remote et multiplie les identités ;
+- la clé du Spark posée sur un compte GitHub dédié : une identité pour N dépôts, mais
+  l'accès devient celui du compte entier, sans lecture seule par dépôt ;
+- un jeton poussé dans la cellule : met un secret là où le §38.1 interdit d'en mettre.
+
+### 71.2 Le jeton : où, par qui, comment
+
+| Variable | Rôle | Format | Obligatoire | Défaut |
+|---|---|---|---|---|
+| `SPARK_GITHUB_DEPLOY_TOKEN` | jeton qui liste, pose et retire des *deploy keys* | *fine-grained personal access token* GitHub | non | absent : la fonction est désactivée et l'écran le dit |
+
+- **Où** : le `.env` du poste de l'exploitant, lu par l'hôte console (§38.1), jamais par
+  `sparkd`, jamais sur la Forge, jamais dans `servers.json` (§22.4), jamais dans un
+  journal ni dans une réponse.
+- **Par qui** : l'exploitant, qui crée le jeton sur GitHub et le colle dans son `.env`.
+- **Comment** : jeton limité **aux seuls dépôts visés**, avec la permission de dépôt
+  *Administration : lecture et écriture*, la seule qui ouvre la gestion des *deploy keys*.
+  C'est un pouvoir large sur le dépôt ; l'écran et le manuel le disent en clair.
+- **Pourquoi pas `GITHUB_TOKEN`** (pris sans arbitrage) : ce nom est aussi celui que lisent
+  `gh` et les CI. Un `GITHUB_TOKEN` exporté dans un shell, avec des droits bien plus
+  larges, serait repris en silence : une option cachée. Un nom propre au produit évite
+  l'héritage.
+- Les trois états du §38.1.1 valent ici : **sans jeton**, **refusé** (401, jeton expiré
+  ou révoqué), **sans accès au dépôt**. Le jeton absent n'est pas une panne.
+
+### 71.3 Les gestes
+
+Le dépôt se saisit au geste, sous la forme `propriétaire/dépôt` (lettres, chiffres, `-`,
+`_`, `.` ; une seule barre). Il n'est **pas conservé** (pris sans arbitrage : voir §71.5) ;
+la source de vérité est GitHub, comme la cellule l'est pour la clé (§17.5).
+
+- **Vérifier** : liste les clés du dépôt et compare le **corps** de la clé du Spark (type et
+  base64, sans le commentaire) à chacune. États : *non posée*, *posée en lecture seule*,
+  *posée en écriture*, *périmée*. *Périmée* = une clé titrée `spark:<nom du Spark>` est
+  présente mais son corps n'est plus celui de l'identité actuelle (identité régénérée,
+  §17.5).
+- **Poser** : crée la clé, titre `spark:<nom du Spark>`, **en lecture seule par défaut**.
+  L'écriture est une case explicite, décochée (pris sans arbitrage : un clone suffit à
+  l'objet de SPK-74, et l'écriture élargit ce que la cellule peut faire du dépôt). Sur une
+  clé *périmée*, « Poser » la **remplace** : elle retire cette clé-là, puis pose la
+  nouvelle.
+- **Retirer** : supprime la clé du dépôt. Geste destructeur chez un tiers : confirmation
+  par la frappe de `propriétaire/dépôt` (design system §6.23).
+
+**La garde, dans le code et éprouvée par un test chacune** (même esprit que le §38.5) :
+
+- le produit n'envoie jamais qu'une clé **publique** ; un corps contenant
+  `PRIVATE KEY` est refusé avant tout appel ;
+- il ne supprime **que** la clé dont le corps égale celui de l'identité du Spark, ou la
+  clé *périmée* portant le titre `spark:<nom>` ; les autres clés du dépôt ne sont ni
+  listées au-delà de leur titre, ni touchées ;
+- un Spark arrêté ou sans identité n'a pas de clé à poser : le geste est refusé et dit
+  pourquoi, comme l'écran d'identité le fait déjà (§17.5, §14.6).
+
+### 71.4 Ce que GitHub répond, et ce que l'écran en dit
+
+| Réponse | Sens retenu | Message |
+|---|---|---|
+| pas de jeton | fonction désactivée | « Aucun jeton GitHub sur ce poste » |
+| 401 | jeton refusé ou expiré | « Jeton refusé : expiré ou révoqué » |
+| 403 | permission manquante ou limite de débit | « Le jeton n'a pas la permission *Administration* sur ce dépôt », ou la limite de débit nommée |
+| 404 | dépôt introuvable **ou jeton sans accès** (GitHub ne distingue pas) | les deux causes sont dites |
+| 422, clé déjà utilisée | cette clé est posée sur un autre dépôt | « Un Spark sert un seul dépôt : cette clé est déjà posée ailleurs » |
+| délai dépassé | fournisseur injoignable | l'erreur et la possibilité de relire ; aucune nouvelle tentative automatique sur une écriture |
+
+### 71.5 Où cela vit, et ce qui n'est pas touché
+
+- Module de l'hôte console `apps/webui/host/github.js`, sur le modèle de `dns.js` :
+  jeton en champ privé, timeout, aucune nouvelle tentative sur une écriture.
+- Écran : une section « Dépôt GitHub » du bloc d'identité du Spark
+  (`spark-identity.js`), sur la facette « Clés ».
+- **Aucune migration, aucune colonne au registre, aucun changement de `sparkd`.** Option
+  écartée : une colonne `dépôt` au registre, qui montrerait l'état *d'un coup d'œil* dans
+  la liste. Elle exige une migration, le seed et `docs/PROD_MIGRATIONS.md`, pour un
+  confort que le geste « Vérifier » rend déjà. À rouvrir si l'exploitant veut l'état sans
+  ressaisir le dépôt.
+- Le geste est journalisé : dépôt, empreinte, mode (lecture ou écriture), résultat ;
+  jamais le jeton, jamais le corps de la clé (§17.2). L'emplacement du journal suit celui
+  des écritures DNS ; il est confirmé en lisant leur code au moment d'écrire celui-ci.
+
+### 71.6 Variables introduites
+
+`SPARK_GITHUB_DEPLOY_TOKEN` (§71.2), au `.env.example` et au README « Variables
+d'environnement ».
+
+Les épreuves de l'hôte injectent `fetchFn`, comme le fait déjà `main.js`. L'E2E, qui lance
+une vraie console, a besoin d'un **sixième doublon**, `SPARK_GITHUB_BASE_URL` : racine de
+l'API GitHub, **lue sous `SPARK_EPREUVE=1` seulement**, ignorée et dite sur la sortie
+d'erreur sinon, avec le bandeau permanent du §53.3. Elle entre au tableau du §53.3 et au
+test de garde, dans le même changement que le code.
+
+### 71.7 Démonstration
+
+Sous pilote factice, la section affiche un dépôt de démonstration et l'état de sa clé,
+sans aucun appel à GitHub : le seed reste un contrat (CLAUDE.md §8), et rien n'est
+fabriqué qui prétende avoir été posé chez un tiers.
+
+### 71.8 Vérification
+
+| Niveau | Preuve |
+|---|---|
+| unitaire | module : comparaison de clé, chaque garde du §71.3, chaque ligne du §71.4, jeton jamais dans une erreur ni une trace |
+| API de l'hôte | routes de lecture et d'écriture, refus direct sans jeton, sans identité, avec un corps privé |
+| E2E | depuis l'accueil : connexion, Sparks, le Spark, facette Clés, saisie du dépôt, *Poser*, *Vérifier*, *Retirer* par frappe, refus affiché ; contre un doublon local de l'API GitHub |
+| visuel | captures desktop et mobile des états : sans jeton, non posée, posée, périmée, refusée |
+| réel | **action humaine** : sur deux dépôts jetables avec le jeton du responsable, poser, vérifier, remplacer, retirer, puis tenter la même clé sur le second dépôt. Cela mesure l'hypothèse du §71.1 |
+
+L'unité reste `[~]` tant que la preuve réelle n'est pas faite.
+
+### 71.9 Hors périmètre
+
+Plusieurs dépôts par Spark ; la création d'un dépôt ; le clonage lui-même ; la rotation
+ou la création du jeton ; les clés *utilisateur* de GitHub.
