@@ -16126,3 +16126,18 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   réutilisant `convient_jour` du module cron (même sémantique que le planificateur) ; 672 entiers dans `week.slots`. Les SLA
   suspendus ne chargent rien. Le graphe porte un équivalent textuel (les cinq tranches les plus chargées) et un survol lu en
   `aria-live`. Limite assumée : on ne mesure pas des secondes d'occupation (DAT §76.5).
+
+**SPK-187 : le briefing rattrape le SLA et la santé — livré le 2026-11-19.**
+
+- **Réponse à la question du responsable** : le dossier de l'agent n'avait pas les nouvelles fonctions, et aucune règle ne
+  l'exigeait. Rattrapé : clés `health` et `snapshots` du modèle, deux sections de `BRIEFING.md`, une « 7 bis » du dossier, une
+  rubrique H du runbook agent, une phrase au manuel M6 ; **la règle est inscrite à `CLAUDE.md` §17** et au DAT §44.12, à sa demande.
+- **Une refonte qui évite le prochain oubli** : le modèle du briefing était construit à **deux** endroits (la projection dans la
+  cellule et la lecture du dossier) ; un champ ajouté dans l'un et pas l'autre aurait fait diverger ce que la cellule lit de ce
+  que la console montre. Un seul constructeur, `_modele_du_spark`.
+- **Vu sur une cellule réelle** : `script_account: spark-docker` — la valeur que le défaut de SPK-184 aurait donnée fausse
+  (`root`) si le briefing avait lu le mode sur la ligne du Spark. Le test « le compte vient du mode relevé » l'épingle.
+- **Une autre session travaillait en parallèle** (SPK-188, les onglets SLA et Santé de la Forge) sur des fichiers communs
+  (`app.py`, `health.py`, `sla.py`, DAT, backlog). Les commits ont été faits **hunk par hunk** : seules mes lignes d'`app.py` sont
+  entrées dans le commit `b751ebf` ; les siennes sont restées dans l'arbre de travail.
+
