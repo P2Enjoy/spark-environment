@@ -17847,3 +17847,55 @@ L'unité reste `[~]` tant que la preuve réelle n'est pas faite.
 
 Plusieurs dépôts par Spark ; la création d'un dépôt ; le clonage lui-même ; la rotation
 ou la création du jeton ; les clés *utilisateur* de GitHub.
+
+
+## 72. Le domaine d'une route est un lien, ouvert dans un nouvel onglet : contrat (SPK-179)
+
+*Contrat écrit le 2026-11-18, avant le code. Aucune migration, aucune route d'API, aucune
+variable d'environnement.*
+
+### 72.1 Le constat
+
+La section *Routes* d'un Spark écrit le domaine de chaque route en texte brut. Pour voir ce
+que la route sert, l'exploitant le recopie dans la barre d'adresse.
+
+### 72.2 Le lien
+
+Le domaine d'une route **de la section Routes d'un Spark** devient un lien :
+
+- `href` : `https://<domaine>/` lorsque la route porte le TLS, `http://<domaine>/` lorsqu'elle
+  est **sans TLS** (SPK-112, §18.3 quater). Le schéma est celui que la route sert, pas un choix
+  de la console : forcer `https://` sur une route sans TLS ouvrirait une erreur de connexion.
+- `target="_blank"` et `rel="noopener noreferrer"`. Le `noopener` coupe l'accès de l'onglet
+  ouvert à la console ; le `noreferrer` ne lui annonce pas l'adresse de la console, qui est
+  une adresse locale (§63).
+- Le domaine reste lisible en police technique ; le lien ne change pas ce qui est écrit.
+- Une **icône « lien externe »** (Lucide, trait de 2 px, `aria-hidden`) suit le domaine, et un
+  texte réservé aux lecteurs d'écran — « (s'ouvre dans un nouvel onglet) » — annonce le
+  comportement : un lien qui sort de la page ne le dit pas par la couleur seule (design system
+  §1.5).
+- **Un joker n'est pas un lien.** `*.monapi.fr` ne désigne aucune adresse (§18.3 bis) : il
+  reste du texte.
+- **Une valeur qui n'est pas un nom d'hôte valide** reste du texte, jamais un `href` : le
+  domaine est une donnée du registre, et un attribut ne se construit pas sur une chaîne qu'on
+  n'a pas validée. La validation est stricte (étiquettes de lettres, chiffres et traits
+  d'union, séparées par des points) ; elle n'écrit rien, elle décide seulement si un lien est
+  rendu.
+- La route **non appliquée** reste liée : sa pastille « non appliquée » dit déjà pourquoi la
+  page ne répondra pas encore.
+
+### 72.3 Ce qui n'est pas lié
+
+Les noms que la préséance soustrait à un joker et le « prend le pas sur » d'une déclaration :
+la console ne connaît pas le TLS de la route d'un autre Spark, donc pas le schéma. Les
+propositions de routes : rien n'est encore servi. L'inventaire DNS : ce sont des
+enregistrements, pas des routes.
+
+### 72.4 Preuves attendues
+
+Unitaires : schéma selon le TLS, joker non lié, domaine invalide non lié, échappement,
+`target` et `rel`, icône et texte d'annonce. E2E depuis l'accueil, à la souris : Spark →
+Routes ; le lien porte le bon `href`, `target="_blank"` et `rel` ; un clic ouvre un **nouvel
+onglet** et la console reste sur sa page ; un joker et une route sans TLS (seedés ou créés par
+le parcours) se rendent comme décrit. Captures desktop et mobile.
+

@@ -9215,6 +9215,30 @@ pré-renseignement, donc l'entrée par défaut n'est retirable par personne.
   depuis l'accueil (Forge → Images → désigner → retirer l'ancienne) ; captures observées ;
   manuel M5, DAT §33.7, README si concerné, seed et changelog à jour.
 
+### [ ] SPK-179 · Le domaine d'une route est un lien, ouvert dans un nouvel onglet
+
+**Demandé le 2026-11-18** par le responsable : « dans les routes, les URL, ce serait
+pratique qu'elles soient des URL cliquables, qui s'ouvrent dans un nouvel onglet. » Dans la
+section *Routes* d'un Spark, le domaine d'une route est du texte : pour voir ce que la route
+sert, on le recopie dans la barre d'adresse.
+
+- Spécification : `docs/DAT.md` **§72** · §18.3, §18.3 bis (le joker) · `docs/DESIGN_SYSTEM.md`
+  §1.5, §9.1, §9.2, §9.6, §10 (icônes) · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-49** · manuel M7 ·
+  `docs/JOURNAL.md` 2026-11-18.
+- Dépend de : SPK-47 (la section Routes), SPK-112 (le TLS d'une route).
+- Portée : le domaine d'une route de la section *Routes* d'un Spark devient un lien
+  `https://<domaine>/` (`http://` si la route est sans TLS), `target="_blank"` et
+  `rel="noopener noreferrer"`, avec une icône « lien externe » et un texte pour lecteurs
+  d'écran qui annonce le nouvel onglet. Un **joker** (`*.monapi.fr`) n'est pas un lien : il ne
+  désigne pas une adresse.
+- Hors périmètre : les propositions de routes (rien n'est encore servi), les noms que la
+  préséance soustrait à un joker, l'inventaire DNS, les routes d'un autre Spark ; aucun
+  changement d'API, de schéma ni de variable d'environnement.
+- DoD : tests unitaires (schéma selon le TLS, joker, domaine invalide, échappement) ; E2E
+  depuis l'accueil (Spark → Routes → lien, `target` et `rel` lus, clic qui ouvre un nouvel
+  onglet sans quitter la console) ; captures observées (desktop, mobile, joker, route sans
+  TLS) ; manuel M7, DAT, design system et changelog à jour.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

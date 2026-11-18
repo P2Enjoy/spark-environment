@@ -15766,3 +15766,20 @@ sans que ma commande s'arrête dessus. L'examen suivant n'a montré que des test
 que les six du premier relevé étaient les mêmes. Le lancement est désormais conditionné au
 relevé.
 
+## 2026-11-18 · SPK-179 : le domaine d'une route devient un lien
+
+**Demande du responsable** : « dans les routes, les URL, ce serait pratique qu'elles soient des
+URL cliquables, qui s'ouvrent dans un nouvel onglet. »
+
+**Observation.** `renderRoutesPanel` écrit `r.domain` dans un `span`. Le schéma dépend du TLS de
+la route (`r.tls`) ; un joker (`*.monapi.fr`, §18.3 bis) ne désigne aucune adresse ; le domaine
+est une donnée du registre, donc un `href` ne se construit qu'après validation.
+
+**Décisions de conception** (à confirmer si elles ne conviennent pas) : lien sur la seule
+section *Routes* d'un Spark — là où un domaine désigne SA route, avec son TLS connu ; pas sur
+les noms d'un autre Spark ni sur les propositions ; `https://` selon le TLS de la route, pas
+forcé ; joker et nom invalide restent du texte ; `noopener noreferrer`, icône et texte
+d'annonce du nouvel onglet.
+
+**Conséquences.** SPK-179 ouverte, DAT §72 et SPK-DS-49 écrits avant le code.
+

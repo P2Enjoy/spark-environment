@@ -256,6 +256,25 @@ socle.
 - Responsive : l'anneau ne se masque jamais ; le tableau défile dans son conteneur
   (§8.1), le pied avec lui.
 
+### SPK-DS-49 · Le domaine d'une route est un lien externe, et il le dit
+
+Date : 2026-11-18 · `docs/DAT.md` §72 · `docs/DESIGN_SYSTEM.md` §1.5, §9.1, §9.2, §9.6, §10.
+
+Le domaine d'une route, dans la section *Routes* d'un Spark, est un `a` qui s'ouvre dans un
+**nouvel onglet** : `target="_blank"`, `rel="noopener noreferrer"`. Un lien qui quitte la page
+**le dit**, sans que la couleur porte seule l'information (§1.5) :
+
+- le domaine reste en police technique, couleur `--color-brand`, souligné au survol et au
+  focus — comme `lien-spark` ;
+- une **icône « lien externe »** (Lucide, trait 2 px, 14 px, `aria-hidden`) le suit ;
+- un texte `sr-only` « (s'ouvre dans un nouvel onglet) » le complète ;
+- sa cible interactive atteint `--size-target` (§4.4) par le rembourrage de la ligne, pas par
+  un agrandissement de l'icône ;
+- `:focus-visible` : anneau 2 px `--color-brand` (§9.5).
+
+Un joker (`*.monapi.fr`) ou un nom qui n'est pas un nom d'hôte valide **reste du texte** : un
+lien vers rien est une commande morte (§1.4).
+
 ### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
 
 Les mesures d'un Spark viennent du runtime et se comparent à ses quotas
