@@ -9825,8 +9825,16 @@ lien et en place des textes bruts ».
     Le JSON versionné d'EM-B311X-SATA est régénéré (`"zfs": null`) : c'est celui qui s'est
     installé. La suite de la commande compte **152 cas**, et la suite sparkd **1 921 sur
     1 921**.
-  - **Reste `[~]`** : le mode `--compresser` n'a pas été joué sur une VM ; les schémas
-    NVMe et UEFI sont construits, pas relevés.
+  - **Reste `[~]`**, revu le 2026-11-18 avec ce qui empêche de conclure :
+    - **`--compresser` sur une VM** : non joué. Deux obstacles.
+      - Le banc (`e2e/forge-vm/redemarrage.mjs`) remplace l'adresse de sparkd par une
+        roue locale **dans le texte** de l'amorce, ce qu'un texte compressé ne permet
+        pas. Le jouer demande au banc une option qui installe sparkd depuis `main`
+        publié, en le disant comme un écart.
+      - La VM demande 6 Gio, et le poste n'en avait que 3 de disponibles ce jour-là
+        (§15 bis : on n'épuise pas la mémoire du poste).
+    - **Schémas NVMe et UEFI** : construits, jamais relevés. Les relever demande une
+      machine de ces offres chez l'hébergeur, donc une commande du responsable.
 
 ### [x] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
 

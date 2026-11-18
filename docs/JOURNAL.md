@@ -15649,3 +15649,29 @@ Ces sorties deviennent les jeux d'essai des contrôles.
   ne lancent jamais `zpool upgrade`.
 
 **Conséquence.** Le préflight passe de 17 à 19 contrôles.
+
+## 2026-11-18 · Les unités de `spark-010`, livrées et prouvées
+
+**Ce qui est fermé**, chaque unité avec sa preuve sur une Forge réelle (backlog) :
+
+- SPK-169 : préflight à 19 contrôles, 19 sur 19 sur `spark-010`, et deux avertissements
+  sur les relevés réels de `spark-experiment` ;
+- SPK-170 : refus d'un pool importable non sain ;
+- SPK-175 : environnement Python reconstruit, panne reproduite puis réparée sur
+  `spark-010` ;
+- SPK-172 : clé posée à la connexion, puis geste signé ;
+- SPK-171 : onglet *Mises à jour* ;
+- SPK-176 : case ZFS décochée, plan composé sans être exécuté.
+
+**Observations.**
+
+- « Relever le catalogue » est un geste automatique, donc non signé : la preuve de
+  SPK-172 emploie la création d'un projet.
+- Le diagnostic de l'installation lit `caddy.service`, masqué depuis SPK-129, et dit
+  « Caddy actif : à faire » sur une Forge saine. Ce défaut est ouvert en SPK-177.
+- La console d'exploitation du poste (port 5175) n'a pas été relancée. Les preuves ont
+  tourné sur une console à part (port 5191), avec une copie de l'inventaire. La relancer
+  fait partie d'OP-43.
+
+**Ce qui reste ouvert** : SPK-158, avec deux obstacles écrits au backlog (le banc et la
+mémoire du poste, puis les machines NVMe et UEFI à commander), et SPK-177.
