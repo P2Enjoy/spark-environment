@@ -1624,7 +1624,10 @@ test('SPK-130 : une raison venue du réseau est échappée', () => {
 
 /** La ligne `<li>` d'une route, telle que rendue. */
 function ligneDe(rendu, domaine) {
-  const debut = rendu.indexOf(`<li><span class="technique">${domaine}</span>`);
+  // SPK-179 : le domaine est un lien (ou du texte, pour un joker) ; la ligne se
+  // retrouve par son nom, quel que soit le balisage qui le porte.
+  const debut = rendu.search(new RegExp(
+    `<li>(<span class="technique">|<a class="technique lien-externe"[^>]*>)${domaine.replace(/[.*]/g, '\\$&')}`));
   assert.ok(debut >= 0, `la ligne de ${domaine} est rendue`);
   return rendu.slice(debut, rendu.indexOf('</li>', debut));
 }

@@ -35,6 +35,13 @@ _Rien à publier pour le moment._
   à la main sur la Forge le 2026-10-30 (OP-41 étape 1).
 
 ### Ajouté
+- **SPK-179 — le domaine d'une route est un lien, ouvert dans un nouvel onglet.** Dans la
+  section *Routes* d'un Spark, le domaine de chaque route s'ouvre en `https://` (ou `http://`
+  pour une route sans TLS) dans un nouvel onglet, avec `noopener noreferrer`, une icône
+  « lien externe » et un texte pour lecteurs d'écran qui annonce le nouvel onglet. Un joker
+  (`*.monapi.fr`) et toute valeur qui n'est pas un nom d'hôte valide restent du texte. Aucun
+  changement d'API, de schéma ni de variable d'environnement. DAT §72 ; design system
+  SPK-DS-49 ; manuel M7.
 - **SPK-178 — la console pose la clé d'un Spark en *deploy key* sur son dépôt GitHub.**
   Sur la facette *Clés*, sous l'identité du Spark, une carte **Dépôt GitHub** : saisir
   `propriétaire/dépôt`, *Vérifier* (état daté : non posée, posée en lecture seule, posée

@@ -24,6 +24,8 @@
  *           anneau, et un bloc « Total de la Forge » (utilisé, alloué,
  *           disponible, capacité) dans l'onglet « Tous » seulement,
  *           docs/DAT.md §68 ; SPK-DS-44) ·
+ *           docs/BACKLOG.md#SPK-179 (le domaine d'une route est un lien ouvert
+ *           dans un nouvel onglet, docs/DAT.md §72 ; SPK-DS-49) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -324,6 +326,62 @@ test('la liste montre Mémoire et Disque en anneau, et le total de la Forge dans
     // --- retour à « Tous » : la ligne revient -------------------------------
     await page.click('nav[aria-label="Sections des Sparks"] a:has-text("Tous")');
     await page.waitForSelector('section[aria-labelledby="titre-total-forge"]', { timeout: 10000 });
+  });
+});
+
+test('le domaine d\u2019une route est un lien qui s\u2019ouvre dans un nouvel onglet', async () => {
+  // SPK-179 · docs/DAT.md §72 · docs/DESIGN_SYSTEM_APP.md SPK-DS-49.
+  // Le parcours d'un exploitant : liste → Spark → section Routes → clic sur le domaine.
+  await parcours('route-lien-externe', async () => {
+    // Aucun vrai domaine n'est contacté : les noms du seed sont répondus ici.
+    await page.context().route(/\.example\.com\//, (r) => r.fulfill({
+      status: 200, contentType: 'text/html', body: '<title>route servie</title>' }));
+    try {
+      await ouvrir('crm-production', 'routes');
+      const lien = page.locator('a.lien-externe[href="https://crm.example.com/"]');
+      assert.equal(await lien.count(), 1, 'le domaine d’une route avec TLS est un lien https');
+      assert.equal(await lien.getAttribute('target'), '_blank');
+      assert.equal(await lien.getAttribute('rel'), 'noopener noreferrer');
+      assert.match(await lien.locator('.sr-only').textContent(), /s’ouvre dans un nouvel onglet/);
+      assert.equal(await lien.locator('svg[aria-hidden="true"]').count(), 1, 'icône décorative');
+      await capturer('spk179-routes-liens', { hauteur: 800 });
+      await capturer('spk179-routes-liens-mobile', { largeur: 390, hauteur: 1100 });
+
+      // --- la souris : un nouvel onglet s'ouvre, la console reste où elle est ---
+      const urlConsole = page.url();
+      const [onglet] = await Promise.all([page.context().waitForEvent('page'), lien.click()]);
+      await onglet.waitForLoadState('domcontentloaded');
+      assert.equal(onglet.url(), 'https://crm.example.com/');
+      assert.equal(await onglet.evaluate(() => window.opener), null,
+        'noopener : l’onglet ouvert n’a pas la main sur la console');
+      await onglet.close();
+      assert.equal(page.url(), urlConsole, 'la console n’a pas quitté sa page');
+      await page.waitForSelector('.entete-entite', { timeout: 10000 });
+
+      // --- le clavier : le même lien s'atteint et s'active sans souris ----------
+      await lien.focus();
+      const [onglet2] = await Promise.all([page.context().waitForEvent('page'),
+                                           page.keyboard.press('Enter')]);
+      await onglet2.waitForLoadState('domcontentloaded');
+      assert.equal(onglet2.url(), 'https://crm.example.com/');
+      await onglet2.close();
+
+      // --- un JOKER n'est pas un lien (boutique porte *.boutique.example.com) ----
+      await ouvrir('boutique', 'routes');
+      const joker = await page.locator('section[aria-labelledby="titre-routes"] li')
+        .filter({ hasText: '*.boutique.example.com' }).first();
+      assert.equal(await joker.locator('a').count(), 0, 'un joker ne désigne aucune adresse');
+      assert.ok((await joker.textContent()).includes('*.boutique.example.com'));
+      await capturer('spk179-routes-joker', { hauteur: 700 });
+
+      // --- une route SANS TLS ouvre http, pas https -----------------------------
+      await ouvrir('ubuntu-24', 'routes');
+      const clair = page.locator('a.lien-externe[href="http://intranet.example.com/"]');
+      assert.equal(await clair.count(), 1, 'le schéma est celui de la route');
+      await capturer('spk179-routes-sans-tls', { hauteur: 700 });
+    } finally {
+      await page.context().unroute(/\.example\.com\//);
+    }
   });
 });
 

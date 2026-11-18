@@ -18,6 +18,22 @@ pas.
 
 Pour faire résoudre le domaine, voir « Pointer le domaine » ci-dessous.
 
+## Ouvrir une route
+
+Dans la section *Routes* d'un Spark, le domaine de chaque route est un **lien** : un clic
+l'ouvre dans un **nouvel onglet**, sans quitter la console. Une petite icône « lien externe »
+le suit, et les lecteurs d'écran annoncent « (s'ouvre dans un nouvel onglet) ».
+
+- L'adresse ouverte est celle que la route **sert** : `https://` quand elle porte le TLS,
+  `http://` quand elle est servie **en clair** (pastille « sans TLS »). Forcer `https://` sur
+  une route en clair ne mènerait qu'à une erreur de connexion.
+- Une route **non appliquée** reste liée : sa pastille « non appliquée » dit déjà pourquoi la
+  page ne répond pas encore.
+- Un **joker** (`*.monapi.fr`) n'est pas un lien : il ne désigne aucune adresse en particulier,
+  c'est un modèle. Les noms qu'un joker s'est fait soustraire, listés sous lui, restent du
+  texte aussi.
+- L'onglet ouvert n'a aucun accès à la console et ne reçoit pas son adresse.
+
 ## Un domaine et tous ses sous-domaines
 
 Une route peut porter une **étoile** en tête : `*.monapi.fr`. Elle sert alors

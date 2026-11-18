@@ -36,6 +36,9 @@
  *       le dit, et se corrige d'un geste) · docs/DESIGN_SYSTEM.md §6.8 (une
  *       pastille d'écart porte sa sortie), §6.24 · docs/DESIGN_SYSTEM_APP.md
  *       SPK-DS-31 — pour le bouton « Activer le TLS » et son refus.
+ * @spec docs/BACKLOG.md#SPK-179 · docs/DAT.md §72 (le domaine d'une route est un
+ *       lien ouvert dans un nouvel onglet) · docs/DESIGN_SYSTEM.md §1.5, §9.2, §10 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-49 — pour `domaineDeRoute` et `lienDomaine`.
  * @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 (Caddy et le certificat,
  *       relevés à chaque visite) · docs/DESIGN_SYSTEM.md §6.8, §6.13, §14.6 ·
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-34 — pour les badges Caddy et TLS,
@@ -147,6 +150,63 @@ export function refusZones(corps) {
 }
 
 /**
+ * Un nom d'hôte, et rien d'autre : des étiquettes de lettres, chiffres et traits
+ * d'union séparées par des points. Pas de joker, pas d'espace, pas de schéma.
+ *
+ * @spec docs/BACKLOG.md#SPK-179 · docs/DAT.md §72.2
+ *
+ * Le domaine d'une route est une donnée du registre : un attribut `href` ne se
+ * construit pas sur une chaîne qu'on n'a pas validée. Cette règle ne décide que
+ * s'il y a un LIEN ; elle n'écrit rien et ne remplace pas la validation du
+ * serveur à la déclaration (§18.4).
+ */
+const NOM_D_HOTE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i;
+
+// Lucide « external-link » : trait de 2 px, décoratif (DESIGN_SYSTEM.md §10).
+const ICONE_LIEN_EXTERNE = '<svg class="icone-lien-externe" xmlns="http://www.w3.org/2000/svg" '
+  + 'viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+  + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" '
+  + 'focusable="false"><path d="M15 3h6v6"/><path d="M10 14 21 3"/>'
+  + '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+
+/**
+ * L'adresse qu'une route sert, ou `null` quand elle n'en désigne aucune.
+ *
+ * @spec docs/BACKLOG.md#SPK-179 · docs/DAT.md §72.2 · §18.3 bis (le joker), §18.3
+ *       quater (une route sans TLS)
+ *
+ * Le schéma est celui de la ROUTE : `https` si elle porte le TLS, `http` sinon.
+ * Forcer `https` sur une route sans TLS ouvrirait une erreur de connexion. Un
+ * joker (`*.monapi.fr`) ne désigne aucune adresse ; une valeur qui n'est pas un
+ * nom d'hôte non plus.
+ */
+export function domaineDeRoute(route) {
+  const domaine = String(route?.domain ?? '');
+  if (!NOM_D_HOTE.test(domaine)) return null;
+  return `${route.tls ? 'https' : 'http'}://${domaine.toLowerCase()}/`;
+}
+
+/**
+ * Le domaine d'une route : un lien vers ce qu'elle sert quand elle en désigne un,
+ * du texte sinon. Il s'ouvre dans un NOUVEL onglet et le dit, sans que la
+ * couleur porte seule l'information (§1.5).
+ *
+ * @spec docs/BACKLOG.md#SPK-179 · docs/DAT.md §72.2 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-49
+ *
+ * `noopener` coupe l'accès de l'onglet ouvert à la console ; `noreferrer` ne lui
+ * annonce pas l'adresse locale de la console (§63).
+ */
+export function lienDomaine(route) {
+  const nom = echapper(route?.domain);
+  const adresse = domaineDeRoute(route);
+  if (adresse === null) return `<span class="technique">${nom}</span>`;
+  return `<a class="technique lien-externe" href="${echapper(adresse)}" target="_blank"`
+    + ` rel="noopener noreferrer">${nom}${ICONE_LIEN_EXTERNE}`
+    + `<span class="sr-only"> (s’ouvre dans un nouvel onglet)</span></a>`;
+}
+
+/**
  * Zone la plus SPÉCIFIQUE qui contienne le domaine (§38.5).
  *
  * Un compte peut porter `exemple.tech` ET `staging.exemple.tech` : proposer la
@@ -239,7 +299,7 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
                </p>
              </div>`
           : '';
-        return `<li><span class="technique">${echapper(r.domain)}</span>` +
+        return `<li>${lienDomaine(r)}` +
           ` → port ${echapper(r.target_port)} du Spark` +
           // SPK-78 · §38.9.1 : l'état DNS RELEVÉ, pas un souvenir d'écriture.
           `${renderEtatDns(ui.dnsRoutes, r.domain)}` +

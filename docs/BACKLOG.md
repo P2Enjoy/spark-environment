@@ -9215,7 +9215,7 @@ pré-renseignement, donc l'entrée par défaut n'est retirable par personne.
   depuis l'accueil (Forge → Images → désigner → retirer l'ancienne) ; captures observées ;
   manuel M5, DAT §33.7, README si concerné, seed et changelog à jour.
 
-### [ ] SPK-179 · Le domaine d'une route est un lien, ouvert dans un nouvel onglet
+### [~] SPK-179 · Le domaine d'une route est un lien, ouvert dans un nouvel onglet
 
 **Demandé le 2026-11-18** par le responsable : « dans les routes, les URL, ce serait
 pratique qu'elles soient des URL cliquables, qui s'ouvrent dans un nouvel onglet. » Dans la
@@ -9238,6 +9238,16 @@ sert, on le recopie dans la barre d'adresse.
   depuis l'accueil (Spark → Routes → lien, `target` et `rel` lus, clic qui ouvre un nouvel
   onglet sans quitter la console) ; captures observées (desktop, mobile, joker, route sans
   TLS) ; manuel M7, DAT, design system et changelog à jour.
+- **État au 2026-11-18 : implémenté et vérifié sur la pile de développement factice, pas
+  sur une Forge réelle — reste `[~]`.** Prouvé : tests unitaires de la console verts, dont
+  `spark-routes-lien.test.js` (schéma selon le TLS, joker, noms invalides et hostiles
+  échappés) ; le parcours E2E « le domaine d'une route est un lien… » vert depuis l'accueil
+  — `target` et `rel` lus, clic à la souris **et** Entrée au clavier ouvrent un nouvel onglet
+  sans `window.opener` et sans que la console quitte sa page, joker en texte, route sans TLS
+  en `http://` — réseau intercepté, aucun vrai domaine contacté ; captures observées
+  (desktop, mobile, joker). **Non prouvé** : sur une Forge réelle ou sur la VM d'installation
+  fraîche (README §28.7). Le seed n'a pas été modifié : il porte déjà une route avec TLS,
+  un joker, une route sans TLS et une route non appliquée.
 
 ---
 

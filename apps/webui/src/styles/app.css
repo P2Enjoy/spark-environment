@@ -302,6 +302,12 @@ tbody tr:hover { background: var(--color-hover); }
 .lien-spark { color: var(--color-brand); font-weight: 700; text-decoration: none; }
 .lien-spark:hover { text-decoration: underline; }
 
+/* --- Le domaine d'une route, lien externe (SPK-179, SPK-DS-49) -------------- */
+.lien-externe { display: inline-flex; align-items: center; gap: var(--space-1);
+                color: var(--color-brand); text-decoration: none; }
+.lien-externe:hover, .lien-externe:focus-visible { text-decoration: underline; }
+.icone-lien-externe { flex: none; }
+
 /* --- Jauge d'usage : le burst n'est PAS un dépassement (SPK-DS-02) -------- */
 .jauge { display: flex; flex-direction: column; gap: var(--space-1); min-width: 120px; }
 .jauge__piste {
