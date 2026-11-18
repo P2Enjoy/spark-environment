@@ -17639,6 +17639,15 @@ relit `zpool upgrade`. Si le zpool y figure encore, il lance `zpool upgrade <zpo
 vérifie qu'il n'y figure plus. Sinon il ne fait rien et le dit. La phase `storage` d'un
 plan qui demande la mise à niveau n'est donc pas « terminée » d'avance.
 
+**Révisé le 2026-11-18, après un échec réel sur la Forge de test.** « Figurer
+encore » s'entend **avec une fonctionnalité que `zpool upgrade` active**. Une
+fonctionnalité marquée `(*)` reste listée après la mise à niveau, puisque ZFS ne
+l'active jamais ainsi : elle ne compte ni avant ni après. La première version la
+comptait. Sur `spark-experiment`, la mise à niveau a activé 11 fonctionnalités sur
+12, et l'exécuteur a déclaré un échec parce que `dynamic_gang_header(*)` restait
+listée. La règle est désormais la même que celle du diagnostic et de l'onglet
+*Mises à jour*.
+
 ### 70.7 Vérification
 
 | Unité | Unitaire | Intégration ou E2E | Machine réelle |
