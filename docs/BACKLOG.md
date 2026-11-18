@@ -9165,15 +9165,18 @@ ligne des totaux face à ce que la Forge a au total. Arbitrages du jour : la for
   §14.6 · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-44** · `docs/JOURNAL.md` 2026-11-18.
 - Dépend de : SPK-18 (la liste), SPK-14 (les mesures), SPK-22 (la capacité de la Forge).
 - Portée : un anneau par cellule Mémoire et Disque dont l'usage et la limite sont
-  connus ; une ligne de pied « Total » dans l'onglet « Tous » (somme des usages mesurés
-  face à la capacité de la Forge) ; la capacité vient de `/v1/forge`, lue avec la liste.
+  connus ; **un bloc « Total de la Forge » au-dessus du tableau**, dans l'onglet « Tous »
+  seulement — capacité, **alloué, disponible, utilisé** par ressource (*révisé le
+  2026-11-18, remplace le pied de tableau livré en be5c710*) ; capacité, alloué et
+  disponible viennent de `/v1/forge`, lue avec la liste.
 - Hors périmètre : la colonne CPU (inchangée) ; les onglets de projet (aucune ligne de
   totaux) ; tout nouveau champ de l'API ; toute variable d'environnement.
 - DoD : tests unitaires de l'anneau et de la ligne de totaux ; épreuve E2E depuis
   l'accueil (connexion, clic, capture) ; captures observées (desktop, mobile, absence de
   capacité, un Spark arrêté, un Spark au-delà du seuil) ; manuel M3, DAT, design system,
   seed (un Spark près de sa limite) et changelog à jour.
-- **État au 2026-11-18 : implémenté et vérifié sur la pile de développement factice, pas
+- **État au 2026-11-18 (avant la révision du bloc de totaux — le pied de tableau décrit
+  ici est à remplacer, preuves à refaire) : implémenté et vérifié sur la pile factice, pas
   sur une Forge réelle — reste `[~]`.** Prouvé : 1665 tests unitaires de la console
   verts, dont `sparks-totaux.test.js` ; le parcours E2E « la liste montre Mémoire et
   Disque en anneau… » vert, depuis l'accueil, à la souris ; captures observées (desktop,

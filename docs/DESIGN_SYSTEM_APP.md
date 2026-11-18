@@ -240,9 +240,15 @@ socle.
   droite faisait suivre l'anneau à la largeur du texte — observé en capture).
 - Absence : pas d'anneau quand l'usage ou la limite manque ; la cellule garde son
   comportement du §14.6.
-- **Ligne « Total »** : un `tfoot`, seulement dans l'onglet « Tous ». Mémoire et Disque
-  en anneau, CPU en barre comme sa colonne, face aux capacités physiques de la Forge ; texte du pied en `--color-text-2`, séparateur
-  haut `--color-border`. Capacité absente : nommée, jamais inventée.
+- **Bloc « Total de la Forge »** *(révisé le 2026-11-18, remplace la ligne de pied)* : une
+  carte **au-dessus** du tableau, seulement dans l'onglet « Tous ». Trois colonnes —
+  Processeur, Mémoire, Disque — sous 1024 px elles s'empilent. Chacune : un titre, une
+  jauge à deux parts (utilisé `--color-brand` dans alloué `--color-brand-soft`, piste
+  `--color-border`), puis des paires terme / valeur (§6.4) **Utilisé**, **Alloué**,
+  **Disponible**, **Capacité**. Chiffres en `technique`. Alloué au-delà de 90 % de la
+  capacité : part en `--color-danger`, chiffres en gras, texte `sr-only` (§1.5). Pastille
+  « surengagé ×N » comme l'écran Forge. Capacité absente : l'utilisé seul, et l'absence
+  nommée. Pas d'icône décorative ; la carte est un `section` titré (`h2`).
 - Responsive : l'anneau ne se masque jamais ; le tableau défile dans son conteneur
   (§8.1), le pied avec lui.
 

@@ -15590,3 +15590,20 @@ rien ne l'exige.
   rejouer l'amorce ne le répare que si on l'a d'abord mis de côté. → SPK-173.
 - Sur l'offre EM-B311X-SATA, la procédure qui marche est donc : installation en 24.04 sans
   pool déclaré, puis montée en 26.04 avec les étapes 3 et 6 ci-dessus.
+
+**SPK-173 révisée le 2026-11-18 : le total sort du tableau.** Demande du responsable, après
+avoir vu la ligne de pied : « le total séparé de la table pour être plus visible, plus il
+doit lister le total alloué, le total disponible et le total utilisé ».
+
+**Décisions de conception** (à confirmer si elles ne conviennent pas) : un bloc au-dessus du
+tableau, dans « Tous » seulement ; alloué, disponible et capacité **lus** dans les pools de
+`/v1/forge` (les chiffres de l'écran Forge, §27.2) plutôt que recomposés ; l'utilisé reste la
+somme des mesures ; la comparaison aux capacités **physiques** du premier jet est abandonnée
+au profit des capacités de l'admission control, seules à se réconcilier avec alloué et
+disponible ; l'alerte à 90 % porte sur l'**alloué** (la Forge n'accepte presque plus de Spark),
+pas sur l'utilisé ; l'utilisé du CPU exclut les Sparks à cœurs dédiés, absents du pool partagé.
+Le réseau n'y entre pas : la liste n'a pas de colonne réseau.
+
+**Conséquences.** DAT §68.3, SPK-DS-44 et le backlog réécrits avant le code. Le code, les
+tests, l'E2E, le manuel M8, le changelog et les captures suivent dans le commit de livraison.
+
