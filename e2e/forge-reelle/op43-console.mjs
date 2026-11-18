@@ -71,6 +71,8 @@ try {
   let cellule = '';
   for (let essai = 0; essai < 20; essai += 1) {
     await page.click('a.destination[href="#/serveurs"]');
+    // L'écran Serveurs, et non le tableau de la page précédente encore affiché.
+    await page.waitForSelector('h1:has-text("Serveurs")', { timeout: 10000 });
     await page.waitForSelector('tbody tr', { timeout: 10000 });
     cellule = await page.locator('tbody tr', { hasText: 'courant' }).locator('td').nth(4).innerText();
     if (!/en attente de connexion/.test(cellule)) break;

@@ -12,6 +12,10 @@ n'est appliquée en production sans instruction humaine explicite.
 
 ## 1. Baseline de production
 
+**Mise à jour le 2026-11-18** (OP-43) : build `a003ac285`, préflight à **19**
+contrôles — 0 bloquant, **2 signalés** (`STO-MIROIR`, `SYS-RAID` : le disque `sdb` est
+en faute, à faire remplacer par l'hébergeur), 0 non mesuré.
+
 **Relevée le 2026-09-07** sur la Forge de test, par le préflight du paquet et par
 lecture directe de la machine. Les **17** contrôles du §31 du [DAT](DAT.md) sont
 verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-30, après OP-28).
@@ -156,15 +160,25 @@ Risques       : le jeton « Administration » est large : il agit sur les régla
                 le révoquer à la moindre fuite. Il ne quitte jamais le poste.
 ```
 
-### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169 à SPK-172, SPK-175 à SPK-177)
+### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169 à SPK-172, SPK-175 à SPK-177) — **APPLIQUÉ le 2026-11-18**
 
 ```
-État          : EN ATTENTE sur la Forge de test (51.158.54.202) — à jouer sur
-                instruction du responsable. `spark-010` porte toute la part sparkd
-                (build c58ec92c2, posée le 2026-11-18 par le runbook A.2). La
-                console d'exploitation du poste a été redémarrée sur le nouveau
-                code le 2026-11-18 à 11:37 (étape 3), et a posé sa ligne sur
-                spark-010. Reste : les étapes 1 et 2 sur la Forge de test.
+État          : APPLIQUÉ le 2026-11-18, sur instruction du responsable
+                (« Les deux Forges »), par le bloc « Code déployé » de la
+                console (e2e/forge-reelle/op43-mise-a-jour.mjs).
+                - Forge de test : 765241507 → a003ac285, sauvegardes
+                  /var/lib/sparkd/sauvegardes/spark-20261118-122303.db et
+                  spark-20261118-122557.db ; « Mise à jour prouvée ».
+                - spark-010 : → bcaa43e33, « Mise à jour prouvée ».
+                - Console d'exploitation du poste relancée par son propre
+                  geste (aucune session de terminal ouverte).
+                Relevé après : préflight de la Forge de test 19 contrôles,
+                0 bloquant, 2 signalés (STO-MIROIR, SYS-RAID : disque sdb) ;
+                /readyz « ready » ; colonne Signature « clé reconnue par la
+                Forge » sur les deux Forges ; onglet Mises à jour lu sur
+                chacune. La pose des signataires, tentée avant la mise à jour
+                (« sparkd à mettre à jour »), repart désormais après elle
+                (SPK-172, DAT §70.3).
 Objectif      : - préflight à 19 contrôles : STO-MIROIR (zpool status) et
                   SYS-RAID (/proc/mdstat) — DAT §70.1 ;
                 - l'amorce et forge_install n'importent plus un pool importable

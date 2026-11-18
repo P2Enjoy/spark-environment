@@ -2,6 +2,24 @@
 
 ## [Non publié]
 
+_Rien à publier pour le moment._
+
+## [Publié]
+
+### Déployé en production, 2026-11-18
+
+- **Opérations** (`docs/PROD_MIGRATIONS.md` OP-43), sur instruction du responsable, par
+  le bloc *Code déployé* de la console :
+  - la Forge de test passe de la build `765241507` à `a003ac285`, sauvegardes du registre
+    `spark-20261118-122303.db` et `spark-20261118-122557.db` ;
+  - `spark-010` passe à `bcaa43e33` ;
+  - la console d'exploitation du poste est relancée par son propre geste.
+- **Vérifié après** : préflight de la Forge de test à 19 contrôles, 0 bloquant et 2
+  signalés (`STO-MIROIR`, `SYS-RAID` : le disque `sdb` à remplacer), `/readyz` prêt.
+  Colonne *Signature* « clé reconnue par la Forge » sur les deux Forges, onglet
+  *Mises à jour* lu sur chacune.
+- Aucune migration de schéma.
+
 ### Sécurité
 - **SPK-157 — CVE-2026-98432 : aucun paquet TCP IPv4 porteur d'options n'atteint
   la Forge ni ses Sparks.** Le pare-feu que `sparkd` pose
@@ -2953,8 +2971,6 @@
   reconfiguration du cpuset à chaud sans redémarrage, topologie SMT.
 - Incus **≥ 6.19** devient une contrainte de déploiement : la version des dépôts
   Ubuntu (6.0.0) ne permet de démarrer aucun conteneur Docker dans un Spark.
-
-## [Publié]
 
 ### Déployé en production, 2026-11-10
 
