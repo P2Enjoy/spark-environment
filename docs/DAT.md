@@ -17418,3 +17418,211 @@ Service : désignation atomique, une seule par défaut, idempotence, refus `miss
 d'audit. Composant : pastille, bouton présent seulement sur `verified` non défaut.
 E2E depuis l'accueil : Forge → Images → désigner une autre → retirer l'ancienne
 (maintenant retirable, sous réserve du second refus).
+
+## 70. Ce que la première Forge livrée a appris : contrats (SPK-169, SPK-170, SPK-171, SPK-172, SPK-175, SPK-176)
+
+L'installation de la deuxième Forge réelle, le 2026-11-18, a mis au jour six écarts entre
+ce que le produit promet et ce qu'il fait (journal du jour). Ce chapitre en pose les
+contrats. **Arbitrage** : le responsable a demandé le 2026-11-18 de corriger ces unités
+(« fix ces unités identifiés dans la session ») et a donné mandat de trancher sans lui
+reposer la question. Chaque décision ci-dessous est donc prise sous ce mandat ; elle est
+écrite avec sa raison et l'option écartée, pour qu'il puisse la renverser.
+
+### 70.1 Le préflight lit l'état du miroir (SPK-169)
+
+**Le défaut.** `STO-POOL` concluait « miroir ZFS natif » d'après le pilote du pool Incus,
+sans lire le pool. Deux Forges réelles tournaient dégradées, un disque `FAULTED`, avec un
+préflight à 17 sur 17. La promesse du §8.5 est un miroir : le pool qui n'en a plus
+qu'une moitié ne la tient pas.
+
+**Deux contrôles de plus**, lus en lecture seule :
+
+- **`STO-MIROIR`** lit `zpool status <zpool>`, où `<zpool>` est `zfs.pool_name` du pool
+  Incus, ou le nom du pool s'il ne le porte pas.
+- **`SYS-RAID`** lit `/proc/mdstat`, c'est-à-dire les RAID logiciels qui portent `/` et
+  `/boot` (§8.6).
+
+| Relevé | Verdict |
+|---|---|
+| `zpool status` illisible | `inconnu` : ne pas avoir mesuré n'est pas avoir mesuré une faute (§31.2) |
+| pool `ONLINE`, chaque vdev de premier niveau est un `mirror` dont tous les membres sont `ONLINE` | **OK**, avec les membres nommés |
+| pool `ONLINE`, mais un vdev de premier niveau qui n'est pas un miroir | **avertissement** : « aucune redondance », support nommé |
+| pool `DEGRADED` | **avertissement** : chaque membre qui n'est pas `ONLINE` est nommé avec son état et ses compteurs d'erreurs |
+| pool `FAULTED`, `UNAVAIL`, `SUSPENDED` ou `OFFLINE` | **échec** : le pool ne sert plus |
+| `/proc/mdstat` absent, ou aucun `md` | **OK** : « aucun RAID logiciel » (un VPS n'en a pas) |
+| un `md` dont l'état `[n/m]` a `m < n`, ou dont la carte porte `_` | **avertissement** : le `md` et les membres sortis (`(F)`) sont nommés |
+
+**Pourquoi un avertissement, et pas un échec, pour un miroir dégradé.** Un échec bloque
+l'installation et la reprise (§50.5). Or la Forge dégradée **sert** : bloquer sa reprise
+empêcherait de la remettre d'aplomb pendant qu'on attend le disque de remplacement. Le
+§48.2 a fait le même choix pour la même raison. C'est l'écran vert qui était faux, et
+« signalé » suffit à le corriger. Le remède nomme le geste : faire remplacer le disque
+par l'hébergeur, puis `zpool replace` et `mdadm --add`. Il dit aussi le risque : la
+prochaine panne de disque emporte le pool.
+
+La série passe de 17 à 19 contrôles.
+
+### 70.2 L'amorce n'adopte pas en silence un pool qui n'est pas sain (SPK-170)
+
+**Le défaut.** L'installateur de l'hébergeur n'efface pas les partitions entre deux
+installations. L'amorce a importé le pool `spark` d'une installation ratée (`zpool import
+-f`), qui était dégradé, et l'a confié à Incus. Le refus de `creer-pool.sh` sur un support
+déjà signé n'était jamais atteint, car l'adoption passe avant.
+
+**La règle retenue.** Avant d'importer, l'amorce lit l'état que donne `zpool import`,
+qui ne fait que lister les pools importables. **Un pool importable qui n'est pas
+`ONLINE` n'est jamais importé.** L'amorce s'arrête en code 1, nomme l'état et les
+membres en cause, et donne les deux issues, sans rien effacer :
+
+1. pour garder les données, l'importer à la main (`sudo zpool import -f spark`), puis
+   rejouer l'amorce, qui adopte alors un pool **déjà importé** ;
+2. pour un reste d'installation ratée, effacer les deux partitions (`zpool labelclear
+   -f`, `wipefs -a`), puis rejouer avec `--pool-source`.
+
+**Ce qui ne change pas.** Un pool importable `ONLINE` est toujours adopté, puisque c'est
+la réinstallation qui garde ses disques (§50.3, SPK-73). L'amorce le dit désormais en
+toutes lettres : « pool « spark » importable et sain : adopté ; il n'a pas été créé par
+cette installation ». Un pool **déjà importé**, c'est-à-dire le rejeu sur une Forge en
+service, est adopté quel que soit son état : c'est l'affaire de `STO-MIROIR` (§70.1),
+pas une raison d'interrompre la remise d'aplomb.
+
+**L'option écartée** : refuser, quand `--pool-source` est donné, tout pool que
+l'installation n'a pas créé. Elle empêcherait la réinstallation qui garde les données, et
+elle n'a aucun moyen de reconnaître « son » pool, puisque l'identité de l'hôte change à
+chaque installation.
+
+**La même règle vaut pour la console.** `sparkd.forge_install`, à l'adoption d'un zpool
+non importé (§50.3), relit l'état de ce zpool et refuse de l'importer s'il n'est pas
+`ONLINE`.
+
+### 70.3 Les signataires autorisés se posent à la connexion (SPK-172)
+
+**Le défaut.** La console signe chaque geste avec la clé déclarée pour le serveur
+(§36.10.8), et la Forge refuse une signature qu'elle ne peut rattacher à personne
+(§36.10.5). Or aucune étape du produit n'écrivait `allowed_signers`. Sur les deux
+Forges réelles, le fichier a été posé à la main, et tant qu'il manquait, l'ajout d'une
+image au catalogue échouait.
+
+**Où.** `SPARKD_ALLOWED_SIGNERS` vaut désormais par défaut
+`/etc/sparkd/allowed_signers`. Le fichier absent ou vide continue de **désactiver** la
+fonction (§36.10.5) : le défaut ne change rien à une Forge qui n'en a pas. En revanche,
+le poser ne demande plus de redémarrer sparkd, qui relit le fichier à chaque
+vérification.
+
+**Par qui, et quand.** Par la **console**, à la **première ouverture du tunnel** vers un
+serveur distant qui déclare `signingKey`. C'est elle seule qui connaît le principal
+(`console/<serveur>`) et la clé publique : le cloud-init ne connaît pas le nom que la
+console donne au serveur. Le geste se rejoue à chaque démarrage de la console. Il est
+idempotent : une ligne déjà juste n'est pas réécrite.
+
+**Comment.** Par SSH, sur le modèle des scripts fermés du §50 :
+`sudo -n /opt/sparkd/venv/bin/python -m sparkd.signataires poser --principal
+console/<serveur> --cle '<type> <base64>'`. Le nom vient de l'inventaire et la clé du
+fichier **public** désigné par `signingKey`. L'hôte et le module valident chacun leur
+forme, et aucun texte ne vient du navigateur. Le module :
+
+- écrit une ligne `console/<serveur> namespaces="spark-audit" <type> <base64>` ;
+- **remplace** la ligne du même principal si la clé a changé, et garde toutes les
+  autres (une autre console, une autre personne) ;
+- écrit le fichier de façon atomique, en `0644`, propriété de root ;
+- rend `deja`, `pose` ou `remplace`.
+
+Un serveur sans `signingKey` ne déclenche rien, puisque la console ne signe pas pour
+lui. Une Forge locale non plus : elle n'a pas de transport SSH.
+
+**Ce qui se voit.** L'état du dernier geste voyage avec la description du tunnel :
+`deja`, `pose`, `remplace`, `sans_droit` (pas de sudo sans invite), `sans_sparkd`
+(paquet absent) ou `echec`, avec un message. La vue *Serveurs* le montre sur la carte
+du serveur. Un échec ne bloque rien (§36.10.8) : il dit seulement pourquoi les gestes
+signés seront refusés.
+
+### 70.4 Une Forge survit à la montée de version majeure d'Ubuntu (SPK-175)
+
+**Le défaut.** Après la montée de 24.04 à 26.04, sparkd ne démarrait plus.
+`/opt/sparkd/venv` était lié à Python 3.12, alors que la 26.04 fournit 3.14. Rejouer
+l'amorce ne réparait rien, parce que l'environnement existait encore.
+
+**La règle.** L'amorce compare la version `majeure.mineure` de
+`/opt/sparkd/venv/bin/python` à celle de `python3`. Si l'interpréteur de l'environnement
+ne s'exécute plus, ou si les versions diffèrent, l'environnement est **mis de côté**
+sous `/opt/sparkd/venv.avant-<ancienne version>` (un suffixe horodaté évite d'écraser
+une sauvegarde précédente). Il est ensuite reconstruit, et l'amorce le dit. Le dépôt
+Incus est déjà réécrit à chaque passage, pour la version courante, depuis
+`/etc/os-release` : c'est vérifié sur `spark-010`.
+
+**La procédure** est écrite au runbook, au §A.5 : avant la montée, déplacer le
+`core.efi` orphelin d'une machine qui démarre en BIOS. Ensuite, rejouer
+`sudo /opt/spark-amorce.sh` **sans** `--pool-source`, puis relire le préflight. La montée
+ne lance jamais `zpool upgrade` (§70.6).
+
+### 70.5 Un onglet de la Forge suit les mises à jour du système (SPK-171)
+
+**Demandé par le responsable le 2026-11-18.** C'est un onglet **Mises à jour** des
+sections de la Forge (`#/forge/mises-a-jour`), en **lecture seule**. Appliquer une mise à
+jour depuis la console est une autre décision : elle n'est pas prise ici, et l'onglet
+donne la commande à lancer en SSH.
+
+**Ce qui est relevé**, par `GET /v1/forge/systeme`, sans rien écrire et sans lancer
+`apt update` :
+
+| Champ | Source | Absent |
+|---|---|---|
+| `os`, `noyau` | `PRETTY_NAME` de `/etc/os-release`, `uname -r` | `null` |
+| `mises_a_jour.total`, `.securite` | `/usr/lib/update-notifier/apt-check` (« N;M » sur la sortie d'erreur) | repli `apt list --upgradable` ; la sécurité est alors `null` |
+| `mises_a_jour.paquets` | `apt list --upgradable` : nom, version installée, version proposée, suite, sécurité si la suite finit par `-security` ; 200 au plus, nombre réel donné | `[]` |
+| `mises_a_jour.liste_relue_a` | date de `/var/lib/apt/periodic/update-success-stamp`, sinon de `/var/lib/apt/lists` | `null` : l'écran dit « date inconnue » |
+| `redemarrage.requis`, `.paquets` | `/var/run/reboot-required`, `/var/run/reboot-required.pkgs` | `false`, `[]` |
+| `version.disponible` | `/var/lib/ubuntu-release-upgrader/release-upgrade-available` : vide, aucune ; « New release 'X' available » donne X | `connue: false` |
+| `zfs.a_niveau` | `zpool upgrade` : les pools qui ont des fonctionnalités à activer, avec leur liste | `[]` |
+
+Avec le pilote factice, la réponse vient d'un **relevé de démonstration** fixe : trois
+paquets dont un de sécurité, un redémarrage requis, une version disponible et un pool à
+mettre à niveau. Elle porte `source: "fake"`, et l'onglet l'affiche (§53, un réglage
+d'épreuve se voit). Avec le vrai pilote, `source` vaut `"hote"`.
+
+**L'écran** a cinq états : chargement, erreur, à jour, mises à jour en attente, et relevé
+de démonstration. Il montre la version et le noyau ; le nombre de mises à jour, celles
+de sécurité en premier, puis la table des paquets ; un redémarrage requis, avec les
+paquets qui le demandent ; une version d'Ubuntu disponible, avec un renvoi à la
+procédure du runbook (§70.4) ; un pool ZFS qui a des fonctionnalités à activer, avec un
+renvoi à l'installation de la Forge (§70.6). Un bouton *Relire* refait la lecture. Le
+nombre de paquets en attente apparaît aussi sur l'onglet.
+
+### 70.6 La mise à niveau du pool ZFS est proposée, jamais imposée (SPK-176)
+
+**Demandé par le responsable le 2026-11-18.** Une Forge montée de version a un ZFS plus
+récent que son pool : `zpool status` l'annonce (« Some supported and requested features
+are not enabled »). `zpool upgrade` est **irréversible**. Après lui, le pool ne s'importe
+plus avec un ZFS plus ancien, celui d'un système de secours ou de l'installateur de
+l'hébergeur par exemple. Le produit ne le lance donc jamais de lui-même, ni l'amorce,
+ni la montée de version.
+
+**Le relevé.** Le diagnostic de l'installation (§50.1) lit `zpool upgrade`, qui ne fait
+que lister. Il en tire, pour chaque pool, les fonctionnalités qui restent à activer. Celles
+que ZFS marque `(*)` ne s'activent pas par `zpool upgrade` : elles sont listées à part et
+ne comptent pas.
+
+**L'option.** Quand le zpool du plan figure dans ce relevé, l'installation de la Forge
+propose une case **décochée par défaut** : « Activer les fonctionnalités ZFS disponibles
+(`zpool upgrade`) ». Le texte de la case dit l'irréversibilité et liste les
+fonctionnalités. Le plan ne porte `storage.zfsUpgrade: true` que si la case est cochée,
+et la console refuse cette clé quand le relevé ne la justifie pas. Le geste n'efface
+aucune donnée : il ne demande pas la frappe de « EFFACER ». La case suffit, puisqu'elle
+est un choix explicite.
+
+**L'exécution.** `sparkd.forge_install` accepte la clé facultative `zfsUpgrade`
+(booléen) sur les trois dispositions. À la phase `storage`, une fois le pool en place, il
+relit `zpool upgrade`. Si le zpool y figure encore, il lance `zpool upgrade <zpool>`, puis
+vérifie qu'il n'y figure plus. Sinon il ne fait rien et le dit. La phase `storage` d'un
+plan qui demande la mise à niveau n'est donc pas « terminée » d'avance.
+
+### 70.7 Vérification
+
+| Unité | Unitaire | Intégration ou E2E | Machine réelle |
+|---|---|---|---|
+| SPK-169 | relevés `zpool status` et `/proc/mdstat`, sain, dégradé et en panne | série complète à 19 codes | préflight de `spark-010` |
+| SPK-170 | bloc du pool de l'amorce joué sur un pool importable dégradé | adoption refusée par `forge_install` | relu sur `spark-010` (pool sain, aucun refus) |
+| SPK-172 | module `sparkd.signataires` (pose, remplacement, refus de forme) ; script fermé de la console | tunnel qui pose et le dit | `spark-010` : la ligne retirée revient à la connexion, et l'ajout d'une image est signé |
+| SPK-175 | bloc de l'environnement Python de l'amorce, versions égales et différentes | — | `spark-010` : rejeu de l'amorce sans effet sur un environnement juste |
+| SPK-171 | lecteur des sources et rendu de l'onglet | API sous pilote factice ; E2E depuis l'accueil | onglet relu sur `spark-010` |
+| SPK-176 | relevé `zpool upgrade`, plan refusé sans relevé, phase `storage` | E2E de l'installation (case présente, décochée) | — : la mise à niveau est irréversible, elle n'est pas lancée sans décision |

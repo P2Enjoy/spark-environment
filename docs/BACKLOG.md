@@ -9919,8 +9919,10 @@ et la nouvelle Forge EM-B311X-SATA aussi (`sdb5` FAULTED dès l'installation). L
 rendent un préflight vert, 17 sur 17. Le produit promet un miroir (DAT §8.5) : un pool
 qui n'en a plus qu'une moitié ne tient pas cette promesse, et l'écran le dit vert.
 
-- Spécification : `docs/DAT.md` §8.5 (la promesse du miroir) — **le verdict attendu reste
-  à écrire** (échec ou avertissement, et sur quelles sources : `zpool status`, `/proc/mdstat`).
+- Spécification : `docs/DAT.md` §70.1 (écrite le 2026-11-18, sous le mandat du
+  responsable) — deux contrôles de plus, `STO-MIROIR` (`zpool status`) et `SYS-RAID`
+  (`/proc/mdstat`) ; un miroir dégradé est **signalé**, un pool hors service est un
+  **échec** ; la série passe à 19 · §8.5 (la promesse du miroir) · §31.2.
 - Dépend de : SPK-28.
 - DoD : test unitaire rouge avant correction sur les sorties `zpool status` relevées le
   2026-11-18 ; verdict observé sur une Forge réelle ; manuel et DAT à jour.
@@ -9934,9 +9936,11 @@ par une installation précédente, créé par une autre machine (nom d'hôte
 support déjà signé) n'a jamais été atteint : l'adoption passe avant. L'installateur de
 l'hébergeur n'efface pas les partitions entre deux installations.
 
-- Spécification : `docs/DAT.md` §66.2 point 6, §66.8 — **la règle reste à arbitrer par le
-  responsable** : refuser un pool importé qui n'est pas sain ; refuser, quand
-  `--pool-source` est donné, un pool que l'installation en cours n'a pas déclaré ; ou les deux.
+- Spécification : `docs/DAT.md` §70.2 (tranchée le 2026-11-18 sous le mandat du
+  responsable) — un pool **importable** qui n'est pas `ONLINE` n'est jamais importé :
+  l'amorce s'arrête et donne les deux issues ; un pool importable sain reste adopté et
+  l'amorce le dit ; la même règle vaut pour `forge_install` ; l'option « refuser tout
+  pool non créé par l'installation » est écartée, raison écrite · §66.2 point 6, §66.8.
 - Dépend de : SPK-159.
 - DoD : preuve rouge avant correction (le bloc du pool de l'amorce joué sur un pool
   importable étranger et dégradé) ; création par `creer-pool.sh` éprouvée sur une machine
@@ -9950,11 +9954,11 @@ l'hébergeur n'efface pas les partitions entre deux installations.
 machine signalait d'elle-même un redémarrage requis et une version d'Ubuntu disponible ;
 rien dans la console ne le montrait.
 
-- Spécification : **à écrire avant le code** — `docs/DAT.md` (ce qui est relevé : paquets
-  à mettre à jour, mises à jour de sécurité, redémarrage requis, nouvelle version
-  d'Ubuntu disponible ; d'où : `apt`, `/var/run/reboot-required`, `do-release-upgrade -c`),
-  `docs/DESIGN_SYSTEM.md` (l'onglet), le chapitre du manuel. **Lecture seule d'abord** :
-  appliquer une mise à jour depuis la console est une décision distincte, à arbitrer.
+- Spécification : `docs/DAT.md` §70.5 (écrite le 2026-11-18) — onglet **Mises à jour**
+  (`#/forge/mises-a-jour`), `GET /v1/forge/systeme`, sources nommées champ par champ,
+  aucun `apt update` lancé, relevé de démonstration visible sous pilote factice ;
+  **lecture seule** : appliquer depuis la console n'est pas décidé ici ·
+  `docs/DESIGN_SYSTEM_APP.md` (l'onglet, à écrire avec le code) · `docs/manuel/M8-exploiter.md`.
 - Dépend de : rien d'ouvert.
 - DoD : test unitaire du relevé, test d'API, E2E de l'onglet depuis le parcours
   canonique, vérification visuelle, manuel à jour.
@@ -9971,10 +9975,12 @@ L'ajout d'une image au catalogue échouait donc. **Aucune étape du produit n'é
 avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS` dans
 `/etc/sparkd/sparkd.env`.
 
-- Spécification : `docs/DAT.md` §36.10.5 — **le geste qui pose le fichier reste à
-  arbitrer**. Proposition : la console le pose à la première connexion, ou quand la clé
-  de signature du serveur change. Elle seule connaît le principal (`console/<serveur>`)
-  et la clé publique ; le cloud-init ne connaît pas le nom que la console donne au serveur.
+- Spécification : `docs/DAT.md` §70.3 (tranchée le 2026-11-18 sous le mandat du
+  responsable) — `SPARKD_ALLOWED_SIGNERS` vaut par défaut `/etc/sparkd/allowed_signers` ;
+  la **console** pose la ligne `console/<serveur>` à la première ouverture du tunnel,
+  par SSH et `python -m sparkd.signataires poser`, remplace la ligne de ce principal si
+  la clé change, garde les autres ; l'état du geste se voit sur la carte du serveur ·
+  §36.10.5, §36.10.8.
 - Dépend de : SPK-40.
 - DoD : preuve qu'une Forge neuve accepte la première signature de la console sans geste
   manuel ; refus d'une clé non déclarée toujours prouvé ; runbook à jour.
@@ -9993,11 +9999,29 @@ manuels ont été nécessaires :
 Hors produit, mais sur la même machine : un `core.efi` laissé par l'image de l'hébergeur
 fait échouer `grub-efi-amd64-signed` sur une machine BIOS. Déplacé à la main.
 
-- Spécification : **à écrire** — `docs/DAT.md` (ce que l'amorce ou le préflight vérifie
-  après une montée : l'environnement Python correspond à l'interpréteur ; le dépôt Incus
-  correspond à la version) et `docs/AGENT_RUNBOOK.md` (la procédure de montée).
+- Spécification : `docs/DAT.md` §70.4 (écrite le 2026-11-18) — l'amorce compare la
+  version de l'interpréteur de l'environnement à celle de `python3`, met de côté un
+  environnement qui ne correspond plus et le reconstruit ; le dépôt Incus est déjà
+  réécrit à chaque passage · `docs/AGENT_RUNBOOK.md` §A.5 (la procédure de montée).
 - Dépend de : SPK-159.
 - DoD : test unitaire de la détection ; procédure du runbook jouée sur une Forge réelle.
+
+### [ ] SPK-176 · L'installation de la Forge propose la mise à niveau du pool ZFS, sans l'imposer
+
+**Demandé par le responsable le 2026-11-18** : « dans l'amorce UI de la forge pense à
+proposer le zfs upgrade comme optionnel quand disponible ». Sur `spark-010`, montée en
+26.04 (ZFS 2.4.1), le pool créé en 24.04 a huit fonctionnalités à activer ; `zpool
+upgrade` est irréversible, et n'a pas été lancé.
+
+- Spécification : `docs/DAT.md` §70.6 — le diagnostic lit `zpool upgrade` ; l'écran
+  d'installation propose une case **décochée par défaut** quand le zpool du plan a des
+  fonctionnalités à activer, avec l'irréversibilité dite et la liste ; le plan ne porte
+  `storage.zfsUpgrade: true` que si elle est cochée, et la console le refuse sans relevé
+  qui le justifie ; `forge_install` relit puis lance `zpool upgrade <zpool>` · §50.1-§50.5
+  · `docs/DESIGN_SYSTEM_APP.md` (la case, à écrire avec le code) · `docs/manuel/M2-installer.md`.
+- Dépend de : SPK-68.
+- DoD : test unitaire du relevé et du plan ; test de la phase `storage` ; E2E de l'écran
+  d'installation ; vérification visuelle ; manuel à jour.
 ---
 
 ## Lot 9 — La sauvegarde externe des instantanés

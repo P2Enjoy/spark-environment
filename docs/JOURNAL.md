@@ -15620,3 +15620,32 @@ qu'en légende, une fois. C'est la forme que le responsable avait suggérée pou
 (le camembert) ; le bloc la reprend, en grand. Trois parts qui se réconcilient avec les pools
 de `/v1/forge`.
 
+
+## 2026-11-18 · Six unités nées de `spark-010` : contrats écrits avant le code (DAT §70)
+
+**Problème.** Le responsable demande de corriger les unités ouvertes pendant la mise en
+service de `spark-010` (« fix ces unités identifiés dans la session »), et d'ajouter à
+l'installation de la Forge la mise à niveau ZFS « comme optionnel quand disponible ». Il
+donne mandat de trancher sans reposer la question (« DO IT AND DONT BOTHER ASKS »).
+
+**Relevés réels, en lecture seule sur `spark-010`, le 2026-11-18.** `zpool upgrade`
+liste huit fonctionnalités à activer sur `spark` (dont `dynamic_gang_header(*)`, que
+`zpool upgrade` n'active pas) ; `zpool status` est `ONLINE` et le signale. `/proc/mdstat`
+montre `md0` et `md1` en `[2/2] [UU]`. `apt-check` rend `0;0`, sans
+`/var/run/reboot-required`, et `release-upgrade-available` est vide. sparkd tourne en root.
+Ces sorties deviennent les jeux d'essai des contrôles.
+
+**Décisions prises sous mandat** (DAT §70, raisons et options écartées écrites) :
+
+- SPK-169 : un miroir dégradé est signalé, pas bloquant, comme au §48.2 : la Forge
+  dégradée sert et doit pouvoir se reprendre. Un pool hors service est un échec.
+- SPK-170 : un pool importable non sain n'est jamais importé. L'option « refuser tout
+  pool non créé par l'installation » est écartée, parce qu'elle casse la réinstallation
+  qui garde les données.
+- SPK-172 : la console pose la ligne à la connexion, et le défaut de
+  `SPARKD_ALLOWED_SIGNERS` évite le redémarrage.
+- SPK-171 : l'onglet est en lecture seule ; appliquer depuis la console n'est pas décidé.
+- SPK-176, nouvelle unité : la case est décochée par défaut, et l'amorce comme la montée
+  ne lancent jamais `zpool upgrade`.
+
+**Conséquence.** Le préflight passe de 17 à 19 contrôles.
