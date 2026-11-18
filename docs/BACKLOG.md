@@ -9989,7 +9989,7 @@ rien dans la console ne le montrait.
 - DoD : test unitaire du relevé, test d'API, E2E de l'onglet depuis le parcours
   canonique, vérification visuelle, manuel à jour.
 
-### [~] SPK-172 · Les signataires autorisés d'une Forge se posent sans geste manuel
+### [x] SPK-172 · Les signataires autorisés d'une Forge se posent sans geste manuel
 
 **Constaté le 2026-11-18 sur `spark-010`.** La console signe les gestes avec la clé
 déclarée pour le serveur, et la Forge refuse une signature qu'elle ne peut rattacher à
@@ -10020,9 +10020,23 @@ avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS
   - le manuel M12 et OP-43.
 
   Les suites passent : sparkd 1 961, webui 1 687. Le refus d'une clé non déclarée reste
-  prouvé (`test_signature_route.py`, `test_signataires.py`). **Reste** : la preuve sur
-  `spark-010` (la ligne retirée revient à la connexion, et l'ajout d'une image est
-  signé) et la vérification visuelle de la colonne.
+  prouvé (`test_signature_route.py`, `test_signataires.py`).
+- **Prouvé sur `spark-010` le 2026-11-18** (`e2e/forge-reelle/spk172-signataires.mjs`,
+  joué contre une console à part sur le port 5191, avec une copie de l'inventaire).
+  - **Préparation** : sparkd mis à jour depuis `main` (build bf2881f), puis la ligne
+    `console/spark-010` retirée de `/etc/sparkd/allowed_signers`. Le fichier était
+    alors vide, comme sur une Forge neuve.
+  - **Pose** : depuis l'accueil, *Serveurs* puis le serveur courant. La colonne
+    *Signature* dit « clé posée à la connexion », et la ligne est revenue sur la Forge
+    (`0644 root`).
+  - **Geste signé** : *Sparks*, *Projets*, *Créer un projet* (« essai-spk172 »). La
+    ligne `project.create` du journal dit « signée ». Le projet est ensuite supprimé
+    par le même écran.
+  - **Vérification visuelle** : captures `spk172-serveurs-signature`, `-mobile`,
+    `spk172-projet-cree` et `spk172-journal-signe`, observées. Sur mobile, le tableau
+    défile dans son conteneur, avec l'indication.
+  - **Écart à noter** : « Relever le catalogue » n'est pas un témoin, car il entre au
+    journal comme un geste automatique, non signé.
 
 ### [x] SPK-175 · Une Forge survit à la montée de version majeure d'Ubuntu
 
