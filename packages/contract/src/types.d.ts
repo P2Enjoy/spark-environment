@@ -309,6 +309,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/forge/systeme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Forge Systeme
+         * @description Les mises à jour du système, relevées en lecture seule.
+         *
+         *     @spec docs/BACKLOG.md#SPK-171 · docs/DAT.md §70.5
+         *
+         *     Rien n'est lancé qui écrive : ni `apt update`, ni une mise à niveau. Avec
+         *     le pilote factice, le relevé de démonstration, qui porte
+         *     `source: "fake"` et que l'écran affiche comme tel.
+         */
+        get: operations["forge_systeme_v1_forge_systeme_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/images": {
         parameters: {
             query?: never;
@@ -1960,6 +1986,28 @@ export interface operations {
         };
     };
     forge_sync_v1_forge_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    forge_systeme_v1_forge_systeme_get: {
         parameters: {
             query?: never;
             header?: never;

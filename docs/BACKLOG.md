@@ -9973,7 +9973,7 @@ l'hébergeur n'efface pas les partitions entre deux installations.
     refus, code 0 ; la recette rend 19 contrôles.
 
 
-### [ ] SPK-171 · Un onglet de la Forge suit les mises à jour du système (apt)
+### [~] SPK-171 · Un onglet de la Forge suit les mises à jour du système (apt)
 
 **Demandé par le responsable le 2026-11-18**, à l'installation de la Forge `spark-010` :
 « la forge devrait avoir un onglet pour surveiller les mises à jour apt ». Ce matin-là, la
@@ -9988,6 +9988,20 @@ rien dans la console ne le montrait.
 - Dépend de : rien d'ouvert.
 - DoD : test unitaire du relevé, test d'API, E2E de l'onglet depuis le parcours
   canonique, vérification visuelle, manuel à jour.
+- **Codé le 2026-11-18.**
+  - **Relevé** : `sparkd.systeme`, avec 10 preuves sur les sorties réelles de
+    `spark-010` (`zpool upgrade`, `apt-check` à « 0;0 »), y compris l'API sous pilote
+    factice et l'absence d'écriture au journal.
+  - **Écran** : composant `forge-systeme.js`, 6 preuves.
+  - **E2E** `e2e/mises-a-jour.test.mjs`, vert : depuis l'accueil, *Forge* puis
+    *Mises à jour*. Le relevé de démonstration est affiché et la sécurité en tête ;
+    *Relire* au clavier rend le focus sans rien journaliser, et le renvoi ZFS mène à
+    *Pools*.
+  - **Captures observées** : `spk171-mises-a-jour`, `-mobile`.
+  - **Documentation** : manuel M8, SPK-DS-46, OP-43.
+  - **Écart au contrat écrit** : le nombre de paquets sur l'onglet est retiré (DAT
+    §70.5, raison écrite).
+  - **Reste** : l'onglet lu sur `spark-010`, contre la vraie machine.
 
 ### [x] SPK-172 · Les signataires autorisés d'une Forge se posent sans geste manuel
 

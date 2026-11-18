@@ -322,6 +322,9 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
                              // — la somme de ses Sparks et leur repartition. Ce
                              // qu'un Spark consomme se regarde dans sa fenetre.
                              ['#/forge/supervision', 'Supervision'],
+                             // SPK-171 · §70.5 : ce que le SYSTÈME de la Forge
+                             // attend — paquets, redémarrage, version, pools.
+                             ['#/forge/mises-a-jour', 'Mises à jour'],
                              // SPK-62 · §47.3.0 bis : un canal d'alerte décrit
                              // la FORGE, et les gestes qu'il rapporte portent
                              // sur n'importe lequel de ses Sparks. Il vient

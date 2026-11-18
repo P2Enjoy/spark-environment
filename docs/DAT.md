@@ -17588,8 +17588,10 @@ de démonstration. Il montre la version et le noyau ; le nombre de mises à jour
 de sécurité en premier, puis la table des paquets ; un redémarrage requis, avec les
 paquets qui le demandent ; une version d'Ubuntu disponible, avec un renvoi à la
 procédure du runbook (§70.4) ; un pool ZFS qui a des fonctionnalités à activer, avec un
-renvoi à l'installation de la Forge (§70.6). Un bouton *Relire* refait la lecture. Le
-nombre de paquets en attente apparaît aussi sur l'onglet.
+renvoi à l'installation de la Forge (§70.6). Un bouton *Relire* refait la lecture.
+**Révisé au code, le 2026-11-18** : le nombre de paquets en attente ne figure pas sur
+l'onglet. Le porter aurait obligé à relire le système à chaque page de la Forge, pour
+un chiffre que l'onglet donne en un clic.
 
 ### 70.6 La mise à niveau du pool ZFS est proposée, jamais imposée (SPK-176)
 

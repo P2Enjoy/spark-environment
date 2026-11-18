@@ -682,6 +682,30 @@
         ]
       }
     },
+    "/v1/forge/systeme": {
+      "get": {
+        "description": "Les mises à jour du système, relevées en lecture seule.\n\n@spec docs/BACKLOG.md#SPK-171 · docs/DAT.md §70.5\n\nRien n'est lancé qui écrive : ni `apt update`, ni une mise à niveau. Avec\nle pilote factice, le relevé de démonstration, qui porte\n`source: \"fake\"` et que l'écran affiche comme tel.",
+        "operationId": "forge_systeme_v1_forge_systeme_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forge Systeme V1 Forge Systeme Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Forge Systeme",
+        "tags": [
+          "forge"
+        ]
+      }
+    },
     "/v1/images": {
       "get": {
         "description": "Catalogue complet, y compris ce qui n'est pas proposable.\n\nUne entree `missing` ou `unknown` reste visible : la faire disparaitre\nferait croire qu'elle n'a jamais existe (docs/DAT.md §33.3).",

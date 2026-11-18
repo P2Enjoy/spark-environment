@@ -53,6 +53,7 @@ from . import veilleur as veilleur_service
 from . import snapshots as snapshot_service
 from . import protection as protection_service
 from . import isolation as isolation_service
+from . import systeme as systeme_service
 from . import reseaux as reseaux_service
 from . import projets as projets_service
 from . import environnement as env_service
@@ -867,6 +868,20 @@ def create_app(config: Config) -> FastAPI:
         """L'état d'isolation de chaque Spark, LU dans Incus (SPK-109, §57.3)."""
         with registry() as connection:
             return isolation_service.etat_parc(connection, app.state.incus)
+
+    @app.get("/v1/forge/systeme", tags=["forge"])
+    def forge_systeme() -> dict:
+        """Les mises à jour du système, relevées en lecture seule.
+
+        @spec docs/BACKLOG.md#SPK-171 · docs/DAT.md §70.5
+
+        Rien n'est lancé qui écrive : ni `apt update`, ni une mise à niveau. Avec
+        le pilote factice, le relevé de démonstration, qui porte
+        `source: "fake"` et que l'écran affiche comme tel.
+        """
+        if config.driver == "fake":
+            return systeme_service.releve_factice()
+        return systeme_service.releve(systeme_service.lecteur_local())
 
     @app.post("/v1/forge/isolation", tags=["forge"])
     def forge_isolate() -> dict:

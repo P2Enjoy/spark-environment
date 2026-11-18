@@ -56,6 +56,7 @@ import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-vi
 import { brancherModale } from './components/modale.js';
 import { renderSupervisionForge, SUPERVISION_VIDE }
   from './components/supervision.js';
+import { renderMisesAJour, SYSTEME_VIDE } from './components/forge-systeme.js';
 import { tunnelContextOf, tunnelFailureMessage, signatureMotifOf }
   from './components/tokens.js';
 
@@ -82,6 +83,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null, forgeListe
                // choisie sur l'une ne decide pas de celle de l'autre.
                supervision: { ...SUPERVISION_VIDE },
                mesures: { ...SUPERVISION_VIDE },
+               // SPK-171 · §70.5 : les mises à jour du système, relevées à la
+               // demande et en lecture seule.
+               systeme: { ...SYSTEME_VIDE },
                // SPK-57 · §49 : la modale de redimensionnement. Fermée tant
                // qu'on ne l'a pas ouverte, et ses valeurs sont celles du Spark
                // AU MOMENT DE L'OUVERTURE — pas des champs vides qui feraient
@@ -206,7 +210,7 @@ function marquerNavigation() {
   const courant = etat.route === 'serveurs' ? '#/serveurs'
     : etat.route === 'manuel' ? '#/manuel'
     : ['forge', 'images', 'environnement', 'journal', 'forgedns',
-       'supervision', 'alertes', 'propositions'].includes(etat.route)
+       'supervision', 'misesajour', 'alertes', 'propositions'].includes(etat.route)
       ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
@@ -345,6 +349,8 @@ function peindre() {
       : etat.route === 'supervision'
       ? renderOngletsForge('#/forge/supervision')
         + renderSupervisionForge(etat.supervision)
+      : etat.route === 'misesajour'
+      ? renderOngletsForge('#/forge/mises-a-jour') + renderMisesAJour(etat.systeme)
       : etat.route === 'serveurs'
       ? renderServeurs(etat.catalogueServeurs)
       : etat.route === 'forge'
@@ -439,6 +445,9 @@ function brancher() {
     });
   }
   racine.querySelector('[data-action="reessayer"]')?.addEventListener('click', router);
+  // SPK-171 · §70.5 : relire ne change rien sur la Forge — pas de confirmation.
+  racine.querySelector('[data-action="relire-systeme"]')
+    ?.addEventListener('click', () => chargerSysteme({ focus: true }));
   brancherGraphiques();
   // §27.8 : le relevé ne détruit rien et n'a aucun paramètre — pas de confirmation.
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
@@ -4995,6 +5004,26 @@ async function chargerPropositionsForge({ depuisBouton = false } = {}) {
   if (depuisBouton) racine.querySelector('[data-propositions-relire]')?.focus();
 }
 
+/**
+ * Onglet « Mises à jour » de la Forge (SPK-171).
+ *
+ * @spec docs/BACKLOG.md#SPK-171 · docs/DAT.md §70.5 · docs/DESIGN_SYSTEM.md
+ *       §6.13 (pendant un nouveau relevé, l'ancien ne reste pas affiché comme
+ *       actuel), §14.3 (le focus revient au bouton qui a relu)
+ */
+async function chargerSysteme({ focus = false } = {}) {
+  etat.route = 'misesajour';
+  etat.systeme = { ...SYSTEME_VIDE, status: 'loading' };
+  peindre();
+  try {
+    etat.systeme = { ...SYSTEME_VIDE, status: 'pret', donnees: await api('/v1/forge/systeme') };
+  } catch (erreur) {
+    etat.systeme = { ...SYSTEME_VIDE, status: 'erreur', error: erreur.message };
+  }
+  peindre();
+  if (focus) racine.querySelector('[data-action="relire-systeme"]')?.focus();
+}
+
 async function chargerAlertes() {
   etat.route = 'alertes';
   etat.alertes = { ...ALERTES_VIDE, status: 'loading' };
@@ -5587,6 +5616,7 @@ function router() {
   if (location.hash === '#/serveurs') return chargerServeurs();
   if (location.hash === '#/forge/dns') return chargerInventaireDns();
   if (location.hash === '#/forge/alertes') return chargerAlertes();
+  if (location.hash === '#/forge/mises-a-jour') return chargerSysteme();
   if (location.hash === '#/forge/propositions') return chargerPropositionsForge();
   if (location.hash === '#/forge/journal') return chargerJournal();
   if (location.hash === '#/forge/environnement') return chargerCatalogueEnv();

@@ -14,6 +14,19 @@
   à la main sur la Forge le 2026-10-30 (OP-41 étape 1).
 
 ### Ajouté
+- **SPK-171 — un onglet Forge → Mises à jour.** Il montre, en lecture seule :
+  - la version d'Ubuntu et le noyau ;
+  - les mises à jour en attente, celles de sécurité en tête, avec la date de la liste
+    des paquets ;
+  - un redémarrage requis et les paquets qui le demandent ;
+  - une nouvelle version d'Ubuntu disponible ;
+  - les pools ZFS qui ont des fonctionnalités à activer.
+
+  La lecture passe par la nouvelle route `GET /v1/forge/systeme`, qui ne lance ni
+  `apt update` ni aucune mise à niveau. Sous pilote factice, un relevé de démonstration
+  s'affiche avec ce nom. *Relire* refait la lecture. Appliquer depuis la console n'est
+  pas prévu : l'écran donne la commande et renvoie au manuel. DAT §70.5, SPK-DS-46,
+  manuel M8, OP-43. Aucune migration, aucune variable d'environnement.
 - **SPK-172 — la console pose elle-même sa clé de signature sur la Forge.** Aucune étape
   du produit n'écrivait `allowed_signers`, et sur une Forge neuve le premier geste signé
   (l'ajout d'une image au catalogue) était refusé. Désormais :

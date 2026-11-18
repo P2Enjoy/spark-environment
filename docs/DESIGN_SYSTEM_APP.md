@@ -1030,6 +1030,35 @@ La correspondance entre jeton et libellé vit dans `tokens.js`
 (`SIGNATAIRES_ETATS`), à côté de celle du tunnel (§12.5). Le manuel M12 donne le
 sens de chaque état ; l'écran ne porte que son nom (§1.5 bis).
 
+### SPK-DS-46 · L'onglet « Mises à jour » : un relevé daté, des valeurs nommées, aucun geste
+
+**Date** : 2026-11-18 · SPK-171 · `DAT.md` §70.5, §70.6 · `DESIGN_SYSTEM.md` §1.5 bis,
+§5.4, §6.4, §6.8, §6.13, §6.14, §14.5, §14.6
+
+L'onglet *Mises à jour* suit *Supervision* dans les sections de la Forge. Il est en
+**lecture seule** : son seul bouton, *Relire*, refait la lecture et rend le focus
+(§14.3). Il n'existe aucun bouton « Mettre à jour ».
+
+- **Le relevé se date** : « Relevé le … », sous l'en-tête, comme la fraîcheur de la
+  supervision. Pendant une relecture, l'écran repasse par l'état de chargement :
+  l'ancien relevé n'est pas montré comme actuel (§6.13).
+- **Quatre cartes** : *Système* (paires terme / valeur), *Paquets* (résumé en badge,
+  puis table native), *Pools ZFS*, chacune avec son titre. Le résumé des paquets est
+  `danger` quand des mises à jour de sécurité attendent, `accent` sinon, `success`
+  avec « à jour » ; une ligne de sécurité porte le badge « sécurité », une ligne
+  courante le mot « courante » en note.
+- **Chaque absence est nommée** : « non relevée », « Date de la liste des paquets
+  inconnue », « part de sécurité non relevée », « seul le nombre est connu » (§14.5,
+  §14.6).
+- **Le relevé de démonstration se voit** : badge accent « relevé de démonstration »,
+  à côté de la date.
+- **L'écran nomme, le manuel explique** : la commande `sudo apt upgrade` est donnée,
+  mais pourquoi et quand appliquer vit au manuel M8, par un renvoi (§1.5 bis). Les
+  pools à mettre à niveau renvoient à l'onglet *Pools*, où l'installation le propose
+  (SPK-DS-47).
+
+Preuves observées le 2026-11-18 : `e2e/captures/spk171-mises-a-jour`, `-mobile`.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

@@ -120,7 +120,7 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169, SPK-170, SPK-172, SPK-175)
+### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169 à SPK-172, SPK-175)
 
 ```
 État          : EN ATTENTE sur la Forge de test (51.158.54.202) — à jouer sur
@@ -135,7 +135,9 @@ Objectif      : - préflight à 19 contrôles : STO-MIROIR (zpool status) et
                   montée d'Ubuntu — DAT §70.4, runbook §A.5 ;
                 - SPARKD_ALLOWED_SIGNERS vaut par défaut
                   /etc/sparkd/allowed_signers, et la console y pose sa ligne
-                  console/<serveur> à la connexion — DAT §70.3.
+                  console/<serveur> à la connexion — DAT §70.3 ;
+                - GET /v1/forge/systeme (lecture seule) et l'onglet Forge →
+                  Mises à jour de la console — DAT §70.5.
                 Aucune migration de schéma. Aucune variable nouvelle : le défaut
                 d'une variable existante change, et une valeur posée l'emporte.
 Dépend de     : rien.
@@ -152,7 +154,9 @@ Vérification  : - préflight : 19 contrôles. Sur la Forge de test, STO-MIROIR 
                 - écran Serveurs, colonne Signature : « clé reconnue par la
                   Forge » (la ligne posée à la main le 2026-09-14 est la même) ;
                 - un geste signé (armer puis lever une protection) entre au
-                  journal « signée ».
+                  journal « signée » ;
+                - Forge → Mises à jour : la version, le noyau et l'état des
+                  paquets de la Forge, sans le badge « relevé de démonstration ».
 Retour arrière: réinstaller la build précédente (runbook A.2). Le fichier
                 allowed_signers reste en place ; la ligne posée par la console
                 est celle qu'OP-09 posait à la main.
