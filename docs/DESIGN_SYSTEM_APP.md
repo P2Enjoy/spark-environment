@@ -217,6 +217,31 @@ panneau qui paraît dans le flux alors qu'il le surplombe se lit mal.
   ouverture, dernière activité. Rien d'autre ;
 - « Fermer » demande confirmation et nomme la session visée — inchangé.
 
+### SPK-DS-44 · Mémoire et Disque en anneau, et le total d'une Forge
+
+Date : 2026-11-18 · `docs/DAT.md` §68 · `docs/DESIGN_SYSTEM.md` §1.5, §6.14, §9.4, §14.6.
+
+La colonne CPU est une **barre** (SPK-DS-02) ; Mémoire et Disque sont des **anneaux**.
+La différence de forme dit la différence de nature : le CPU a un burst, la mémoire est
+un plafond strict, le disque un quota. L'anneau est un composant du produit, pas du
+socle.
+
+- Anneau SVG de **24 px** (l'échelle d'espacement), piste `--color-border`, remplissage
+  `--color-brand`, **`--color-danger` à partir de 90 %** (`SEUIL_ALERTE_RESSOURCE`).
+  Contraire de SPK-DS-02 sans le contredire : le CPU peut dépasser sa réservation sans
+  défaut, la mémoire et le disque non — l'approche de la limite est un vrai signal.
+- Il **accompagne** les chiffres, il ne les remplace pas ; il est `aria-hidden`, et la
+  cellule porte le nom accessible « Mémoire : 3,3 Gio sur 8,0 Gio, 41 % ».
+- Au-delà du seuil : chiffres en gras et texte `sr-only` « proche de la limite » — la
+  couleur ne porte pas seule (§1.5).
+- Absence : pas d'anneau quand l'usage ou la limite manque ; la cellule garde son
+  comportement du §14.6.
+- **Ligne « Total »** : un `tfoot`, seulement dans l'onglet « Tous ». Mêmes anneaux, face
+  aux capacités physiques de la Forge ; texte du pied en `--color-text-2`, séparateur
+  haut `--color-border`. Capacité absente : nommée, jamais inventée.
+- Responsive : l'anneau ne se masque jamais ; le tableau défile dans son conteneur
+  (§8.1), le pied avec lui.
+
 ### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
 
 Les mesures d'un Spark viennent du runtime et se comparent à ses quotas

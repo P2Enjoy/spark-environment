@@ -17265,3 +17265,63 @@ utilisateurs seedés, sans URL directe ni appel d'API :
    l'instantané est là et que celui écrit après n'y est plus ;
 6. refuser, par requête directe, chaque geste gardé sans mot de passe (configurer, purger,
    afficher la clé) : la preuve de CLAUDE.md §10.
+
+
+## 68. Mémoire et Disque en anneau, et la ligne des totaux de la liste : contrat (SPK-173)
+
+*Contrat écrit le 2026-11-18, avant le code. Aucune migration, aucune route nouvelle,
+aucune variable d'environnement.*
+
+### 68.1 Le constat
+
+La liste des Sparks donne le CPU en jauge, la mémoire et le disque en chiffres
+(« 3,3 Gio / 8,0 Gio »). Comparer deux Sparks demande de lire et diviser. Et rien ne
+dit ce que la Forge a au total face à ce que ses Sparks consomment.
+
+### 68.2 L'anneau
+
+Une cellule Mémoire ou Disque dont **l'usage et la limite sont connus** porte un anneau
+SVG de 24 px à gauche des chiffres. Le remplissage vaut `usage / limite`, borné à 100 %.
+La limite est celle du §20.3 : `limits.memory` pour la mémoire (plafond strict, §7.6),
+le quota du disque racine pour le disque.
+
+- **Au-delà du seuil**, le remplissage prend la couleur `danger`. Le seuil est **90 %**,
+  constante nommée `SEUIL_ALERTE_RESSOURCE` dans `tokens.js` : ce n'est ni une variable
+  d'environnement ni un réglage. La couleur ne porte jamais seule l'information
+  (design system §1.5) : au-delà du seuil, les chiffres passent en gras et le nom
+  accessible de la cellule dit « proche de la limite ».
+- Usage ou limite inconnus : **pas d'anneau**, la cellule reste ce qu'elle était
+  (vide si l'usage manque, chiffres seuls si la limite manque — §14.6).
+- Un Spark arrêté : la mémoire n'est pas mesurée (§20.4), la cellule reste vide ; le
+  disque garde sa vraie occupation et son anneau.
+- Nom accessible : « Mémoire : 3,3 Gio sur 8,0 Gio, 41 % » — jamais l'anneau seul.
+
+### 68.3 La ligne des totaux
+
+Un pied de tableau « Total », **rendu seulement dans l'onglet « Tous »**. Dans l'onglet
+d'un projet, une somme partielle face à la capacité de toute la Forge se lirait comme
+une part de la Forge ; elle n'est donc pas rendue.
+
+| Colonne | Somme | Face à |
+|---|---|---|
+| CPU | usages CPU mesurés | cœurs physiques de la Forge (`cpu.cores_total`, sans SMT, §7.7) |
+| Mémoire | usages mémoire mesurés | mémoire de la machine (`memory.total_bytes`) |
+| Disque | occupations disque mesurées | capacité de stockage (`pools.storage.capacity`, sans surengagement, §7.7) |
+
+Les capacités sont **physiques** et non les capacités allouables surengagées : une
+mémoire de 94 Gio vendue ×1,5 ne s'ouvre pas à 141 Gio d'usage réel.
+
+- La somme porte sur les Sparks **mesurés** ; la ligne dit « n Sparks sur m mesurés »
+  lorsque la somme est partielle (§6.13, résultat partiel). Un Spark arrêté n'ajoute
+  rien au CPU ni à la mémoire, et ajoute son disque.
+- Chaque cellule de total porte le même anneau, le même seuil et le même nom accessible.
+- Capacité non relevée (`/v1/forge` en échec) : la somme reste, la capacité est
+  **nommée absente** (« capacité de la Forge non relevée »), pas inventée (§14.6).
+- La capacité est lue avec la liste ; un échec de cette lecture n'empêche pas la liste.
+
+### 68.4 Preuves attendues
+
+Unitaires : proportion, borne à 100 %, seuil, absence d'usage / de limite, somme
+partielle, absence de capacité, absence de la ligne hors onglet « Tous ». E2E depuis
+l'accueil à la souris : connexion avec un utilisateur seedé, lecture de la liste,
+captures (desktop, mobile), Spark seedé au-delà de 90 %.

@@ -15465,3 +15465,29 @@ ni image, seul le disque racine du profil `default` utilise le pool.
 - SPK-169 et SPK-170 restent ouverts.
 - `spark-experiment` tourne toujours sur un seul disque. Il faut demander à l'hébergeur
   de remplacer `sdb`, puis réparer le miroir.
+
+## 2026-11-18 · SPK-173 : Mémoire et Disque en anneau, et un total face à la Forge
+
+**Demande du responsable**, sur une capture de la liste des Sparks : « mémoire et disque
+devraient être représentés aussi graphiquement comme l'usage CPU, par exemple un
+camembert à côté des valeurs en chiffres », puis « il manque une ligne des totaux vs ce
+qui est disponible en total sur la Forge », puis « mais seulement dans le tab Tous ».
+
+**Observations.** La colonne CPU est une barre (`renderCpuGauge`), Mémoire et Disque
+sont du texte (`renderMesure`). Le design system n'a aucune règle sur le camembert. La
+mémoire est un plafond strict (DAT §7.6), donc 100 % est un maximum réel ; le disque
+inclut les instantanés (§20.3). La liste ne lit pas `/v1/forge` aujourd'hui.
+
+**Arbitrages du responsable.** Forme : anneau (barre proposée, écartée). Alerte : rouge
+au-delà d'un seuil (couleur unique proposée, écartée). Totaux : onglet « Tous »
+seulement.
+
+**Décisions de conception** (à confirmer par le responsable si elles ne conviennent pas) :
+seuil de **90 %**, la valeur de l'exemple donné ; capacités **physiques** (cœurs,
+mémoire de la machine) et non allouables, parce que le surengagement mémoire gonflerait
+un dénominateur qu'aucun usage réel n'atteint ; couleur doublée du gras et d'un texte
+pour lecteurs d'écran (design system §1.5).
+
+**Conséquences.** SPK-173 ouverte, DAT §68 et SPK-DS-44 écrits avant le code. Aucune
+migration, aucune route, aucune variable d'environnement.
+

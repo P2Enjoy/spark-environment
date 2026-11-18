@@ -9152,6 +9152,27 @@ plus simple, et l'ajouter à la recette cloud-init.
   - **Reste `[P]`** : OP-41 étapes 2 et 3 (mise à jour de sparkd, qui emporte
     aussi OP-39 et OP-40) sur instruction du responsable, puis la vérification
     d'OP-41 ; étape 4, le noyau corrigé, à sa publication par Ubuntu.
+### [ ] SPK-173 · La liste des Sparks montre Mémoire et Disque en anneau, et un total face à la Forge
+
+**Demandé le 2026-11-18** par le responsable, depuis la liste des Sparks : la mémoire et
+le disque se lisent en chiffres seulement, là où le CPU a sa jauge ; et il manque une
+ligne des totaux face à ce que la Forge a au total. Arbitrages du jour : la forme est un
+**anneau** (camembert) à côté des chiffres, qui passe au **rouge au-delà d'un seuil de
+90 %** ; la ligne des totaux n'existe **que dans l'onglet « Tous »**.
+
+- Spécification : `docs/DAT.md` **§68** · `docs/DESIGN_SYSTEM.md` §1.5, §6.14, §9.4,
+  §14.6 · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-44** · `docs/JOURNAL.md` 2026-11-18.
+- Dépend de : SPK-18 (la liste), SPK-14 (les mesures), SPK-22 (la capacité de la Forge).
+- Portée : un anneau par cellule Mémoire et Disque dont l'usage et la limite sont
+  connus ; une ligne de pied « Total » dans l'onglet « Tous » (somme des usages mesurés
+  face à la capacité de la Forge) ; la capacité vient de `/v1/forge`, lue avec la liste.
+- Hors périmètre : la colonne CPU (inchangée) ; les onglets de projet (aucune ligne de
+  totaux) ; tout nouveau champ de l'API ; toute variable d'environnement.
+- DoD : tests unitaires de l'anneau et de la ligne de totaux ; épreuve E2E depuis
+  l'accueil (connexion, clic, capture) ; captures observées (desktop, mobile, absence de
+  capacité, un Spark arrêté, un Spark au-delà du seuil) ; manuel M3, DAT, design system,
+  seed (un Spark près de sa limite) et changelog à jour.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks
