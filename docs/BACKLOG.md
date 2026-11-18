@@ -9990,6 +9990,8 @@ lien et en place des textes bruts ».
       - Une première tentative avait été tuée (137) par le délai de 10 minutes de
         l'outil qui la lançait, sans laisser de processus orphelin. Le banc a ensuite
         été relancé seul, avec 9,4 Gio libres.
+      - Rejoué une seconde fois le même jour : VERT en 224 s.
+      - **Preuve acceptée par le responsable le 2026-11-18.**
   - **Fermée le 2026-11-18.** Les preuves unitaires NVMe et UEFI que la DoD demande
     existent. Le **relevé** de ces schémas chez l'hébergeur n'en fait pas partie : il
     demande une machine de ces offres, et il se fera à la première commande (README
