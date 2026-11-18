@@ -9541,7 +9541,7 @@ bon onglet** — « un dashboard de tous les SLA et de toutes les santés déplo
   la synthèse répétait le mot de l'état à côté de sa pastille, et la taille cumulée des instantanés n'était pas affichée.
   Décisions du rédacteur à confirmer : DAT §76.7.
 
-### [~] SPK-189 · L'aperçu du SLA dit le taux d'occupation de chaque prise, et recalcule un autre horaire
+### [x] SPK-189 · L'aperçu du SLA dit le taux d'occupation de chaque prise, et recalcule un autre horaire
 
 **Demandé le 2026-11-19** par le responsable : « lors de la création du SLA, voir le taux d'occupation du preview des 3 exécutions
 planifiées, visualisé, et avec un bouton pour calculer un autre horaire (modifier heure et minutes) ».
@@ -9556,7 +9556,11 @@ planifiées, visualisé, et avec un bouton pour calculer un autre horaire (modif
 - DoD : tests de service, d'API contre le vrai registre et de composant ; E2E depuis l'accueil, souris et clavier ; captures
   observées (desktop, mobile, collision, aucune autre prise, horaire recalculé) ; manuel et changelog à jour.
 
-**État (2026-11-19) : livré, `[~]` — pas encore vu sur une Forge réelle.** Prouvé : 14 tests de service et d'API contre le vrai
+**État (2026-11-19) : livré et vérifié, `[x]`.** **Preuve sur la Forge RÉELLE (spark-010, `59133e7`)** : un SLA `0 3 * * *` posé sur un
+Spark d'essai ; la modale de `magiline-mcp` (qui porte son propre SLA, posé par le responsable) lue **sans rien enregistrer** : à 02:00,
+« aucune autre prise dans cette tranche » ; après « Calculer un autre horaire » à 03:00, « 1 autre prise dans cette tranche
+(03:00–03:15 UTC) : essai-spk · 100 % » sur les trois prises, barres pleines ; Échap, et la politique de `magiline-mcp` est inchangée.
+Prouvé en local : 14 tests de service et d'API contre le vrai
 registre (`test_sla_charge_apercu.py`, 13 rouges avant : collision exacte, bornes de la tranche, deux SLA qui s'additionnent,
 taux relatif au pic, jour de semaine, jour de mois, taux borné à 1, zéro sans division, SLA du Spark et suspendus exclus, aucun
 écrit) ; 13 tests de composant (barre, phrase nommée, absence nommée, légende une fois, nom hostile échappé, zone repliée et

@@ -16152,3 +16152,15 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **Le SLA du Spark qu'on édite est exclu** : sa politique en place est celle qu'on remplace.
 - **Le bouton ne remplace que minute et heure** ; une fréquence plus fine qu'un jour devient quotidienne, et l'écran le dit.
 
+**SPK-189 : le taux d'occupation de l'aperçu du SLA — livré et prouvé le 2026-11-19.**
+
+- **Prouvé sur la Forge réelle sans rien écrire chez un locataire** : le SLA de test a été posé sur un Spark d'essai ; l'aperçu a
+  été lu sur la modale de `magiline-mcp`, qui porte un SLA posé par le responsable lui-même (journal d'audit : `sla.set` à 23:06 UTC,
+  valeurs par défaut de la modale — c'est ce geste qui a sans doute fait naître la demande). Échap : sa politique est restée telle quelle.
+- **Une course dans mon propre script de preuve**, pas dans le produit : j'attendais « trois lignes d'aperçu » alors qu'elles
+  existaient déjà avant le recalcul (délai de 250 ms) ; il faut attendre que l'aperçu porte **la nouvelle heure**.
+- **Défaut vu à la capture en local et corrigé** : la phrase d'une prise semblait collée à la date suivante.
+- **Constaté, hors de ce chantier** : `e2e/manuel.test.mjs` échoue depuis le commit SPK-188 (`m8-forge-sla.jpg` et `m8-forge-sante.jpg`
+  sont cités par le manuel mais ne figurent pas dans la liste des illustrations que le test connaît). Ce n'est pas lié à SPK-189 ;
+  signalé, non corrigé — l'unité n'est pas la mienne.
+

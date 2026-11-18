@@ -124,6 +124,20 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-51 · L'aperçu du SLA dit le taux d'occupation et recalcule un autre horaire (SPK-189)
+
+```
+État          : APPLIQUÉ le 2026-11-19 sur spark-010 (sparkd 59133e7, par « Code déployé »). Prouvé sur la Forge réelle, sans
+                écrire sur le Spark d'un locataire. spark-experiment n'a PAS reçu ce code.
+Quoi          : `load` dans la réponse de POST /v1/sparks/{nom}/sla/preview ; la barre de taux sous chaque prise et le bouton
+                « Calculer un autre horaire » de la modale (console).
+Migration     : AUCUNE. Variables : AUCUNE. Lecture du registre seule : l'aperçu n'écrit rien.
+À redéployer  : sparkd et la console.
+Vérifier      : ouvrir la modale d'un SLA : chaque prise porte sa barre et sa phrase ; « Calculer un autre horaire » change
+                l'heure et la minute et relance l'aperçu ; fermer par Échap ne change rien.
+Retour arrière: redéployer le code précédent : l'aperçu perd `load`, rien n'est à défaire.
+```
+
 ### OP-50 · Le briefing d'un Spark dit la surveillance et les instantanés (SPK-187)
 
 ```

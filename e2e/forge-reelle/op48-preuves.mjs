@@ -11,7 +11,7 @@
  * la fois (CLAUDE.md §15 bis) : le verrou est pris à l'import. Les phases se jouent l'une après l'autre :
  *
  *   node e2e/forge-reelle/op48-preuves.mjs <phase> [serveur] [spark] [--garde-fichier=CHEMIN] [--destinataire=ADRESSE]
- *   phases : image | creer | sla | sante | rootless | sonde-docker | sonde-https | retire-sonde | smtp | destinataire | webhook | geste | nettoyer
+ *   phases : image | creer | sla | sla-charge | sante | rootless | sonde-docker | sonde-https | retire-sonde | smtp | destinataire | webhook | geste | nettoyer
  *   --garde-fichier  (phase smtp) fichier 0600 qui porte le mot de passe des canaux ; il n'est jamais affiché
  *   --destinataire   (phase smtp) l'adresse qui reçoit les alertes
  *
@@ -142,14 +142,16 @@ try {
     await capturer('sla-avant');
     await page.click('[data-ouvre="sla"]');
     await page.waitForSelector('#sla-phrase', { timeout: 10000 });
-    await page.fill('#sla-schedule', '*/15 * * * *');
+    const chaineSla = nommes.schedule ?? '*/15 * * * *';
+    await page.fill('#sla-schedule', chaineSla);
     await page.fill('#sla-count', '2');
-    await page.waitForFunction(() => /15 minutes/.test(document.querySelector('#sla-phrase')?.textContent ?? ''), null, { timeout: 15000 });
+    await page.waitForSelector('#sla-phrase', { timeout: 15000 });
+    await page.waitForFunction(() => !document.querySelector('#sla-apercu [role="alert"]') && document.querySelector('#sla-phrase'), null, { timeout: 15000 });
     await capturer('sla-modale');
     await page.click('[data-engage="sla"]');
     await page.waitForSelector('dialog#sla', { state: 'detached', timeout: 30000 });
     const sla = lire(`/v1/sparks/${nom}/sla`);
-    verifier(sla.schedule === '*/15 * * * *' && sla.enabled, `le SLA est au registre de la Forge réelle (${sla.schedule}, actif)`);
+    verifier(sla.schedule === chaineSla && sla.enabled, `le SLA est au registre de la Forge réelle (${sla.schedule}, actif)`);
     await capturer('sla-actif');
   }
 
@@ -333,6 +335,35 @@ try {
     await page.waitForFunction(() => /canal courriel enregistrée|refus/.test(document.querySelector('#formulaire-smtp')?.innerText ?? ''), null, { timeout: 30000 });
     const vu = lire('/v1/notify/channels').smtp;
     verifier(vu.to === nommes.destinataire && vu.password_set && vu.enabled, 'le destinataire est changé, le mot de passe du compte conservé');
+  }
+
+  if (phase === 'sla-charge') {
+    // SPK-189 : l'aperçu d'un SLA dit où tombent les prises face aux AUTRES SLA de la Forge. On ouvre la modale d'un Spark
+    // (par défaut `magiline-mcp`), on LIT, on essaie un autre horaire, et on ferme par Échap : RIEN n'est enregistré.
+    const cible = nommes.spark ?? 'magiline-mcp';
+    const avantSla = JSON.stringify(lire(`/v1/sparks/${cible}/sla`));
+    await ouvrir(cible, 'instantanes');
+    await page.waitForSelector('section[aria-labelledby="titre-sla"]', { timeout: 30000 });
+    await page.click('[data-ouvre="sla"]');
+    await page.waitForSelector('#sla-apercu .liste-charge li', { timeout: 30000 });
+    console.log('  aperçu :', (await page.textContent('#sla-apercu .liste-charge')).replace(/\s+/g, ' ').slice(0, 260));
+    await capturer('sla-charge-depart');
+    await page.click('[data-sla-autre]');
+    await page.fill('#sla-heure', nommes.heure ?? '3');
+    await page.fill('#sla-minute', nommes.minute ?? '0');
+    await page.click('[data-sla-calculer]');
+    await page.waitForFunction((h) => document.querySelector('#sla-schedule')?.value.split(' ')[1] === h,
+      nommes.heure ?? '3', { timeout: 15000 });
+    // L'aperçu se recalcule après un court délai : on attend qu'il porte LA NOUVELLE heure, pas qu'il existe.
+    await page.waitForFunction((h) => new RegExp(`T?${h.padStart(2, '0')}:\\d\\d UTC`).test(
+      document.querySelector('#sla-apercu .liste-charge')?.textContent ?? ''), nommes.heure ?? '3', { timeout: 15000 });
+    const texte = (await page.textContent('#sla-apercu .liste-charge')).replace(/\s+/g, ' ');
+    console.log('  après « Calculer un autre horaire » :', texte.slice(0, 260));
+    verifier(new RegExp(nommes.attendu ?? 'essai-spk').test(texte), `la collision avec « ${nommes.attendu ?? 'essai-spk'} » est nommée, sur la Forge réelle`);
+    await capturer('sla-charge-recalcule');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog#sla', { state: 'detached', timeout: 15000 });
+    verifier(JSON.stringify(lire(`/v1/sparks/${cible}/sla`)) === avantSla, `rien n'a été enregistré sur « ${cible} »`);
   }
 
   if (phase === 'webhook') {
