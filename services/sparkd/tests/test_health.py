@@ -372,6 +372,49 @@ def test_le_script_s_execute_sous_le_compte_de_la_pile(db):
     assert rootless[-1] == "docker ps; echo $HOME" and "docker ps" not in rootless[6]
 
 
+def test_un_Spark_rootless_du_REGISTRE_joue_son_script_sous_le_compte_rootless(db):
+    """Défaut vu sur spark-010 (2026-11-18), invisible aux doublons.
+
+    `docker_mode` n'est PAS une colonne de la ligne `spark` : il vit dans l'observation d'amorçage
+    (`spark_bootstrap_observation`). `commande_script` lisait `spark.get("docker_mode")`, donc rien :
+    un Spark rootless était traité comme enraciné, et `docker ps` y sortait en code 1 (aucun démon
+    root). Les tests passaient un dictionnaire où l'on avait écrit la clé à la main.
+    """
+    s = spark(db)
+    assert "docker_mode" not in s, "le préalable : la ligne du Spark ne porte pas le mode"
+    db.execute(
+        "INSERT INTO spark_bootstrap_observation (spark_id, observed_at, docker_mode, managed_items)"
+        " VALUES (?, ?, 'rootless', '[]')", (s["id"], "2026-11-18T10:00:00+00:00"))
+    vus = []
+
+    class Espion:
+        def exec_capture(self, nom, commande):
+            vus.append(commande)
+            return 0, "", ""
+
+    sonde = {"kind": "script", "target": "docker ps", "expected": 0}
+    resultat = health._executer(db, Espion(), None, s, sonde)
+    assert resultat["ok"] is True
+    assert "runuser -u spark-docker" in vus[0][6], "le script doit passer par le compte rootless"
+    assert vus[0][-1] == "docker ps"
+
+
+def test_un_Spark_enracine_ou_non_releve_garde_le_script_nu(db):
+    vus = []
+
+    class Espion:
+        def exec_capture(self, nom, commande):
+            vus.append(commande)
+            return 0, "", ""
+
+    sonde = {"kind": "script", "target": "pg_isready", "expected": 0}
+    health._executer(db, Espion(), None, spark(db), sonde)  # jamais amorcé : aucun relevé
+    db.execute("INSERT INTO spark_bootstrap_observation (spark_id, observed_at, docker_mode, managed_items)"
+               " VALUES ('S1', '2026-11-18T10:00:00+00:00', 'enracine', '[]')")
+    health._executer(db, Espion(), None, spark(db), sonde)
+    assert vus == [["timeout", "-k", "5", "60", "sh", "-c", "pg_isready"]] * 2
+
+
 # --- appliquer : l'alerte part à la transition, une fois -----------------------------------------------------
 
 def deroule(db, incus, sondes, statuts, seuil=3, debut=T0):

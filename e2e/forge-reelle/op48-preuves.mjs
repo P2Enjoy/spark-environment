@@ -11,7 +11,7 @@
  * la fois (CLAUDE.md §15 bis) : le verrou est pris à l'import. Les phases se jouent l'une après l'autre :
  *
  *   node e2e/forge-reelle/op48-preuves.mjs <phase> [serveur] [spark] [--garde-fichier=CHEMIN] [--destinataire=ADRESSE]
- *   phases : image | creer | sla | sante | smtp | destinataire | webhook | geste | nettoyer
+ *   phases : image | creer | sla | sante | rootless | sonde-docker | sonde-https | retire-sonde | smtp | destinataire | webhook | geste | nettoyer
  *   --garde-fichier  (phase smtp) fichier 0600 qui porte le mot de passe des canaux ; il n'est jamais affiché
  *   --destinataire   (phase smtp) l'adresse qui reçoit les alertes
  *
@@ -231,6 +231,92 @@ try {
     verifier(vu.smtp.enabled && vu.smtp.password_set && vu.live_smtp.configured, 'le canal courriel est actif sur la Forge réelle, mot de passe enregistré');
     verifier(!JSON.stringify(vu).includes(motDePasse), 'le mot de passe ne ressort PAS de l\'API');
     await capturer('smtp-actif');
+  }
+
+  if (phase === 'rootless') {
+    // SPK-184 : amorcer Docker en ROOTLESS dans le Spark d'essai (écran Infos), pour y jouer ensuite une sonde script
+    // `docker ps` sous le compte rootless — la mesure que les doublons ne pouvaient pas faire.
+    await ouvrir(nom);
+    await page.waitForSelector('#titre-amorcage', { timeout: 30000 });
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 15000 });
+    await page.check('#amorcage-rootless');
+    await page.click('[data-amorcage="engager"]');
+    await page.waitForSelector('.liste-amorcage', { timeout: 520000 });
+    const compteRendu = (await page.textContent('#titre-amorcage ~ .liste-amorcage')).replace(/\s+/g, ' ');
+    console.log('  compte rendu :', compteRendu.slice(0, 300));
+    verifier(/rootless/.test(compteRendu), 'l\'amorçage s\'est fait en rootless');
+    await capturer('rootless-amorce');
+  }
+
+  if (phase === 'sonde-docker') {
+    // SPK-184 : « docker ps » sous le compte rootless, dans la vraie cellule. « Tester » d'abord, puis la sonde planifiée.
+    await ouvrir(nom, 'sante');
+    await page.waitForSelector('section[aria-labelledby="titre-sante"]', { timeout: 30000 });
+    await page.click('[data-ouvre="sante"]');
+    await page.waitForSelector('#sante-name', { timeout: 10000 });
+    await page.fill('#sante-name', 'docker-rootless');
+    await page.selectOption('#sante-kind', 'script');
+    await page.fill('#sante-commande', 'docker ps');
+    await page.fill('#sante-threshold', '1');
+    await page.waitForSelector('#sante-phrase', { timeout: 10000 });
+    console.log('  aide :', (await page.textContent('#sante-commande-aide')).replace(/\s+/g, ' ').slice(0, 160));
+    await page.click('[data-sante-tester]');
+    await page.waitForFunction(() => /L’essai a (réussi|échoué)/.test(document.querySelector('#sante-test')?.textContent ?? ''), null, { timeout: 90000 });
+    const verdict = (await page.textContent('#sante-test')).replace(/\s+/g, ' ');
+    console.log('  essai :', verdict);
+    verifier(/L’essai a réussi/.test(verdict), '« docker ps » réussit sous le compte rootless, dans la vraie cellule');
+    await capturer('sonde-docker-essai');
+    await page.click('[data-engage="sante"]');
+    await page.waitForSelector('dialog#sante', { state: 'detached', timeout: 30000 });
+    await page.waitForSelector('[data-sante-sonde="docker-rootless"]', { timeout: 30000 });
+    await capturer('sonde-docker-posee');
+  }
+
+  if (phase === 'sonde-https') {
+    // SPK-184 : une sonde HTTPS contre le VRAI Caddy et un vrai certificat, sur une route d'un Spark existant (lecture d'une
+    // ligne de statut seulement). La sonde est RETIRÉE à la fin : on laisse la configuration du locataire comme on l'a trouvée.
+    const cible = nommes.spark ?? 'magiline-mcp';
+    const domaine = nommes.domaine ?? 'magiline.mcp.dev.lelabs.tech';
+    await ouvrir(cible, 'sante');
+    await page.waitForSelector('section[aria-labelledby="titre-sante"]', { timeout: 30000 });
+    const avant = lire(`/v1/sparks/${cible}/health`).checks.length;
+    await page.click('[data-ouvre="sante"]');
+    await page.waitForSelector('#sante-name', { timeout: 10000 });
+    await page.fill('#sante-name', 'https-reel');
+    await page.selectOption('#sante-route', domaine);
+    await page.fill('#sante-threshold', '20');
+    await page.waitForSelector('#sante-phrase', { timeout: 10000 });
+    await page.click('[data-sante-tester]');
+    await page.waitForFunction(() => /L’essai a (réussi|échoué)/.test(document.querySelector('#sante-test')?.textContent ?? ''), null, { timeout: 90000 });
+    let verdict = (await page.textContent('#sante-test')).replace(/\s+/g, ' ');
+    console.log('  essai :', verdict);
+    const statut = /HTTP (\d{3})/.exec(verdict)?.[1];
+    if (statut && statut !== '200') {
+      await page.fill('#sante-expected', statut);
+      await page.waitForFunction(() => !document.querySelector('[data-sante-tester]')?.disabled, null, { timeout: 15000 });
+      await page.click('[data-sante-tester]');
+      await page.waitForFunction(() => /L’essai a réussi/.test(document.querySelector('#sante-test')?.textContent ?? ''), null, { timeout: 90000 });
+      verdict = (await page.textContent('#sante-test')).replace(/\s+/g, ' ');
+      console.log('  essai, statut attendu réglé sur celui que le serveur répond :', verdict);
+    }
+    verifier(/L’essai a réussi/.test(verdict), `la Forge joint « ${domaine} » par son vrai Caddy, certificat vérifié`);
+    await capturer('sonde-https-essai');
+    await page.click('[data-engage="sante"]');
+    await page.waitForSelector('dialog#sante', { state: 'detached', timeout: 30000 });
+    await page.waitForSelector('[data-sante-sonde="https-reel"]', { timeout: 30000 });
+    await capturer('sonde-https-posee');
+  }
+
+  if (phase === 'retire-sonde') {
+    // On remet la configuration du locataire comme on l'a trouvée.
+    const cible = nommes.spark ?? 'magiline-mcp';
+    await ouvrir(cible, 'sante');
+    await page.waitForSelector('[data-sante-sonde="https-reel"]', { timeout: 30000 });
+    await page.click('[data-sante-retrait="https-reel"]');
+    await page.click('[data-sante-confirme-retrait="https-reel"]');
+    await page.waitForFunction(() => !document.querySelector('[data-sante-sonde="https-reel"]'), null, { timeout: 30000 });
+    verifier(lire(`/v1/sparks/${cible}/health`).checks.length === 0, `« ${cible} » retrouve sa configuration d'origine (aucune sonde)`);
   }
 
   if (phase === 'destinataire') {

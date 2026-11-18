@@ -35,6 +35,10 @@
   formulaires d'Alertes **retiennent leur saisie** à chaque frappe (jamais les mots de passe). Preuve : un parcours
   qui retarde la lecture de la Forge de 2,5 s, passe à l'onglet Alertes, tape, et constate que la saisie survit —
   rouge sans les deux remèdes, vert avec.
+- **Corrigé, vu sur la Forge réelle spark-010 — un Spark rootless jouait ses sondes script sous `root`.** `docker_mode` vit
+  dans l'observation d'amorçage, pas sur la ligne du Spark que lisait le runner : il valait toujours « absent », donc un Spark
+  rootless était traité comme enraciné, sans accès à son socket Docker — `docker ps` y sortait en code 1. Les doublons passaient
+  un dictionnaire où la clé avait été écrite à la main. Le mode est lu là où il vit ; deux tests le prouvent (rouge avant).
 - **Corrigé, vu sur spark-010 — une sonde HTTPS sans route recevait un refus avant toute saisie.** Sur un Spark sans
   route TLS, la modale ouvrait sur « Aucun domaine dans l'adresse » : exact, mais prématuré. L'aperçu attend qu'il y ait une
   route à viser. Un parcours l'épingle (rouge sans le remède).

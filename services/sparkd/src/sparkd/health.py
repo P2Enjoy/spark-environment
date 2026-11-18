@@ -293,7 +293,26 @@ def _executer(connection, incus, sondes, spark: dict, sonde: dict) -> dict:
             return {"ok": False, "latency_ms": None,
                     "detail": f"« {domaine} » n'est plus une route de ce Spark"}
         return releve_http(sondes, domaine, chemin, sonde["expected"])
-    return releve_script(incus, spark, sonde["target"], sonde["expected"])
+    return releve_script(incus, {**spark, "docker_mode": _mode_docker(connection, spark)},
+                         sonde["target"], sonde["expected"])
+
+
+def _mode_docker(connection: sqlite3.Connection, spark: dict) -> str | None:
+    """Le mode Docker du Spark, lu dans l'observation d'amorçage — là où il vit.
+
+    @spec docs/BACKLOG.md#SPK-184 · docs/DAT.md §75.5 (le compte n'est pas un choix de la ligne : `root`
+          sur un Spark enraciné, le compte rootless sur un Spark rootless)
+
+    `docker_mode` n'est PAS une colonne de la ligne `spark` : c'est `spark_bootstrap_observation`. Le lire
+    sur la ligne rendait toujours `None`, donc un Spark rootless jouait ses scripts sous `root`, sans
+    accès à son socket Docker — `docker ps` y sortait en code 1. Mesuré le 2026-11-18 sur la Forge
+    réelle spark-010 ; les doublons passaient un dictionnaire où la clé avait été écrite à la main.
+    `None` (jamais amorcé) vaut « enraciné » : le script part sous `root`, comme avant.
+    """
+    ligne = connection.execute(
+        "SELECT docker_mode FROM spark_bootstrap_observation WHERE spark_id = ?",
+        (spark["id"],)).fetchone()
+    return ligne["docker_mode"] if ligne else None
 
 
 # --- le registre ------------------------------------------------------------------------------
