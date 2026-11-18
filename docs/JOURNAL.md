@@ -15685,9 +15685,15 @@ Ces sorties deviennent les jeux d'essai des contrôles.
 
   Le relevé des schémas NVMe et UEFI chez l'hébergeur, hors DoD, se fera à la première
   machine de ces offres.
-- OP-43 sur la Forge de test (`spark-experiment`), qui porte des Sparks en service :
-  **non jouée**. Toute modification de la production attend une instruction explicite
-  du responsable (CLAUDE.md §9).
+- OP-43 : demandée explicitement par le responsable (« Les deux Forges »), elle est
+  jouée par le bloc *Code déployé* de la console.
+  - **Résultat** : la Forge de test passe à `a003ac285`, `spark-010` à `bcaa43e33`,
+    les deux mises à jour prouvées, avec sauvegardes du registre. Le préflight de la
+    Forge de test rend 19 contrôles et signale le disque `sdb`.
+  - **Constat** : la colonne *Signature* y disait encore « sparkd à mettre à jour »,
+    parce que la pose avait été tentée avant la mise à jour. Elle repart désormais
+    après une mise à jour réussie (SPK-172, DAT §70.3) ; vérifié ensuite, « clé
+    reconnue par la Forge ».
 
 ## 2026-11-18 · Un jeton GitHub pour poser la clé du Spark : un Spark, un dépôt (SPK-178)
 

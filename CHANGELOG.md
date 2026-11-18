@@ -18,6 +18,9 @@ _Rien à publier pour le moment._
   signalés (`STO-MIROIR`, `SYS-RAID` : le disque `sdb` à remplacer), `/readyz` prêt.
   Colonne *Signature* « clé reconnue par la Forge » sur les deux Forges, onglet
   *Mises à jour* lu sur chacune.
+- **SPK-172, corrigé au déploiement** : la pose des signataires repart après une mise à
+  jour de sparkd réussie depuis la console. Elle avait été tentée avant, et la colonne
+  restait sur « sparkd à mettre à jour » (DAT §70.3).
 - Aucune migration de schéma.
 
 ### Sécurité
