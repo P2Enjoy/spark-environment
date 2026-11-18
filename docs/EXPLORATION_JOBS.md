@@ -194,7 +194,15 @@ Si le sujet devient une unité, la pratique du dépôt est de **mesurer avant de
 - le coût d'une lecture de l'état des conteneurs d'ordonnancement à chaque visite de l'onglet
   Docker (barreau 2).
 
-## 9. Ce que cette étude ne fait pas
+## 9. Un exécuteur dans la cellule existera déjà : la santé (ajouté le 2026-11-18)
+
+La santé d'un Spark (`docs/DAT.md` §75, SPK-184 à SPK-186) a été **décidée** le même jour et exécute des
+**scripts dans la cellule**, sous le compte de la pile, avec un délai, un code de sortie et une cadence en
+chaîne crontab. Si les jobs sont un jour exposés (barreaux 3 et 4 du §5), **cet exécuteur est celui qu'ils
+réutiliseraient** : un script de santé est un job avec une assertion. Ce n'est pas une décision d'exposer les
+jobs ; c'est ce qui rend l'étude moins coûteuse si elle aboutit.
+
+## 10. Ce que cette étude ne fait pas
 
 - elle ne décide pas d'exposer quoi que ce soit ;
 - elle ne touche ni à `sparkd`, ni à la console, ni au schéma, ni à `docs/DAT.md` ;

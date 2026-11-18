@@ -15860,3 +15860,35 @@ SPK-DS-50 écrits avant le code. À mesurer sur la VM : le nom `SLA_…` accept�
   — `pnpm` est absent de ce poste — mais `src/types.d.ts` n'est pas versionné.
 - **Reste** : mesurer sur la VM que le vrai Incus accepte `SLA_…` ; SPK-183, l'écran.
 
+## 2026-11-18 · SPK-184 à SPK-186 : la santé d'un Spark
+
+**Demande du responsable** : un onglet « Santé » par Spark, qui exécute soit un script soit une requête
+HTTPS ; une erreur passe par l'alerte hors bande ; une entrée se suggère par `health.?` ; il était
+« dispo pour en débattre ».
+
+**Débat, et arbitrages.** Trois formes de sonde ont été proposées : depuis la Forge vers une route du Spark
+(A), depuis la Forge vers une URL quelconque (B), dans la cellule (C). Le responsable retient **A et C**,
+un **seuil d'échecs par ligne**, une **cadence par ligne en chaîne crontab « au 5 minutes près »**, et
+note qu'un type « Docker natif » est superflu puisqu'un script s'exécute dans le Spark et peut lancer un
+conteneur ad hoc ou interroger Docker.
+
+**Observations dans le code.**
+- Rien n'existe pour la santé. Le diagnostic des routes (SPK-130) sonde Caddy et le certificat **par la
+  boucle locale**, à la demande, sans mémoire ni alerte : la nouvelle sonde reprend cette méthode.
+- Le canal hors bande (§47) est **fermé et réservé aux gestes graves** ; il exclut le `runtime`. Une sonde
+  qui échoue toutes les 5 minutes l'inonderait : l'alerte part à la **transition**, jamais au relevé, et
+  les deux actions entrent dans la liste fermée avec une exception nommée.
+- Une entrée écrite par un agent et exécutée par la Forge est une requête choisie par un locataire. La
+  boucle locale à adresse fixe — seul le nom varie — la rend sûre **par construction** et supprime le
+  besoin des garde-fous d'une SSRF ; elle ne voit pas le DNS.
+
+**Décisions du rédacteur, à confirmer** (DAT §75.11) : boucle locale sans résolution DNS ; « au 5 minutes
+près » = écart minimal de 5 minutes ; jokers refusés ; alerte de rétablissement ; pas de répétition ;
+script sans l'environnement de la pile ; cellule arrêtée sans alerte.
+
+**Limites assumées, dites au contrat.** SPK-62 est encore `[~]` : la fonctionnalité repose sur un canal pas
+entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§75.7).
+
+**Conséquences.** SPK-184 (service), SPK-185 (`health.?`) et SPK-186 (écran) ouvertes ; DAT §75, SCHEMA
+§8 quater et SPK-DS-51 écrits avant le code. Aucun code, aucune variable d'environnement.
+

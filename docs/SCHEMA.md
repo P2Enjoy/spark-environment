@@ -398,6 +398,54 @@ ALTER TABLE snapshot ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'
   `origin = 'sla'`. Les lignes existantes valent `manual`, et rien ne les réécrit.
 - Aucun secret, aucune valeur métier en dur : les bornes de rétention sont celles du `CHECK`.
 
+## 8 quater. `health_check` et `health_result` : la santé d'un Spark (contrat, SPK-184 — non livré)
+
+*Contrat écrit le 2026-11-18, avant le code. La migration prend le numéro suivant au moment de
+l'écrire.*
+
+```sql
+CREATE TABLE health_check (
+    id                    TEXT    PRIMARY KEY,
+    spark_id              TEXT    NOT NULL REFERENCES spark(id) ON DELETE CASCADE,
+    name                  TEXT    NOT NULL,
+    kind                  TEXT    NOT NULL CHECK (kind IN ('http', 'script')),
+    target                TEXT    NOT NULL,           -- http : domaine + chemin ; script : la commande
+    expected              INTEGER NOT NULL,           -- http : statut ; script : code de sortie
+    schedule              TEXT    NOT NULL,           -- crontab à cinq champs, UTC, écart ≥ 5 min
+    threshold             INTEGER NOT NULL CHECK (threshold BETWEEN 1 AND 20),
+    enabled               INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    state                 TEXT    NOT NULL DEFAULT 'unknown' CHECK (state IN
+                              ('unknown', 'healthy', 'unstable', 'down', 'stopped')),
+    consecutive_failures  INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0),
+    state_since           TEXT,
+    next_run_at           TEXT,                       -- UTC ; NULL tant que suspendu
+    last_run_at           TEXT,
+    last_latency_ms       INTEGER,
+    last_detail           TEXT,                       -- motif court, jamais un corps de réponse
+    created_at            TEXT    NOT NULL,
+    updated_at            TEXT    NOT NULL,
+    UNIQUE (spark_id, name)
+);
+
+CREATE TABLE health_result (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    check_id    TEXT    NOT NULL REFERENCES health_check(id) ON DELETE CASCADE,
+    run_at      TEXT    NOT NULL,
+    ok          INTEGER NOT NULL CHECK (ok IN (0, 1)),
+    latency_ms  INTEGER,
+    detail      TEXT
+);
+CREATE INDEX health_result_par_sonde ON health_result (check_id, id);
+```
+
+- **Un nom par Spark** ; supprimer le Spark supprime ses sondes et leur historique.
+- **`health_result` est borné** : au plus 100 relevés par sonde, les plus anciens supprimés à
+  l'écriture. Une table qui grossit sans borne finit par peser plus que ce qu'elle surveille.
+- **Aucun corps de réponse, aucune sortie de script complète n'est stockée** : `detail` est un motif
+  court (`HTTP 503`, `délai dépassé`, `code de sortie 2`).
+- **L'état « suspendu »** n'est pas un état : c'est `enabled = 0`. Une sonde suspendue garde son
+  dernier état connu, daté.
+
 ## 9. `audit_log`
 
 `id`, `ts`, `actor`, `actor_class`, `action`, `target_type`, `target_id`,

@@ -9307,6 +9307,63 @@ instantanés » et la modale qui la règle.
   captures observées (desktop, mobile, états : sans SLA, actif, suspendu, en échec, aperçu de
   suppression) ; manuel M9, seed et changelog à jour.
 
+### [ ] SPK-184 · La santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes
+
+**Demandé le 2026-11-18** par le responsable : un onglet « Santé » par Spark, qui exécute soit
+une requête HTTPS soit un script et, **en erreur, passe par l'alerte hors bande**. Débattu avec
+lui le même jour ; arbitrages : sondes depuis la Forge **vers les routes du Spark** (A) **et**
+scripts **dans la cellule** (C) ; **seuil d'échecs par ligne** ; **cadence par ligne**, en
+chaîne crontab, « au 5 minutes près » ; pas de type « Docker natif » — un script s'exécute dans
+le Spark et peut interroger Docker lui-même.
+
+Cette unité est le **service** : le modèle, les deux exécuteurs, le planificateur, la machine à
+états, l'intégration à la notification hors bande et l'API. La paire `health.?` est SPK-185,
+l'écran SPK-186.
+
+- Spécification : `docs/DAT.md` **§75** · §47 (la notification hors bande), §18.7 (la sonde par la
+  boucle locale) · `docs/SCHEMA.md` **§8 quater** · `docs/JOURNAL.md` 2026-11-18.
+- Dépend de : SPK-62 (le canal hors bande — **encore `[~]`**), SPK-130 (la sonde Caddy par la
+  boucle locale), SPK-43 (l'exécution dans une cellule), SPK-182 (l'analyseur crontab).
+- Portée : migration (`health_check`, `health_result`) ; l'analyseur crontab généralisé à un écart
+  minimal par appelant ; sonde HTTPS par la boucle locale, vers un domaine **déclaré par le Spark** ;
+  script exécuté dans la cellule sous le compte de la pile ; un planificateur à pool borné ; la
+  machine à états (inconnu, sain, instable, en panne, arrêté, suspendu) ; `health.down` et
+  `health.up` ajoutés à la liste fermée du §47.2, avec leur exception nommée ; l'API
+  (lister, poser, tester, suspendre, retirer).
+- DoD : preuve rouge avant correction ; tests unitaires (machine à états, grammaire de cible,
+  validation) ; API contre le vrai registre — y compris les refus par requête directe (domaine qui
+  n'est pas une route du Spark, joker, Spark protégé, cadence trop rapprochée, seuil hors bornes) ;
+  une sonde HTTPS et un script réels contre le doublon ; une alerte réellement émise vers un canal
+  d'épreuve ; migration et `docs/PROD_MIGRATIONS.md` à jour.
+
+### [ ] SPK-185 · La paire `health` / `health.?` : l'agent propose une sonde
+
+Suite de SPK-184 : le fichier réel `/etc/spark/health`, régénéré depuis le registre, et sa
+proposition `/etc/spark/health.?`, comme les six paires du DAT §55.
+
+- Spécification : `docs/DAT.md` **§75.9** · §55 (le fichier `.?`), §55.3 (ce qu'une acceptation fait),
+  §55.6 (qui propose, qui décide), §55.7 (ce que les fichiers disent à un agent).
+- Dépend de : SPK-184, SPK-105.
+- Portée : la septième paire ; la grammaire d'une ligne ; la validation côté serveur avant toute
+  acceptation ; l'en-tête qui apprend la grammaire à l'agent ; le dossier et le brief.
+- DoD : tests unitaires de la grammaire ; API (une proposition ne pose rien, ne retire rien, écarter
+  n'est pas refuser) ; la proposition d'un script se montre avec sa commande exacte.
+
+### [ ] SPK-186 · L'onglet « Santé » dans la console
+
+Suite de SPK-184 et SPK-185 : la facette « Santé » de la fenêtre d'un Spark.
+
+- Spécification : `docs/DAT.md` **§75.10** · `docs/DESIGN_SYSTEM.md` §1.3, §1.5, §6.9, §6.13, §6.23,
+  §6.27, §9, §14.6 · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-51** · manuel.
+- Dépend de : SPK-184, SPK-185.
+- Portée : la liste des sondes (état, dernier relevé, latence, durée, échecs consécutifs sur seuil,
+  frise des derniers résultats) ; la bannière des propositions ; la modale (HTTPS ou script, route,
+  chemin, cadence avec son menu, seuil) et son bouton « Tester » ; suspendre, reprendre, retirer ;
+  la mention de l'absence de canal d'alerte ; le seed ; le manuel.
+- DoD : tests unitaires de composant ; E2E depuis l'accueil, à la souris et au clavier ; captures
+  observées (desktop, mobile, sans sonde, sain, instable, en panne, arrêté, proposition) ; manuel,
+  seed et changelog à jour.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

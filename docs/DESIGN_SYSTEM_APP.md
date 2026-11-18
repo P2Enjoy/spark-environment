@@ -327,6 +327,58 @@ la provenance se **lit**, elle ne se déduit pas d'un nom. Les instantanés manu
 commande d'origine ; une prise, un échec ou une suppression qui change l'écran est annoncé
 (`role="status"` / `role="alert"`). Aucune information ne repose sur la couleur seule (§1.5).
 
+### SPK-DS-51 · La facette « Santé » : un état qui se lit en texte, et un échec qui ne crie pas
+
+Date : 2026-11-18 · `docs/DAT.md` §75 · `docs/DESIGN_SYSTEM.md` §1.3, §1.5, §6.9, §6.13, §6.23, §6.27,
+§9.7, §14.6.
+
+**La liste.** Une sonde par ligne d'une liste administrable (§6.19), pas un tableau : ses attributs
+qualifient la sonde sans former des colonnes comparables. Chaque ligne porte :
+
+- le **nom** et le **type** (« HTTPS » ou « Script ») ;
+- l'**état**, en pastille **et en texte** (§1.5) : « Sain » (`success`), « Instable » (`accent` :
+  un retard, pas une panne), « En panne » (`danger`), « Arrêté » et « Suspendu » (`neutral` : un
+  Spark arrêté n'est pas malade), « Jamais relevé » (`neutral`, §14.6) ;
+- pour une sonde instable, les **échecs sur le seuil** (« 2 échecs sur 3 ») ;
+- le **dernier relevé**, sa **latence**, et **depuis quand** l'état dure ;
+- le **motif court** de la dernière erreur, tel que le serveur le donne ;
+- une **frise** des derniers relevés : une suite de repères, **ronds pleins pour un succès, croix pour
+  un échec** — la forme porte ce que la couleur dit déjà (§1.5), et la frise a un équivalent textuel
+  (« 18 réussis sur les 20 derniers »).
+
+**Ce que la facette ne fait pas.** Aucune alerte sonore, aucun clignotement, aucune bannière rouge plein
+cadre : la panne se lit, elle ne crie pas. Les alertes partent par le canal hors bande, pas par l'écran.
+
+**L'absence nommée.** Sans sonde : « Aucune sonde : rien ne surveille ce Spark », avec la seule commande
+qui a un objet, **Ajouter une sonde** (§6.13, §1.4). Sans canal d'alerte configuré, la facette le dit
+**une fois**, sous le titre : « Aucun canal d'alerte n'est configuré : une panne ne se verra qu'ici », avec
+le renvoi vers l'onglet Alertes de la Forge (§47.6).
+
+**La modale** (§6.27), nommée comme la facette :
+
+- **« Type »** : HTTPS ou Script ;
+- **HTTPS** : un **`select` des routes du Spark** — jamais un champ libre : une adresse qui ne peut pas
+  être autre chose qu'une route du Spark ne se saisit pas, elle se choisit (§1.4) — un **chemin**, le
+  **statut attendu** ; un joker n'apparaît pas dans la liste ;
+- **Script** : la **commande**, en `technique`, et le **code de sortie attendu** ; une ligne d'aide dit
+  **sous quel compte** elle s'exécutera (« s'exécute dans la cellule, sous `root` / sous le compte de la
+  pile »), jamais en le laissant à choisir ;
+- **Cadence** : le **même couple menu + chaîne crontab** que le SLA (SPK-DS-50), avec la phrase lisible et
+  les trois prochains relevés ; l'écart minimal (5 minutes) est dit dans l'aide ;
+- **Seuil d'échecs** : un champ numérique, avec l'aide « nombre d'échecs consécutifs avant l'alerte » ;
+- **« Tester »** : exécute la définition **une fois, sans rien enregistrer**, et affiche le résultat dans la
+  modale (`role="status"`) — succès, ou échec avec son motif. Un test n'est pas un relevé : il ne touche
+  ni l'état ni l'alerte, et la modale le dit.
+
+**Les propositions** (`health.?`) : la bannière des autres facettes (SPK-DS-27) ; une ligne `script` se
+montre **avec sa commande exacte** et le compte qui l'exécutera, jamais résumée.
+
+**Retirer** une sonde demande une confirmation dans le flux (§6.22) qui dit que son historique disparaît.
+**Suspendre** et **reprendre** sont réparateurs, sans confirmation (§6.24).
+
+**Accessibilité.** Tout est au clavier ; un changement d'état affiché est annoncé en `role="status"` ;
+l'état n'est jamais porté par la couleur seule.
+
 ### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
 
 Les mesures d'un Spark viennent du runtime et se comparent à ses quotas

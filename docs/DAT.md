@@ -18236,3 +18236,212 @@ réel contre `FakeIncus`, applique la rétention, rattrape une occurrence échue
 échec, saute un Spark sans cellule. Le seed pose un SLA et ses instantanés **par le même
 planificateur**, à des instants simulés (CLAUDE.md §8), et jamais par une écriture directe.
 
+
+## 75. La santé d'un Spark : sondes HTTPS, scripts, états et alertes : contrat (SPK-184 à SPK-186)
+
+*Contrat écrit le 2026-11-18, avant le code, après un débat avec le responsable. Ce qui est du
+responsable est au §75.1 ; ce qui est du rédacteur, et à confirmer, au §75.11.*
+
+### 75.1 La demande, et les arbitrages
+
+Le responsable : un onglet **Santé** par Spark, qui exécute **soit un script soit une requête
+HTTPS** et, **si une sonde est en erreur, passe par l'alerte hors bande** ; « toujours la même
+mécanique » : une entrée se **suggère** par un fichier `health.?`.
+
+Arbitrages du débat :
+
+1. **A et C** : la sonde HTTPS part de la Forge vers une route du Spark (A) ; le script s'exécute
+   dans la cellule (C).
+2. **Le seuil d'échecs est par ligne** : chaque sonde dit combien d'échecs consécutifs la mettent
+   « en panne ».
+3. **La cadence est par ligne**, en chaîne crontab, **« au 5 minutes près »** : lu comme **un écart
+   minimal de 5 minutes** entre deux relevés (§75.4).
+4. **Pas de type « Docker natif »** : un script s'exécute dans le Spark et interroge Docker lui-même
+   (`docker inspect` sur un `HEALTHCHECK`, `docker compose exec …`).
+
+### 75.2 Deux types de sonde
+
+| Type | Où | Ce qu'elle dit | Succès |
+|---|---|---|---|
+| **`http`** | depuis la Forge, par la boucle locale, vers un domaine **que le Spark déclare** | Caddy, le certificat et l'application répondent | le statut attendu |
+| **`script`** | **dans la cellule**, sous le compte de la pile | ce que le script sait vérifier (une base, un volume, un conteneur) | le code de sortie attendu |
+
+### 75.3 La sonde HTTPS : l'adresse est fixe, seul le nom varie
+
+C'est ce qui rend la sonde sûre, et ce n'est pas un détail. Une entrée écrite par un agent, exécutée
+par la Forge, est une requête sortante **choisie par un locataire** : si elle pouvait viser
+`127.0.0.1:2019` (l'API de Caddy), la Forge elle-même ou l'intérieur d'un autre Spark que l'isolation
+protège (§57), ce serait une faille de type SSRF.
+
+La sonde **se connecte toujours à `127.0.0.1:443`**, comme le diagnostic des routes (§18.7). Seuls
+varient le nom TLS (SNI) et l'en-tête `Host`. Le DNS n'est **jamais résolu** : il ne peut donc rien
+rediriger. Les règles qui en découlent :
+
+- le **domaine doit être celui d'une route non joker du Spark**, lue au registre à chaque relevé ;
+  un domaine qui n'en est pas — ou une route retirée depuis — est un refus, pas un relevé ;
+- **un joker est refusé** : le nom visé pourrait être capté par la route plus spécifique d'un autre
+  Spark (§18.3 bis), et la sonde jugerait le mauvais Spark ;
+- méthode **`GET`**, port 443, **aucune redirection suivie** (une redirection est un échec, sauf si
+  elle est le statut attendu), **aucun corps envoyé**, aucun identifiant dans l'adresse ;
+- le **certificat est vérifié comme un navigateur** : un certificat invalide est une panne, et le
+  motif le dit ;
+- **le corps de la réponse n'est jamais lu au-delà de l'en-tête**, ni stocké ;
+- délai de **10 secondes**, constante du code.
+
+Ce que cela **ne teste pas** : le DNS. Il a son propre relevé (§38.9). Une panne de DNS n'est pas vue
+ici, et le dire à l'écran vaut mieux que de le laisser croire.
+
+### 75.4 La cadence : une chaîne crontab, 5 minutes au plus serré
+
+La même grammaire que le SLA (§74.3), par ligne, lue en UTC. **L'écart minimal entre deux relevés est de
+5 minutes** (constante du code ; celle du SLA reste à 15) : l'analyseur reçoit désormais l'écart
+minimal en paramètre. Une sonde toutes les minutes coûterait une requête, une ligne d'historique et
+une chance de faux positif de plus, sans rien apprendre de mieux. Le menu déroulant de l'écran propose
+les cadences courantes : toutes les 5 minutes (`*/5 * * * *`), toutes les 15, toutes les heures.
+
+### 75.5 Le script : dans la cellule, sous le compte de la pile
+
+Exécuté dans la cellule par le même chemin que le terminal (§37), donc **seulement si la cellule
+tourne**.
+
+- **Le compte** n'est pas un choix de la ligne : c'est celui qui fait tourner la pile — `root` sur un
+  Spark enraciné, le compte rootless sur un Spark rootless (§42.10, SPK-95). C'est ce qui permet à un
+  script d'atteindre le socket Docker. Une ligne ne peut pas demander un autre compte.
+- **Ce qui est vérifié** : le code de sortie (0 par défaut). Délai de **60 secondes**, au-delà
+  l'exécution est tuée et la sonde échoue (`délai dépassé`).
+- **Ce qui est gardé** : un motif court. **La sortie du script n'est ni stockée ni envoyée** — elle
+  peut contenir un secret —, et jamais portée dans une alerte.
+- **L'environnement** : celui d'un shell de connexion du compte, rien de plus. Les variables de la pile
+  ne sont pas injectées ; un script qui en a besoin les lit où la pile les lit.
+- **Ressources** : le script consomme le quota du Spark comme n'importe quel processus de la cellule.
+  Rien de plus n'est alloué pour lui.
+
+Un script est du **code exécuté sans qu'une personne regarde**. L'agent peut déjà le faire dans sa
+cellule : ce que la sonde ajoute, c'est la **persistance** et le **déclenchement par la Forge**. D'où le
+traitement de l'acceptation (§75.9) : la commande exacte se montre.
+
+### 75.6 La machine à états
+
+Par sonde : `unknown` → `healthy` | `unstable` | `down` | `stopped`.
+
+- **Un succès** remet le compteur d'échecs à zéro : l'état devient `healthy`.
+- **Un échec** l'incrémente. Tant qu'il est **inférieur au seuil**, l'état est **`unstable`** (« 2 échecs
+  sur 3 ») : visible, **sans alerte**. À **seuil atteint**, l'état devient **`down`**.
+- **Un Spark arrêté** met la sonde en **`stopped`** : une cellule arrêtée volontairement n'est pas
+  malade, et **rien n'est alerté**. Au redémarrage le compteur repart de zéro.
+- **Une sonde suspendue** (`enabled = 0`) ne relève rien et garde son dernier état, daté.
+- Le premier relevé d'une sonde neuve n'alerte pas : `unknown` → `down` n'existe qu'après le seuil
+  d'échecs.
+
+### 75.7 L'alerte : une transition, pas un relevé
+
+Le canal hors bande (§47) est conçu pour les **gestes graves et rares** ; il exclut les lignes du
+`runtime` parce qu'un canal qui crie tout le temps n'est plus lu (§47.2). Une sonde qui échoue toutes
+les 5 minutes ferait exactement le contraire. Donc :
+
+- **une alerte à chaque transition seulement** : `health.down` quand l'état devient `down`,
+  `health.up` — « rétabli » — quand il quitte `down` pour `healthy`. **Pas de répétition** tant que la
+  panne dure ;
+- les deux actions sont **ajoutées à la liste fermée** du §47.2, avec une **exception nommée** pour la
+  classe `runtime` — comme `forge.shell_refused` l'est pour les refus : la liste reste énumérée, jamais
+  déduite d'un motif ;
+- **le message porte** le Spark, le nom de la sonde, son type, depuis quand, le nombre d'échecs, le
+  **motif court** (§75.3, §75.5). **Jamais** un corps de réponse, une sortie de script, une adresse
+  interne (§47.4) ;
+- **un canal absent ou injoignable ne fait jamais échouer un relevé** (§47.5) : l'état est écrit, la ligne
+  d'audit aussi, et l'écran dit qu'aucune alerte n'est partie (§47.6) ;
+- les lignes d'audit portent l'acteur `sante`, de classe `runtime` ;
+- **SPK-62 est encore `[~]`** : le canal n'est pas entièrement prouvé sur une Forge réelle. Cette
+  fonctionnalité repose dessus, et ses preuves s'arrêtent là où les siennes s'arrêtent.
+
+**Qui surveille le surveillant ?** Si `sparkd` ou la Forge tombe, plus aucune sonde ne part et plus aucune
+alerte non plus : le silence ressemble à la santé. C'est une **limite assumée de cette unité**, qui ne
+la couvre pas. Un battement vers un service extérieur — « la Forge n'a pas donné signe de vie » — la
+couvrirait ; il demande un service que le produit ne possède pas.
+
+### 75.8 Le planificateur et l'API
+
+Un fil de plus, `sparkd-sante`, sur le patron du SLA (§74.5) : sa propre connexion au registre, une panne
+comptée et reprise, un pas fixé par la décision. Les relevés échus sont exécutés par un **pool borné de
+quatre** : une sonde de 10 secondes ne retarde pas les autres, et un Spark qui en porte vingt ne monopolise
+pas la Forge. **Au plus 20 sondes par Spark.**
+
+- `GET /v1/sparks/{nom}/health` : les sondes, leur état, leurs derniers relevés ;
+- `PUT /v1/sparks/{nom}/health/{sonde}` : pose ou modifie, validée entièrement côté serveur ;
+- `POST /v1/sparks/{nom}/health/test` : **exécute une définition une fois, sans rien écrire**, et rend le
+  résultat ; ni compteur, ni état, ni alerte. C'est la simulation qui précède l'écriture, comme l'aperçu du
+  §74.7 ;
+- `POST /v1/sparks/{nom}/health/{sonde}/{suspend|resume}` ; `DELETE /v1/sparks/{nom}/health/{sonde}`.
+
+**Autorisation (CLAUDE.md §10).** Poser, modifier, suspendre, retirer sont des **écritures** : refusées sur un
+Spark **protégé** (§35). **Les relevés, eux, continuent** : sonder ne modifie rien du Spark et surveille
+justement ce qu'on a protégé. Lire est ouvert.
+
+### 75.9 La paire `health` / `health.?` (SPK-185)
+
+Une septième paire au §55.3 :
+
+| Fichier réel — posé par le plan de contrôle | Proposition | Ce qu'elle fait à l'acceptation |
+|---|---|---|
+| `/etc/spark/health` | `/etc/spark/health.?` | **ajoute ou remplace** des sondes, **ligne par ligne**, par nom |
+
+Comme les autres : le fichier réel est **régénéré** depuis le registre — il porte les sondes actives et
+leur dernier état, en commentaire, pour que l'agent voie si sa demande a été accordée —, l'écrire à la main
+n'a aucun effet durable, et **aucune proposition ne retire** : retirer reste un geste du propriétaire.
+
+**Grammaire, une ligne par sonde** (positionnelle ; la cible va en dernier parce qu'une commande contient
+des espaces) :
+
+```
+# nom   type    cadence (5 champs)  seuil  attendu  cible…
+api     http    */5 * * * *         3      200      https://app.example.com/healthz
+base    script  */10 * * * *        2      0        docker compose -f /srv/app/compose.yml exec -T db pg_isready
+```
+
+- `http` : la cible est `https://<domaine>/<chemin>` ; **un domaine, un chemin, rien d'autre**
+  (§75.3) ; l'attendu est un statut HTTP ;
+- `script` : la cible est la commande, jusqu'à la fin de la ligne ; l'attendu est un code de sortie ;
+- l'en-tête du fichier apprend cette grammaire à l'agent (§55.7).
+
+**Valider avant d'accepter.** Chaque ligne est validée par le serveur : un domaine qui n'est pas une route du
+Spark, un joker, une cadence trop rapprochée, un seuil hors bornes sont **refusés avec leur raison, ligne
+par ligne**. **Une ligne `script` se montre avec sa commande exacte et le compte qui l'exécutera**, par la
+comparaison ligne à ligne de SPK-131 : accepter, c'est autoriser l'exécution répétée de ce texte.
+
+### 75.10 Ce que la console en fait (SPK-186)
+
+Une facette **« Santé »** de la fenêtre d'un Spark. Elle montre, par sonde : l'état (en couleur **et** en
+texte), le dernier relevé et sa latence, depuis quand, les échecs consécutifs sur le seuil (« 2 échecs sur
+3 »), une frise des derniers résultats. Une bannière annonce les propositions de `health.?`. La modale
+règle une sonde (type, route et chemin ou commande, cadence avec son menu, seuil, attendu) et porte un
+bouton **« Tester »**. Quand aucun canal d'alerte n'est configuré, la facette le dit : sans canal, une
+panne ne se verrait qu'ici. Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-51.
+
+### 75.11 Décisions du rédacteur, à confirmer par le responsable
+
+1. **La sonde HTTPS passe par la boucle locale, sans résoudre le DNS** (§75.3) : elle ne peut rien viser
+   d'autre qu'une route du Spark, au prix de ne pas voir une panne de DNS. L'alternative — résoudre le nom
+   publiquement — testerait plus de couches mais rouvrirait la redirection par le DNS.
+2. **« Au 5 minutes près » lu comme un écart minimal de 5 minutes** (§75.4).
+3. **Les jokers sont refusés** (§75.3).
+4. **Seuil de 1 à 20, 20 sondes par Spark au plus, 100 relevés gardés par sonde.**
+5. **Une alerte de rétablissement** (`health.up`), en plus de celle de la panne.
+6. **Pas de répétition** de l'alerte tant que la panne dure. Un rappel après un délai serait une option
+   naturelle, qui ajoute une règle de plus.
+7. **Un script ne reçoit pas l'environnement de la pile** (§75.5).
+8. **Une cellule arrêtée n'alerte pas** (§75.6).
+9. **Un seul exécuteur** de scripts dans la cellule : le jour où les jobs d'un Spark seraient exposés
+   (`docs/EXPLORATION_JOBS.md`), il servirait les deux.
+
+### 75.12 Preuves attendues
+
+Unitaires : la machine à états (seuil, instable, panne, rétablissement, arrêté, suspendu, premier relevé),
+la grammaire et ses refus ligne par ligne, la validation du domaine (route du Spark, joker, domaine
+étranger, adresse IP, port, identifiants, schéma), l'écart minimal de 5 minutes. API contre le vrai
+registre : refus par requête directe (Spark protégé, domaine étranger, joker, cadence, seuil), `test` sans
+écriture. Intégration : une sonde HTTPS réelle par la boucle locale contre un serveur d'épreuve ; un script
+réel contre le doublon ; une alerte réellement émise vers un canal d'épreuve, **une seule** pour toute une
+panne, puis une de rétablissement ; un Spark arrêté qui n'alerte pas ; un canal injoignable qui ne fait pas
+échouer le relevé. Le seed pose les états que l'écran doit montrer — sain, instable, en panne, arrêté —
+**par le même planificateur**, jamais par une écriture directe.
+
