@@ -15532,3 +15532,61 @@ donne pas de fenêtre de mesure CPU stable en 30 s, donc l'E2E accepte « Mesure
 ou « N cœurs » et l'état mesuré reste prouvé en unitaire. Les illustrations du manuel
 ont été régénérées (`make manuel`) et seules celles qui montrent la liste sont conservées.
 
+
+## 2026-11-18 · `spark-010` : signataires autorisés posés, puis montée de 24.04 à 26.04
+
+**Signataires autorisés (SPK-172).** L'ajout d'une image au catalogue échouait : « Aucun
+fichier de signataires autorisés n'est configuré sur cette Forge ». La console signe avec
+la clé déclarée pour `spark-010` dans `servers.json`, et aucune étape du produit n'écrit
+`allowed_signers` ; sur `spark-experiment`, le fichier avait été posé à la main le
+2026-09-14. Posé sur `spark-010` : la ligne `console/spark-010 namespaces="spark-audit"`
+suivie de la clé publique, déjà autorisée sur `spark-experiment`, dans
+`/etc/sparkd/allowed_signers`, et `SPARKD_ALLOWED_SIGNERS=/etc/sparkd/allowed_signers` dans
+`sparkd.env` (ancienne copie : `sparkd.env.avant-signataires`). Le principal est
+`console/<nom du serveur dans la console>` (`signature.principal`) : une première ligne
+recopiée telle quelle, `console/spark-experiment`, n'aurait rien autorisé. **Vérifié** : une
+signature `spark-audit` de la clé est acceptée par `ssh-keygen -Y verify -I
+console/spark-010`. Le réglage survit à la réinstallation de sparkd.
+
+**Montée en version, demandée par le responsable** (« notre cible d'origine est 26.04 »).
+Gestes et constats, dans l'ordre :
+1. Redémarrage sur le noyau 6.8.0-149, qui était en attente. Purge des noyaux 142 et 146 :
+   `/boot`, une partition de 469 Mo, passe de 148 à 318 Mo libres.
+2. `do-release-upgrade -f DistUpgradeViewNonInteractive`, détaché sur la machine. Il
+   **s'interrompt** : `grub-efi-amd64-signed` lance `grub-install --target=x86_64-efi` →
+   « cannot find EFI directory », et `shim-signed` reste non configuré. Le système est
+   déjà en 26.04, noyau 7.0 installé. Pendant la montée, `/usr/bin/sudo` disparaît un
+   moment : `sudo` est remplacé par `sudo-rs`.
+3. **Cause** : le script ne lance l'installation EFI que si `/boot/grub/x86_64-efi/core.efi`
+   existe. L'image de l'hébergeur l'y a laissé, sur une machine qui démarre en **BIOS**
+   (`/sys/firmware/efi` absent, aucune partition EFI). apt refuse de retirer
+   `shim-signed`, protégé (`Protected: yes`), et `--allow-remove-essential` n'a pas été
+   employé. Le fichier orphelin est **déplacé** dans `/root/grub-efi-orphelin/`, puis
+   `dpkg --configure -a` passe, et `dist-upgrade` ne trouve plus rien à faire.
+4. `grub-install --target=i386-pc` sur les deux disques (par identifiant), puis
+   `update-grub` : l'entrée par défaut est le noyau 7.0.0-43. Avant de redémarrer, il est
+   vérifié que l'image de démarrage porte `raid1` et `mdadm`, et que le module ZFS 2.4.1
+   existe pour ce noyau.
+5. Redémarrage : 26.04.1, noyau 7.0, `md0`/`md1` sains, pool `ONLINE`, module ZFS 2.4.1.
+   **sparkd ne démarre plus** : son environnement Python a été construit en 3.12, et
+   `python3` est maintenant 3.14 (`ModuleNotFoundError: No module named 'sparkd'`).
+6. L'environnement est mis de côté (`/root/sparkd-venv-py312`), et `sudo
+   /opt/spark-amorce.sh` est rejoué sans `--pool-source`. L'amorce reconstruit
+   l'environnement, réécrit le dépôt Zabbly pour `resolute`, que la montée avait désactivé
+   et laissé sur `noble`, et installe Incus `7.6-ubuntu26.04`. Elle réinstalle sparkd
+   depuis `main` (`be5c71024`). Recette finale : 17 sur 17.
+7. Dernier redémarrage de contrôle : tout revient sans geste. Pool sain, `sparkd`,
+   `caddy-api` et `incus` actifs, `/healthz` ok, `/readyz` ready, préflight 17 sur 17 sans
+   signalement. Aucun redémarrage requis, aucune mise à jour en attente.
+
+**Non fait, volontairement** : `zpool upgrade`. ZFS 2.4.1 propose de nouvelles
+fonctionnalités, mais un pool mis à niveau ne s'importe plus avec un ZFS plus ancien, et
+rien ne l'exige.
+
+**Conséquences.**
+- `spark-010` tourne sur la plateforme visée par le produit (README : Ubuntu 26.04.1,
+  noyau 7.0, ZFS 2.4.1).
+- Une montée de version majeure d'Ubuntu **casse l'environnement Python de sparkd**, et
+  rejouer l'amorce ne le répare que si on l'a d'abord mis de côté. → SPK-173.
+- Sur l'offre EM-B311X-SATA, la procédure qui marche est donc : installation en 24.04 sans
+  pool déclaré, puis montée en 26.04 avec les étapes 3 et 6 ci-dessus.

@@ -9974,6 +9974,26 @@ avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS
 - Dépend de : SPK-40.
 - DoD : preuve qu'une Forge neuve accepte la première signature de la console sans geste
   manuel ; refus d'une clé non déclarée toujours prouvé ; runbook à jour.
+
+### [ ] SPK-173 · Une Forge survit à la montée de version majeure d'Ubuntu
+
+**Constaté le 2026-11-18 sur `spark-010`** (24.04 → 26.04, journal du jour). Deux gestes
+manuels ont été nécessaires :
+1. **sparkd ne redémarre plus** : `/opt/sparkd/venv` est lié à l'interpréteur de la version
+   d'origine (3.12), et `python3` devient 3.14. Rejouer l'amorce ne suffit pas tant que
+   l'environnement existe (`[ -x /opt/sparkd/venv/bin/python ]` reste vrai). Il faut
+   d'abord le mettre de côté.
+2. **Le dépôt Zabbly** est désactivé par la montée et reste sur `noble`. Rejouer l'amorce
+   le réécrit pour la nouvelle version.
+
+Hors produit, mais sur la même machine : un `core.efi` laissé par l'image de l'hébergeur
+fait échouer `grub-efi-amd64-signed` sur une machine BIOS. Déplacé à la main.
+
+- Spécification : **à écrire** — `docs/DAT.md` (ce que l'amorce ou le préflight vérifie
+  après une montée : l'environnement Python correspond à l'interpréteur ; le dépôt Incus
+  correspond à la version) et `docs/AGENT_RUNBOOK.md` (la procédure de montée).
+- Dépend de : SPK-159.
+- DoD : test unitaire de la détection ; procédure du runbook jouée sur une Forge réelle.
 ---
 
 ## Lot 9 — La sauvegarde externe des instantanés
