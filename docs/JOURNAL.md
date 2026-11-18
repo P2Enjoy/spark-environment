@@ -16141,3 +16141,14 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   (`app.py`, `health.py`, `sla.py`, DAT, backlog). Les commits ont été faits **hunk par hunk** : seules mes lignes d'`app.py` sont
   entrées dans le commit `b751ebf` ; les siennes sont restées dans l'arbre de travail.
 
+**SPK-189 : l'aperçu du SLA dit où tombent les prises — contrat écrit le 2026-11-19, avant le code.**
+
+- **Demande du responsable** : voir, en programmant un SLA, le taux d'occupation des trois prochaines prises, et pouvoir recalculer
+  un autre horaire. Elle prolonge SPK-188, que la session voisine vient de livrer : la charge de la semaine existe déjà
+  (`charge_semaine`, 672 tranches) ; l'aperçu en tire `load` pour **ses** trois prises.
+- **« Taux d'occupation » a dû être défini** : rien dans la machine ne mesure une capacité. Il est relatif à la tranche la plus
+  chargée de la semaine des **autres** SLA (100 % = le pire créneau actuel), et on compte des débuts de prise, pas des durées.
+  À confirmer par le responsable (DAT §74.14).
+- **Le SLA du Spark qu'on édite est exclu** : sa politique en place est celle qu'on remplace.
+- **Le bouton ne remplace que minute et heure** ; une fréquence plus fine qu'un jour devient quotidienne, et l'écran le dit.
+

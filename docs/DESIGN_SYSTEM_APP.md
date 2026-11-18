@@ -2236,6 +2236,28 @@ lui est rendu s'il venait de lui (§14.3). Aucune actualisation en tâche de fon
 **Accessibilité.** Tout se fait au clavier : onglets (liens), liens de ligne, « Relire ». Les titres ne sautent pas de niveau
 (§9.3). Une relecture annonce le résultat en `role="status"`. Aucun état ne repose sur la couleur seule.
 
+### SPK-DS-55 · L'aperçu du SLA : le taux d'occupation de chaque prise, et un horaire qui se recalcule
+
+Date : 2026-11-19 · `docs/DAT.md` §74.14 · `docs/DESIGN_SYSTEM.md` §1.5, §6.27, §14.3, §14.6.
+
+**Sous chaque prise du survol, une barre.** Une jauge fine (`.charge`, `role="img"`, un équivalent texte en `aria-label`) dont la
+largeur est le **taux d'occupation** de la tranche de 15 minutes, et **à côté, la phrase** : « aucune autre prise dans cette
+tranche (00:00–00:15 UTC) » ou « 2 autres prises dans cette tranche : crm-production, gram · 100 % ». Le nombre et les noms sont le
+texte : **la couleur ne porte jamais seule** (§1.5). La barre est en **bleu primaire** (`--color-primary`), jamais en rouge — une
+collision est un fait, pas un refus du serveur (SPK-DS-08) —, sur un fond neutre.
+
+**Une légende, une fois**, sous la liste : « Taux d'occupation : la part de la tranche de 15 minutes la plus chargée de la semaine
+que remplissent les prises des autres Spark (sans celle-ci). » — ce que 100 % veut dire, et ne veut pas dire (pas « saturé »).
+
+**« Calculer un autre horaire ».** Un bouton **ordinaire** (`.bouton`) sous l'aperçu, qui ouvre **dans le flux** de la modale deux
+champs numériques, **Heure (UTC)** et **Minute**, et le bouton **Calculer** (§6.27 : pas de modale dans la modale). La zone se met à
+jour **sur place** : ni repeinture de la modale, ni perte du focus (§14.3). Le bouton d'ouverture garde `aria-expanded`. Une valeur
+hors bornes affiche son refus **sous les champs**, en `role="alert"`, sans appel au serveur. Une phrase dit ce que fait le geste :
+« remplace la minute et l'heure ; une fréquence plus fine qu'un jour devient quotidienne ».
+
+**États.** Calcul en cours : « Calcul de l'aperçu… » (déjà là) ; aucun autre SLA sur la Forge : chaque prise dit « aucune autre
+prise », la légende reste (le zéro est un vrai zéro, §14.6) ; erreur du serveur : le refus de l'aperçu, inchangé.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

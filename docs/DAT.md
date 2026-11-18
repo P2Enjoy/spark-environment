@@ -18371,6 +18371,56 @@ réel contre `FakeIncus`, applique la rétention, rattrape une occurrence échue
 planificateur**, à des instants simulés (CLAUDE.md §8), et jamais par une écriture directe.
 
 
+### 74.14 L'aperçu dit où tombent les prises : la charge au moment du choix (SPK-189)
+
+*Contrat écrit le 2026-11-19, avant le code. Aucune migration, aucune variable d'environnement.*
+
+**La demande du responsable.** En programmant un SLA, **voir le taux d'occupation des trois prises planifiées du survol**, de façon
+visuelle, et pouvoir **calculer un autre horaire** en modifiant l'heure et les minutes. Le §76.3 bis dit *quand* la Forge prend ses
+instantanés ; ceci le dit **au moment de choisir**, à l'endroit où l'on pose l'horaire.
+
+**L'aperçu gagne `load`.** `POST /v1/sparks/{name}/sla/preview` rend, en plus de `next_runs` :
+
+`load` : `{ "slot_minutes": 15, "peak": P, "runs": [ { "at", "slot_start", "slot_end", "others", "sparks", "rate" } ] }`, une entrée
+**par prise de `next_runs`, dans le même ordre**.
+
+- `others` — le nombre de prises **des autres SLA** qui tombent dans la **tranche de 15 minutes** qui contient cette prise, **ce
+  jour-là** : la sémantique du planificateur (`cron.Horaire.convient_jour`, jour de mois et jour de semaine compris), pas une
+  moyenne ; `sparks` — leurs noms (c'est l'équivalent textuel de la barre) ;
+- **Les autres** = les SLA qui **prennent** (actifs ou en échec), **sauf celui de ce Spark** : sa politique en place est celle
+  qu'on remplace, et la compter ferait entrer le candidat en collision avec son propre passé. Un SLA suspendu ne prend rien et ne
+  charge rien (§76.3 bis) ;
+- `peak` — la plus forte charge d'une tranche de la semaine, **des autres SLA** (`charge_semaine`, §76.3 bis), 0 s'il n'y en a aucun ;
+- `rate` — `others / peak` borné à 1 ; **0 quand personne d'autre ne prend** (et alors `peak` vaut 0 : jamais de division par zéro).
+  C'est le **taux d'occupation** : 100 % veut dire « aussi chargée que la tranche la plus chargée de la semaine », 0 % « personne
+  d'autre ». Il compte des **débuts de prise**, pas des durées (§76.5) : la durée d'une prise n'est pas connue.
+
+Rien n'est écrit ni exécuté : l'aperçu reste un calcul (§74.7). Le candidat lui-même n'est pas compté dans `others` : l'écran le dit
+(« sans celle-ci »).
+
+**La console.** Sous chaque prise du survol : une **barre de taux d'occupation** et sa phrase — « aucune autre prise dans cette
+tranche (00:00–00:15 UTC) » ou « 2 autres prises dans cette tranche : crm-production, gram · 100 % ». Le nombre et les noms sont le
+texte ; **la couleur ne porte jamais seule** (§1.5), et la barre n'est jamais rouge : une collision est un fait, pas un refus.
+
+**« Calculer un autre horaire ».** Un bouton sous l'aperçu ouvre deux champs, **Heure (UTC)** (0–23) et **Minute** (0–59), et un
+bouton **Calculer**. Il **remplace la minute et l'heure** de la chaîne — les trois autres champs (jour, mois, jour de semaine) sont
+**conservés** — et relance l'aperçu : phrase, trois prises, charge. Une fréquence plus fine qu'un jour (`*/15 * * * *`) devient donc
+**quotidienne à cet instant**, et l'écran le dit. Les champs partent de la chaîne actuelle quand ses deux premiers champs sont des
+entiers. On peut recalculer autant de fois qu'on veut ; **rien n'est enregistré** avant « Enregistrer ». Une valeur hors bornes
+se refuse **dans la modale**, sans appel au serveur. Au clavier : Entrée dans « Minute » calcule.
+
+**Décisions du rédacteur, à confirmer par le responsable.**
+1. Le taux est **relatif à la tranche la plus chargée de la semaine** des autres SLA, pas à une capacité de la machine (qu'on ne
+   mesure pas) — donc « 100 % » ne veut pas dire « saturé », mais « le pire créneau actuel ».
+2. On compte les **débuts de prise**, pas les durées (§76.5, §76.3 bis).
+3. Le bouton remplace **minute et heure seulement** ; il ne propose pas de lui-même « le créneau le plus calme ». Une suggestion
+   automatique serait la suite naturelle ; elle n'est pas demandée.
+
+**Preuves attendues.** Service (pur) : une prise seule, une collision, deux SLA dans la même tranche, un SLA suspendu et celui du
+Spark exclus, jour de mois, `peak` à 0 sans division. API contre le vrai registre : l'aperçu rend `load` et ne change rien au
+registre. Composant : la barre, la phrase, l'absence, le bouton, les bornes. E2E depuis l'accueil, souris **et** clavier : ouvrir la
+modale, lire le taux, calculer un autre horaire, voir le taux changer, enregistrer.
+
 ## 75. La santé d'un Spark : sondes HTTPS, scripts, états et alertes : contrat (SPK-184 à SPK-186)
 
 *Contrat écrit le 2026-11-18, avant le code, après un débat avec le responsable. Ce qui est du

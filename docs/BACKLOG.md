@@ -9541,6 +9541,21 @@ bon onglet** — « un dashboard de tous les SLA et de toutes les santés déplo
   la synthèse répétait le mot de l'état à côté de sa pastille, et la taille cumulée des instantanés n'était pas affichée.
   Décisions du rédacteur à confirmer : DAT §76.7.
 
+### [ ] SPK-189 · L'aperçu du SLA dit le taux d'occupation de chaque prise, et recalcule un autre horaire
+
+**Demandé le 2026-11-19** par le responsable : « lors de la création du SLA, voir le taux d'occupation du preview des 3 exécutions
+planifiées, visualisé, et avec un bouton pour calculer un autre horaire (modifier heure et minutes) ».
+
+- Spécification : `docs/DAT.md` **§74.14** · §76.3 bis (la charge de la semaine, SPK-188), §74.7 (l'aperçu est un calcul), §74.3 ·
+  `docs/DESIGN_SYSTEM.md` §1.5, §6.27, §14.3, §14.6 · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-55** · manuel M9.
+- Dépend de : SPK-183 (la modale), SPK-188 (`charge_semaine`).
+- Portée : `load` dans la réponse de `POST /v1/sparks/{name}/sla/preview` ; la barre de taux et sa phrase sous chaque prise ; la
+  légende ; le bouton « Calculer un autre horaire » (heure et minute, UTC) qui relance l'aperçu ; le manuel.
+- Hors périmètre : toute écriture ; une suggestion automatique du créneau le plus calme ; les durées de prise ; l'onglet SLA de la
+  Forge (SPK-188, déjà livré).
+- DoD : tests de service, d'API contre le vrai registre et de composant ; E2E depuis l'accueil, souris et clavier ; captures
+  observées (desktop, mobile, collision, aucune autre prise, horaire recalculé) ; manuel et changelog à jour.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks
