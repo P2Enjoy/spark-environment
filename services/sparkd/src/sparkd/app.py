@@ -1387,6 +1387,31 @@ def create_app(config: Config) -> FastAPI:
             spark["incus_name"], suggestions_service.FICHIER_SANTE,
             suggestions_service.rendre_sante(sondes), mode="0600")
 
+    def _modele_du_spark(connection, spark: dict, releve) -> dict:
+        """Le modèle UNIQUE du briefing, construit à UN seul endroit (§44.8).
+
+        @spec docs/BACKLOG.md#SPK-187 · docs/DAT.md §44.8, §44.12
+
+        Deux sites le construisaient — la projection dans la cellule et la lecture du dossier — et le
+        troisième champ à y ajouter aurait été oublié dans l'un des deux. La surveillance et le SLA y
+        entrent : des DÉFINITIONS (le briefing filtre lui-même ce qu'il garde, jamais un état).
+        """
+        return briefing_service.modele(
+            spark,
+            forge_public_address=config.forge_public_address,
+            routes=ingress_service.listing(connection),
+            # SPK-102 · §44.2 quater : l'ingress dit lui-même ce qu'il applique,
+            # lu dans la configuration qu'il pose, jamais recopié ici.
+            ingress_behaviour=ingress_service.comportement(connection),
+            ports=ports_service.listing(connection),
+            environment=env_service.lister(connection, spark["id"]),
+            bootstrap=releve,
+            # SPK-104 · §44.8, §54.5 : les notes entrent dans le MODÈLE.
+            notes=notes_service.lister(connection, spark["id"]),
+            surveillance=health_service.lister(connection, spark)["checks"],
+            sla=sla_service.vue(connection, spark),
+        )
+
     def _apply_briefing(connection, spark: dict) -> None:
         """Projette le briefing unique dans une cellule déjà amorcée.
 
@@ -1408,21 +1433,7 @@ def create_app(config: Config) -> FastAPI:
         releve = briefing_service.observation(connection, spark["id"])
         if releve is None:
             return
-        model = briefing_service.modele(
-            spark,
-            forge_public_address=config.forge_public_address,
-            routes=ingress_service.listing(connection),
-            # SPK-102 · §44.2 quater : l'ingress dit lui-même ce qu'il applique,
-            # lu dans la configuration qu'il pose, jamais recopié ici.
-            ingress_behaviour=ingress_service.comportement(connection),
-            ports=ports_service.listing(connection),
-            environment=env_service.lister(connection, spark["id"]),
-            bootstrap=releve,
-            # SPK-104 · §44.8, §54.5 : les notes entrent dans le MODÈLE. Le
-            # briefing les nomme, le dossier les porte en entier — deux
-            # présentations d'une même donnée, jamais deux collectes.
-            notes=notes_service.lister(connection, spark["id"]),
-        )
+        model = _modele_du_spark(connection, spark, releve)
         for chemin, (contenu, mode) in briefing_service.fichiers(model).items():
             app.state.incus.push_file(spark["incus_name"], chemin, contenu, mode=mode)
         # SPK-94 · §44.10 : un agent qui entre par la seconde porte doit pouvoir
@@ -1963,13 +1974,16 @@ def create_app(config: Config) -> FastAPI:
                 spark = service.by_name(connection, name)
                 # §74.8 : configurer est une ÉCRITURE ; la protection s'applique avant tout.
                 protection_service.ensure_writable(connection, name, "sla")
-                return sla_service.programmer(
+                rendu = sla_service.programmer(
                     connection, spark, app.state.incus, schedule=champs["schedule"],
                     retention_days=champs["retention_days"],
                     retention_count=champs["retention_count"], enabled=champs["enabled"],
                     accept_deletion=champs["accept_deletion"])
             except (service.NotFound, sla_service.SlaError, InstanceAbsente, IncusError) as erreur:
                 raise _erreurs_sla(erreur, spark) from erreur
+            # SPK-187 · §44.12 : le briefing dit la politique ; il est réécrit après CHAQUE geste de SLA.
+            _rattraper_briefing(connection, spark)
+            return rendu
 
     @app.post("/v1/sparks/{name}/sla/{geste}", tags=["instantanes"])
     def basculer_sla(name: str, geste: str) -> dict:
@@ -1981,9 +1995,11 @@ def create_app(config: Config) -> FastAPI:
             try:
                 spark = service.by_name(connection, name)
                 protection_service.ensure_writable(connection, name, "sla")
-                return sla_service.basculer(connection, spark, enabled=(geste == "resume"))
+                rendu = sla_service.basculer(connection, spark, enabled=(geste == "resume"))
             except (service.NotFound, sla_service.SlaError) as erreur:
                 raise _erreurs_sla(erreur) from erreur
+            _rattraper_briefing(connection, spark)
+            return rendu
 
     @app.delete("/v1/sparks/{name}/sla", tags=["instantanes"])
     def delete_sla(name: str) -> dict:
@@ -1992,22 +2008,24 @@ def create_app(config: Config) -> FastAPI:
             try:
                 spark = service.by_name(connection, name)
                 protection_service.ensure_writable(connection, name, "sla")
-                return sla_service.retirer(connection, spark)
+                rendu = sla_service.retirer(connection, spark)
             except (service.NotFound, sla_service.SlaError) as erreur:
                 raise _erreurs_sla(erreur) from erreur
+            _rattraper_briefing(connection, spark)
+            return rendu
 
     # --- SPK-184 · la santé d'un Spark (docs/DAT.md §75) -------------------------
 
     def _reposer_sante(connection, spark: dict) -> None:
-        """Réécrit `/etc/spark/health` après un geste. Une projection : jamais bloquante.
+        """Réécrit `/etc/spark/health` ET le briefing après un geste. Une projection : jamais bloquante.
 
-        Le registre fait foi et vient d'être écrit ; si la cellule ne répond pas, le
-        fichier sera réécrit à la prochaine lecture de l'écran (§75.9).
+        @spec docs/BACKLOG.md#SPK-187 · docs/DAT.md §44.12 (réécrit après tout geste de sonde), §75.9
+
+        Le projecteur unique rejoue les deux : le fichier de santé d'abord, puis le briefing, qui nomme les
+        sondes. Le registre fait foi et vient d'être écrit ; si la cellule ne répond pas, la projection est
+        reprise au démarrage ou à la prochaine lecture de l'écran.
         """
-        try:
-            _apply_health_file(connection, spark)
-        except (IncusError, InstanceAbsente):
-            pass
+        _rattraper_briefing(connection, spark)
 
     def _erreurs_sante(erreur: Exception) -> HTTPException:
         if isinstance(erreur, service.NotFound):
@@ -3648,18 +3666,8 @@ def create_app(config: Config) -> FastAPI:
                     "message": "Ce Spark n'a pas encore de cellule : il doit être "
                                "créé avant qu'on puisse décrire son déploiement."})
             acces = _acces_ssh(connection, spark)
-            model = briefing_service.modele(
-                spark,
-                forge_public_address=config.forge_public_address,
-                routes=ingress_service.listing(connection),
-                # SPK-102 · §44.2 quater : l'ingress dit lui-même ce qu'il applique,
-                # lu dans la configuration qu'il pose, jamais recopié ici.
-                ingress_behaviour=ingress_service.comportement(connection),
-                ports=ports_service.listing(connection),
-                environment=env_service.lister(connection, spark["id"]),
-                bootstrap=briefing_service.observation(connection, spark["id"]),
-                notes=notes_service.lister(connection, spark["id"]),
-            )
+            model = _modele_du_spark(
+                connection, spark, briefing_service.observation(connection, spark["id"]))
             return {
                 "spark": name,
                 "written_at": model["written_at"],

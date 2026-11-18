@@ -35,6 +35,14 @@
   formulaires d'Alertes **retiennent leur saisie** à chaque frappe (jamais les mots de passe). Preuve : un parcours
   qui retarde la lecture de la Forge de 2,5 s, passe à l'onglet Alertes, tape, et constate que la saisie survit —
   rouge sans les deux remèdes, vert avec.
+- **SPK-187 — le briefing d'un Spark dit la surveillance et les instantanés, et la règle pour que cela dure.** Le SLA et la
+  santé n'étaient pas dans ce qu'un agent lit, sauf la paire `health.?`. `BRIEFING.md` gagne **« Surveillance de ce Spark »** (les
+  sondes en place, ce qu'un script a le droit de faire — compte de la pile, 60 s, code de sortie seul —, les limites, comment en
+  proposer une) et **« Instantanés »** (la politique du SLA, les `SLA_…` gérés par la Forge, le quota disque) ; le dossier de
+  déploiement, une section « 7 bis » ; `briefing.json`, les clés `health` et `snapshots`. **Des définitions et des limites, jamais un
+  état** : l'état d'une sonde se commande (`cat /etc/spark/health`). Le compte des scripts vient du mode Docker **relevé**. Réécrit
+  après chaque geste de sonde et de SLA. Rien du canal d'alerte. Runbook agent (section H), manuel M6. **Règle** : inscrite à
+  `CLAUDE.md` §17 et au DAT §44.12 — toute fonction visible d'un agent met à jour ce qu'il lit, dans le même changement. DAT §44.12.
 - **Corrigé, signalé par le responsable sur spark-experiment — le journal d'une installation échouée restait un encadré
   d'erreur sous un relevé qui ne voyait plus d'écart.** « Installation arrêtée sur un échec », en rouge, avec « Reprendre le
   diagnostic », restait affiché indéfiniment : le journal persiste, et l'écran le montrait comme un fait courant. Désormais, si

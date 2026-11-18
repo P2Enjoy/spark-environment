@@ -426,6 +426,14 @@ des variables reçues, leurs deux fichiers et les pièges connus. Il ne recopie
 jamais de valeur secrète : elles restent dans les fichiers d'environnement
 décrits plus haut.
 
+Il dit aussi **ce qui surveille la cellule** : la section « Surveillance de ce Spark » liste les sondes de
+santé posées (voir [M14](M14-sante.md)) — nom, type, cible, cadence, seuil — et ce qu'une sonde a le droit de faire
+(un script tourne dans la cellule, 60 secondes au plus, seul son code de sortie compte ; deux relevés au moins 5 minutes
+l'un de l'autre). La section « Instantanés » dit la politique du SLA (voir [M9](M9-instantanes.md)) : cadence, rétention,
+et que les instantanés `SLA_…` sont pris et supprimés par la Forge et consomment le quota disque. **Ni l'un ni l'autre ne
+donnent d'état** — il périmerait avant d'être lu : `cat /etc/spark/health` donne celui des sondes. Rien du canal
+d'alerte n'y figure : c'est un réglage de la Forge. Ces deux sections sont réécrites après chaque geste de sonde ou de SLA.
+
 Le plan de contrôle le réécrit après ses changements. Il porte néanmoins une
 limite importante : `root` dans votre Spark peut le modifier. Employez-le pour
 comprendre la cellule, jamais comme preuve que vous êtes autorisé à agir.

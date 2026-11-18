@@ -140,6 +140,15 @@ Une référence absente du catalogue est refusée **avant** écriture au registr
 (`docs/DAT.md` §33.2). Sur une Forge fraîche, les images sont `unknown` tant que
 le relevé n'a pas été fait : c'est voulu, pas une panne.
 
+L'image **proposée par défaut** à la création se désigne, elle aussi (`docs/DAT.md` §69) :
+
+```bash
+curl -s -X PUT http://127.0.0.1:19876/v1/images/<id>/default   # une seule à la fois ; seule une entrée `verified`
+```
+
+Réponse `{"changed": true|false, "image": …}` : déjà par défaut, rien n'est écrit. Le retrait de l'entrée par
+défaut est refusé tant qu'elle l'est — désigner-en une autre d'abord.
+
 ### B.2 Créer, appliquer, démarrer
 
 Trois gestes distincts, et c'est délibéré : le registre s'écrit **avant** Incus
@@ -512,3 +521,49 @@ ouverte.
 - désactiver la vérification de la clé d'hôte SSH ;
 - employer `apparmor=unconfined` ou `--privileged` pour « faire passer » une
   pile : c'est troquer une protection contre un symptôme.
+
+---
+
+## H. Surveiller un Spark et ses instantanés
+
+<!-- @spec docs/BACKLOG.md#SPK-187 · docs/DAT.md §44.12, §74, §75 -->
+
+Ce que la **cellule** en lit est dit dans son briefing (`/etc/spark/BRIEFING.md`, « Surveillance de ce Spark » et
+« Instantanés »). Ce paragraphe dit comment **opérer** ces fonctions depuis le poste, par le tunnel (§B).
+
+**Les sondes de santé** (`docs/DAT.md` §75) — HTTPS sur une route TLS du Spark, ou un script exécuté dans la cellule :
+
+```bash
+curl -s  http://127.0.0.1:19876/v1/sparks/<spark>/health                       # définitions, états, derniers relevés
+curl -s -X POST http://127.0.0.1:19876/v1/sparks/<spark>/health/validate \
+     -H 'content-type: application/json' \
+     -d '{"kind":"script","target":"pg_isready","expected":0,"schedule":"*/5 * * * *","threshold":3}'  # n'écrit RIEN
+curl -s -X POST http://127.0.0.1:19876/v1/sparks/<spark>/health/test -H 'content-type: application/json' -d '{…}'  # exécute une fois, n'écrit rien
+curl -s -X PUT  http://127.0.0.1:19876/v1/sparks/<spark>/health/<nom> -H 'content-type: application/json' -d '{…}'   # pose
+curl -s -X POST http://127.0.0.1:19876/v1/sparks/<spark>/health/<nom>/suspend    # ou /resume
+curl -s -X DELETE http://127.0.0.1:19876/v1/sparks/<spark>/health/<nom>
+```
+
+Un script **n'a pas de choix de compte** : `root` sur un Spark enraciné, `spark-docker` sur un Spark rootless, d'après le mode relevé
+à l'amorçage. Il tourne 60 s au plus et **seul son code de sortie compte**. Un Spark **protégé** refuse toute écriture, `test` compris,
+mais ses relevés continuent. L'agent **dans** la cellule ne pose rien : il **propose** par `/etc/spark/health.?` (§55).
+
+**Le SLA des instantanés** (`docs/DAT.md` §74) :
+
+```bash
+curl -s -X POST http://127.0.0.1:19876/v1/sparks/<spark>/sla/preview -H 'content-type: application/json' -d '{…}'  # ce que la politique supprimerait
+curl -s -X PUT  http://127.0.0.1:19876/v1/sparks/<spark>/sla -H 'content-type: application/json' \
+     -d '{"schedule":"0 3 * * *","retention_days":7,"retention_count":3,"enabled":true}'
+curl -s -X POST http://127.0.0.1:19876/v1/sparks/<spark>/sla/suspend     # gèle la prise ET la suppression ; /resume
+curl -s -X DELETE http://127.0.0.1:19876/v1/sparks/<spark>/sla           # aucun instantané n'est supprimé
+```
+
+La cadence est en **UTC**, écart minimal 15 minutes. Une rétention qui supprimerait des instantanés est **refusée** (409) tant que
+`"accept_deletion": true` n'est pas posé : lire d'abord l'aperçu, qui les nomme. Seuls les instantanés `SLA_…` sont supprimés par le
+planificateur, jamais un instantané manuel, et le plus récent est toujours gardé.
+
+**Après chaque geste de sonde ou de SLA, le briefing de la cellule est réécrit** : relire `/etc/spark/BRIEFING.md` dans la cellule
+pour constater que la projection a suivi.
+
+**Les canaux d'alerte** (webhook, courriel) sont un réglage de la **Forge**, pas d'un Spark : `PUT /v1/notify/channels`, qui exige
+le mot de passe des canaux (`docs/DAT.md` §47.3.3). Ils ne figurent volontairement pas dans le briefing d'un Spark.

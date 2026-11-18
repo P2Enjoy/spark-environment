@@ -37,11 +37,20 @@ from datetime import UTC, datetime
 from typing import Any
 
 from . import bootstrap
+from . import health as health_service
 from . import notes as notes_service
 from . import suggestions as suggestions_service
 
 FORMAT = "spark-briefing/v1"
 WRITER = "sparkd, plan de contrôle"
+
+#: SPK-187 · §44.12 : ce que le briefing garde d'une sonde et d'un SLA — la DÉFINITION, jamais l'état (§44.4).
+#: Une liste FERMÉE : un champ que `health.lister` ou `sla.vue` ajouterait demain n'entre pas au briefing
+#: sans qu'on l'y ait écrit.
+CLES_SONDE = ("name", "kind", "target", "expected", "schedule", "description", "threshold", "enabled")
+CLES_SLA = ("enabled", "schedule", "description", "retention_days", "retention_count")
+NOM_INSTANTANE_SLA = "SLA_AAAAMMJJ-HHMMSS"
+_ROOTLESS = bootstrap.ROOTLESS
 
 FICHIER_MARKDOWN = "/etc/spark/BRIEFING.md"
 FICHIER_JSON = "/etc/spark/briefing.json"
@@ -314,7 +323,9 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
            environment: list[Any], bootstrap: dict[str, Any] | None,
            written_at: str | None = None,
            ingress_behaviour: dict[str, Any] | None = None,
-           notes: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+           notes: list[dict[str, Any]] | None = None,
+           surveillance: list[dict[str, Any]] | None = None,
+           sla: dict[str, Any] | None = None) -> dict[str, Any]:
     """Construit l'unique modèle public, sans aucune valeur d'environnement."""
     variables = sorted(entry.name for entry in environment if not entry.is_secret)
     secrets = sorted(entry.name for entry in environment if entry.is_secret)
@@ -381,6 +392,29 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
         # le reste. Le briefing les nomme, le dossier les porte en entier — deux
         # présentations d'une même donnée, jamais deux collectes.
         "notes": list(notes or []),
+        # SPK-187 · §44.12 : la surveillance et les instantanés. Des DÉFINITIONS et des LIMITES — l'état d'une
+        # sonde se commande (`cat /etc/spark/health`), il ne se copie pas (§44.4). Les limites viennent des
+        # constantes du service, pas d'une seconde copie ; le compte des scripts, du mode Docker RELEVÉ (c'est
+        # l'observation d'amorçage qui le porte, pas la ligne du Spark : SPK-184, mesuré sur spark-010).
+        "health": {
+            "file": suggestions_service.FICHIER_SANTE,
+            "proposals": suggestions_service.FICHIER_SANTE + suggestions_service.SUFFIXE,
+            "limits": {
+                "max_checks": health_service.MAX_SONDES,
+                "min_gap_minutes": health_service.ECART_MINUTES,
+                "script_timeout_s": health_service.DELAI_SCRIPT,
+                "threshold_min": health_service.SEUIL_MIN,
+                "threshold_max": health_service.SEUIL_MAX,
+            },
+            "script_account": (COMPTE_ROOTLESS if (bootstrap or {}).get("docker_mode") == _ROOTLESS
+                               else COMPTE_CELLULE),
+            "checks": [{cle: sonde[cle] for cle in CLES_SONDE} for sonde in (surveillance or [])],
+        },
+        "snapshots": {
+            "sla": ({cle: sla[cle] for cle in CLES_SLA} if sla and sla.get("configured") else None),
+            "naming": NOM_INSTANTANE_SLA,
+            "shares_disk_quota": True,
+        },
     }
     # SPK-95 · §42.2 quater : les PORTES ouvertes sur cette cellule. La règle vit
     # ici et non dans la console : « root toujours, spark-docker si le mode relevé
@@ -494,6 +528,75 @@ def _lignes_notes_nommees(model: dict[str, Any]) -> list[str]:
         "Elles sont posées par le plan de contrôle depuis son registre : les "
         "éditer à la main n'a aucun effet durable. Pour en proposer une autre "
         "version, écrivez dans le fichier voisin en `.?` — voir ci-dessous.",
+    ])
+    return lignes
+
+
+def _lignes_surveillance(model: dict[str, Any], niveau: str = "##") -> list[str]:
+    """La surveillance de ce Spark, dite d'UNE façon pour les deux présentations (SPK-187, §44.12).
+
+    Des définitions et des limites. L'état d'une sonde périme avant d'être lu : le texte le COMMANDE.
+    """
+    h = model["health"]
+    lim = h["limits"]
+    lignes = ["", f"{niveau} Surveillance de ce Spark", ""]
+    if h["checks"]:
+        lignes.append(f"Sondes en place — leur ÉTAT change : `cat {h['file']}` le donne à jour.")
+        lignes.append("")
+        for s in h["checks"]:
+            if s["kind"] == "http":
+                quoi = f"adresse `{s['target']}` (statut attendu {s['expected']})"
+            else:
+                quoi = f"commande `{s['target']}` (code de sortie attendu {s['expected']})"
+            suspendue = "" if s["enabled"] else " — suspendue"
+            lignes.append(f"- `{s['name']}` · {s['kind']} · {quoi} · {s['description']}, alerte après "
+                          f"{s['threshold']} échec(s) consécutif(s){suspendue}.")
+    else:
+        lignes.append("Aucune sonde : rien ne surveille ce Spark.")
+    compte = (f" (ici : `{h['script_account']}`, le compte rootless qui possède Docker)"
+              if h["script_account"] == COMPTE_ROOTLESS else " (ici : `root`)")
+    lignes.extend([
+        "",
+        "Ce qu'une sonde fait, et ne fait pas :",
+        "",
+        f"- un **script** s'exécute dans la cellule, sous le compte de la pile{compte}, "
+        f"{lim['script_timeout_s']} s au plus. **Seul son code de sortie compte** : sa sortie n'est "
+        "ni gardée ni envoyée ;",
+        "- une sonde **HTTPS** ne vise qu'une **route TLS de ce Spark**, sans joker ; seule la ligne de "
+        "statut est lue ;",
+        f"- deux relevés ne sont jamais espacés de moins de {lim['min_gap_minutes']} minutes ; "
+        f"{lim['max_checks']} sondes au plus ; un seuil de {lim['threshold_min']} à "
+        f"{lim['threshold_max']} échecs consécutifs ;",
+        "- une sonde qui atteint son seuil **alerte le propriétaire**, une fois, puis au rétablissement ;",
+        f"- **pour proposer une sonde**, écrivez une ligne dans `{h['proposals']}` (grammaire plus haut). "
+        "Une proposition **ne pose rien** : le propriétaire la relit, avec la commande exacte d'un script, "
+        "avant d'accepter.",
+    ])
+    return lignes
+
+
+def _lignes_instantanes(model: dict[str, Any], niveau: str = "##") -> list[str]:
+    """Les instantanés : la politique en clair, et ce que l'agent ne peut pas en faire (SPK-187, §44.12)."""
+    s = model["snapshots"]
+    sla = s["sla"]
+    lignes = ["", f"{niveau} Instantanés", ""]
+    if sla:
+        garde = []
+        if sla["retention_days"]:
+            garde.append(f"{sla['retention_days']} jours")
+        if sla["retention_count"]:
+            garde.append(f"{sla['retention_count']} instantanés au plus")
+        suspendu = "" if sla["enabled"] else " — SUSPENDU : rien n'est pris ni supprimé"
+        lignes.append(f"Un SLA prend des instantanés automatiques : {sla['description']}, conservés "
+                      f"{' et '.join(garde)}{suspendu}.")
+    else:
+        lignes.append("Aucun SLA : ce Spark n'est pas sauvegardé automatiquement.")
+    lignes.extend([
+        "",
+        f"- les instantanés `{s['naming']}` sont pris et supprimés **par la Forge**, jamais par la cellule ;",
+        "- un instantané **consomme le quota disque** de ce Spark ; il ne protège ni de la perte du pool ni "
+        "de celle de la machine ;",
+        "- leur liste et leur état se lisent à la **console** : la cellule n'a pas de commande pour cela.",
     ])
     return lignes
 
@@ -938,6 +1041,8 @@ def markdown(model: dict[str, Any]) -> str:
             "- Pour les autres paquets : dpkg-query -W",
         ])
     lines.extend(_lignes_notes_nommees(model))
+    lines.extend(_lignes_surveillance(model))
+    lines.extend(_lignes_instantanes(model))
     lines.extend(_lignes_canal(model))
     lines.extend(["", "## Pièges connus"])
     lines.extend(f"- {pitfall}" for pitfall in model["pitfalls"])
@@ -1436,6 +1541,10 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
     ])
     lignes.extend(_lignes_canal(
         model, "## 7. Proposer un changement : le fichier `.?`"))
+    # SPK-187 · §44.12 : « 7 bis », pour ne pas renuméroter les sections 8 à 10 que des tests et des renvois citent.
+    lignes.extend(["", "## 7 bis. Surveillance et instantanés"])
+    lignes.extend(_lignes_surveillance(model, "###"))
+    lignes.extend(_lignes_instantanes(model, "###"))
     lignes.extend([
         "",
         "## 8. Pièges connus",
