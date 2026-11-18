@@ -15789,3 +15789,25 @@ d'annonce du nouvel onglet.
 
 **Conséquences.** SPK-179 ouverte, DAT §72 et SPK-DS-49 écrits avant le code.
 
+## 2026-11-18 · Les jobs d'un Spark : étude consignée, non planifiée
+
+**Demande du responsable** : ajouter des jobs (« on contrôle le cron de la cellule ») et, comme
+pour les autres fichiers, un `cron.?` par lequel les agents suggèrent une ligne cron. Il n'a pas
+arrêté comment faire et voulait en débattre avant de décider.
+
+**Observation.** Aucun code, document ni chapitre du manuel ne traite de cron ou de jobs. Le
+mécanisme `.?` (DAT §55) accueillerait une septième paire sans rien changer à ses règles.
+
+**Arbitrages du responsable.** L'étude est consignée sans être planifiée ; **les jobs se
+planifient aujourd'hui avec la pile Docker Compose, projet par projet**, et cela continue ; il
+n'est **pas décidé** que le produit doive exposer la mécanique.
+
+**Idées du rédacteur, non arbitrées** (consignées dans `docs/EXPLORATION_JOBS.md`) : le statu
+quo est une option à part entière ; une échelle d'exposition de « rien » à « contrôler » ; si
+l'on contrôle, un ordonnanceur dans la cellule avec un wrapper-témoin plutôt que dans `sparkd` ;
+et, puisque le moteur actuel est Compose, une proposition d'agent qui serait peut-être un
+fragment de pile plutôt qu'une ligne cron.
+
+**Conséquences.** `docs/EXPLORATION_JOBS.md` créé, renvoi dans la section *Réservé* du
+backlog. Aucun identifiant réservé, aucun code, aucun changement de DAT ni de schéma.
+

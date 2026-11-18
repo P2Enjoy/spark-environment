@@ -10626,6 +10626,12 @@ puis le retrait de l'option — il reste `s1 s2`, avec les données d'avant la r
   2026-11-17 avec le responsable, et laissé non planifié : `docs/EXPLORATION_TRANSFERT.md`
   (il se bâtirait sur le lot 9).
 - Quotas d'E/S disque par Spark au-delà de la priorité.
+- **Jobs d'un Spark (planification)** : piste étudiée le 2026-11-18 et laissée hors backlog
+  par arbitrage du responsable, qui n'a pas décidé s'il est utile d'exposer la mécanique —
+  les jobs se planifient aujourd'hui avec la pile Docker Compose, projet par projet. Les
+  options, du statu quo à un `cron.?` contrôlé, sont conservées dans
+  `docs/EXPLORATION_JOBS.md`, qui n'est ni une spécification ni un contrat. Aucun
+  identifiant n'est réservé.
 
 ### [x] SPK-180 · Changer de serveur ne laisse pas la fenêtre d'un Spark de l'autre Forge
 
