@@ -451,3 +451,23 @@ def test_le_planificateur_survit_a_une_panne(db, incus):
     planificateur = sla.Planificateur(ouvrir=casse, incus=incus)
     assert planificateur.un_pas(utc(2026, 11, 19)) is None
     assert planificateur.erreurs == 1
+
+
+def test_les_suppressions_du_planificateur_sont_runtime_donc_ne_notifient_pas(db, incus, tmp_path):
+    """SPK-62 · §47.2 : `snapshot.delete` notifie hors bande, mais pas quand personne ne l'a
+    demandé. Une rétention qui supprime chaque nuit ne doit pas inonder le canal."""
+    from sparkd import notification
+    planificateur = sla.Planificateur(ouvrir=lambda: connect(tmp_path / "s.db"), incus=incus)
+    sla.programmer(db, spark(db), incus, schedule="0 * * * *", retention_days=None,
+                   retention_count=1, now=utc(2026, 11, 18, 0, 30))
+    db.commit()
+    for heure in (1, 2, 3):
+        planificateur.un_pas(utc(2026, 11, 18, heure, 0, 5), retention=False)
+    lignes = db.execute("SELECT actor, actor_class, result FROM audit_log"
+                        " WHERE action = 'snapshot.delete'").fetchall()
+    assert len(lignes) == 2                                   # deux suppressions, une par prise
+    for ligne in lignes:
+        assert (ligne["actor"], ligne["actor_class"]) == ("sla", audit.RUNTIME)
+        assert notification.notifiable("snapshot.delete", ligne["result"], ligne["actor_class"]) is False
+    # Le MÊME geste fait par une personne, lui, notifie.
+    assert notification.notifiable("snapshot.delete", "ok", "human") is True
