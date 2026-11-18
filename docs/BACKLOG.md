@@ -9249,6 +9249,51 @@ sert, on le recopie dans la barre d'adresse.
   fraîche (README §28.7). Le seed n'a pas été modifié : il porte déjà une route avec TLS,
   un joker, une route sans TLS et une route non appliquée.
 
+### [ ] SPK-182 · Le SLA des instantanés dans `sparkd` : prise automatique et rétention
+
+**Demandé le 2026-11-18** par le responsable, comme « un truc important à faire » : dans
+l'onglet Instantanés, un **SLA** — on y programme la **fréquence** des instantanés
+automatiques (une chaîne crontab, avec un menu déroulant des fréquences courantes), le
+**nommage** suit l'horodatage avec le préfixe `SLA_`, et la **rétention** se règle par
+ancienneté et/ou par nombre total d'instantanés, avec **suppression automatique**.
+
+Cette unité est le **service** : le modèle, l'analyseur crontab, le planificateur, la
+rétention et l'API. L'écran est SPK-183.
+
+- Spécification : `docs/DAT.md` **§74** · §19 (les instantanés), §19.1 (restaurer détruit les
+  suivants), §19.4 (le quota) · `docs/SCHEMA.md` **§8 ter** · `docs/JOURNAL.md` 2026-11-18.
+- Dépend de : SPK-13 (les instantanés), SPK-34 (la protection), SPK-15 et SPK-37 (le journal et
+  l'acteur).
+- Portée : migration (`sla`, `snapshot.origin`) ; l'analyseur crontab à cinq champs, maison ;
+  un planificateur sur son propre fil, comme l'historien et le veilleur ; la prise, le
+  rattrapage, la reprise après échec ; la rétention par âge et/ou par nombre, qui ne touche
+  **que** les instantanés d'origine SLA et garde toujours le plus récent ;
+  `GET`, `PUT`, `DELETE /v1/sparks/{nom}/sla` et l'aperçu de ce que la rétention supprimerait.
+- **Le nom `SLA_…` est refusé aujourd'hui** : `snapshots.NAME` n'accepte que minuscules,
+  chiffres et tirets. Le préfixe devient **réservé** au planificateur (§74.4), et le
+  caractère `_` reste à **mesurer** sur Incus avant de le tenir (repli : `sla-…`).
+- DoD : preuve rouge avant correction ; tests unitaires (analyseur, calcul de la prochaine
+  prise, sélection de la rétention) ; API contre le vrai registre — y compris les refus par
+  requête directe (Spark protégé, rétention absente, fréquence trop rapprochée, suppression non
+  confirmée) ; une prise et une rétention réelles par le planificateur contre le doublon ;
+  migration et `docs/PROD_MIGRATIONS.md` à jour.
+
+### [ ] SPK-183 · Le SLA des instantanés dans la console : le panneau et sa modale
+
+Suite de SPK-182 : l'**écran**. Dans l'onglet Instantanés d'un Spark, une section « SLA des
+instantanés » et la modale qui la règle.
+
+- Spécification : `docs/DAT.md` **§74.10** · `docs/DESIGN_SYSTEM.md` §1.3, §6.9, §6.23, §6.27,
+  §9, §14.6 · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-50** · manuel M9.
+- Dépend de : SPK-182.
+- Portée : la section (état, fréquence lisible, prochaine prise, dernière prise, rétention) ;
+  la modale (menu des fréquences courantes, chaîne crontab, rétention, aperçu des
+  suppressions et confirmation dans le flux) ; suspendre, reprendre, retirer ; le badge `SLA`
+  dans la liste des instantanés ; le seed ; le manuel.
+- DoD : tests unitaires de composant ; E2E depuis l'accueil, à la souris et au clavier ;
+  captures observées (desktop, mobile, états : sans SLA, actif, suspendu, en échec, aperçu de
+  suppression) ; manuel M9, seed et changelog à jour.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

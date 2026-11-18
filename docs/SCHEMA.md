@@ -363,6 +363,40 @@ la file sont des tables de registre ; les supprimer **ne touche pas au S3**. Les
 qu'elles portent partent avec elles : sans la clé de sauvegarde gardée par le
 propriétaire, les archives du S3 deviennent illisibles (`docs/DAT.md` §67.4).
 
+## 8 ter. `sla` et `snapshot.origin` : le SLA des instantanés (contrat, SPK-182 — non livré)
+
+*Contrat écrit le 2026-11-18, avant le code. La migration prend le numéro suivant au moment de
+l'écrire.*
+
+```sql
+CREATE TABLE sla (
+    spark_id         TEXT    PRIMARY KEY REFERENCES spark(id) ON DELETE CASCADE,
+    enabled          INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    schedule         TEXT    NOT NULL,           -- crontab à cinq champs, lue en UTC
+    retention_days   INTEGER CHECK (retention_days  IS NULL OR retention_days  BETWEEN 1 AND 3650),
+    retention_count  INTEGER CHECK (retention_count IS NULL OR retention_count BETWEEN 1 AND 1000),
+    next_run_at      TEXT,                       -- UTC, ISO 8601 ; NULL tant que suspendu
+    last_run_at      TEXT,
+    last_status      TEXT    CHECK (last_status IS NULL OR last_status IN ('ok', 'error', 'skipped')),
+    last_error       TEXT,
+    attempts         INTEGER NOT NULL DEFAULT 0, -- reprises de l'occurrence en cours
+    created_at       TEXT    NOT NULL,
+    updated_at       TEXT    NOT NULL,
+    CHECK (retention_days IS NOT NULL OR retention_count IS NOT NULL)
+);
+
+ALTER TABLE snapshot ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'
+    CHECK (origin IN ('manual', 'sla'));
+```
+
+- **Un SLA par Spark** (`spark_id` est la clé). Supprimer le Spark supprime sa politique
+  (`ON DELETE CASCADE`) ; **retirer la politique ne supprime aucun instantané**.
+- **Au moins une rétention** : le `CHECK` l'impose dans la base, pas seulement dans l'API. Un SLA
+  sans rétention accumulerait des instantanés qui comptent dans le quota du Spark (DAT §19.4).
+- **`snapshot.origin`** porte la **provenance**, pas le nom : la rétention ne supprime que
+  `origin = 'sla'`. Les lignes existantes valent `manual`, et rien ne les réécrit.
+- Aucun secret, aucune valeur métier en dur : les bornes de rétention sont celles du `CHECK`.
+
 ## 9. `audit_log`
 
 `id`, `ts`, `actor`, `actor_class`, `action`, `target_type`, `target_id`,

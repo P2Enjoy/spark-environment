@@ -18020,3 +18020,219 @@ habituelle, avec son renvoi.
 - **Machine réelle** : une application sur `spark-010`, carte blanche du responsable,
   suivie d'une relecture du relevé.
 
+
+## 74. Le SLA des instantanés : prise automatique et rétention : contrat (SPK-182, SPK-183)
+
+*Contrat écrit le 2026-11-18, avant le code. Demandé par le responsable comme « un truc
+important à faire ». Les décisions qui sont du rédacteur et non du responsable sont rassemblées
+au §74.11, à confirmer.*
+
+### 74.1 La demande
+
+Dans l'onglet Instantanés d'un Spark, une fonctionnalité **SLA** :
+
+- la **fréquence** des instantanés automatiques se programme — jours et heure de la prise — avec
+  une **chaîne crontab**, et un **menu déroulant** des fréquences les plus courantes ;
+- le **nommage** suit l'horodatage, avec `SLA_` en préfixe ;
+- la **rétention** se règle par **ancienneté** et/ou par **nombre total** d'instantanés, avec
+  **suppression automatique**.
+
+Le §19 décrit ce qu'est un instantané ; ce paragraphe ajoute **qui le prend et qui le supprime
+quand personne ne le demande**. C'est ce deuxième verbe qui commande le dessin.
+
+### 74.2 La politique
+
+Un SLA par Spark (`docs/SCHEMA.md` §8 ter) : une fréquence, une rétention par âge (jours) et/ou
+par nombre, un état actif ou suspendu. **Au moins une rétention est obligatoire**, dans l'API et
+dans la base : un instantané compte dans le quota du Spark (§19.4), et une prise automatique sans
+borne remplirait le disque sans que personne n'ait rien décidé.
+
+**Suspendre** gèle la politique **entièrement** : plus de prise, et **plus de suppression**. Une
+politique en pause ne détruit rien. **Retirer** la politique ne supprime **aucun** instantané ;
+ceux qu'elle a pris restent, étiquetés `SLA`, et se suppriment à la main.
+
+### 74.3 La fréquence : une chaîne crontab à cinq champs
+
+`minute heure jour-du-mois mois jour-de-la-semaine`, lue en **UTC**.
+
+- Syntaxe admise : `*`, une valeur, une liste (`1,15`), un intervalle (`1-5`), un pas (`*/6`,
+  `0-30/10`), les noms de mois et de jours (`jan`, `mon`). Dimanche vaut `0` ou `7`.
+- **Refusés, avec leur raison** : les alias `@daily`, `@reboot` et leurs semblables (le menu
+  déroulant les remplace), un nombre de champs différent de cinq, une valeur hors bornes.
+- **Sémantique du jour** (celle de cron, et la seule que l'utilisateur attend) : si le jour du
+  mois **et** le jour de la semaine sont tous deux restreints, une date convient dès que **l'un
+  ou l'autre** convient.
+- **Écart minimal : 15 minutes** entre deux prises consécutives. Un SLA toutes les minutes
+  produirait des centaines d'instantanés par jour et épuiserait le quota. La borne est une
+  constante du code, documentée ici, ni une variable d'environnement ni un réglage.
+- **L'analyseur est écrit dans le dépôt**, sans dépendance : une bibliothèque de plus pour
+  cinq champs ne se justifie pas (CLAUDE.md §19), et la sémantique du jour est précisément ce
+  qui varie d'une bibliothèque à l'autre.
+- **Le fuseau est UTC**, et l'écran le dit. Les fuseaux locaux apportent le changement d'heure :
+  une prise à 02:30 n'existe pas le jour du passage à l'heure d'été. L'écran ajoute l'équivalent
+  dans le fuseau du navigateur, à titre d'information.
+
+Le menu déroulant n'est qu'une aide de saisie : il écrit une chaîne dans le champ, et **seule la
+chaîne est stockée**. Les fréquences courantes sont : toutes les heures (`0 * * * *`), toutes les
+6 heures (`0 */6 * * *`), tous les jours à 02:00 (`0 2 * * *`), deux fois par jour
+(`0 2,14 * * *`), les jours ouvrés à 02:00 (`0 2 * * 1-5`), le dimanche à 03:00 (`0 3 * * 0`) et
+le 1er du mois à 03:00 (`0 3 1 * *`).
+
+### 74.4 Le nom : `SLA_AAAAMMJJ-HHMMSS`
+
+Le nom suit l'horodatage de la prise, en UTC : `SLA_20261119-020000`. Triable, sans deux-points.
+
+**Il entre en conflit avec la règle actuelle.** `snapshots.NAME` n'accepte que minuscules,
+chiffres et tirets, « pour rester lisible » — ce n'est pas une contrainte d'Incus. `SLA_…` porte
+une majuscule et un souligné. Décision :
+
+- le préfixe `SLA_` est **réservé au planificateur** : la création manuelle continue d'appliquer
+  `NAME`, qui refuse déjà ces caractères, donc un instantané manuel ne peut jamais s'appeler
+  `SLA_…` ;
+- le **planificateur** pose le nom sans passer par `NAME`, et l'API le valide par son propre
+  motif (`^SLA_[0-9]{8}-[0-9]{6}$`) ;
+- **la rétention ne se fie pas au nom** : elle lit `snapshot.origin`. Le préfixe est une
+  étiquette pour l'humain ; la provenance est une donnée.
+
+**À mesurer sur la Forge (VM d'installation fraîche) avant de tenir ce nom :** que le vrai Incus
+accepte une majuscule et un souligné dans un nom d'instantané. Rien ici ne l'a mesuré. Repli si
+non : `sla-AAAAMMJJ-HHMMSS` en minuscules, le reste du contrat inchangé.
+
+### 74.5 La prise : un planificateur sur son propre fil
+
+Comme l'historien (§52) et le veilleur (§43.5.3) : un fil démarré avec `sparkd`, qui ne
+s'arrête pas sur une panne, et dont le pas est fixé par la décision et non par un réglage.
+
+- À chaque pas (30 s), pour chaque politique **active** dont `next_run_at` est échu : prendre
+  l'instantané, poser `last_run_at`, `last_status`, puis calculer la prochaine occurrence
+  **strictement après maintenant**.
+- La prise passe par `snapshots.create` : même écriture au registre, même journal d'audit. L'acteur
+  est `sla`, de classe `runtime` (§36.4) : la ligne est **non signée** et ne notifie pas (§47.2).
+- **Un Spark arrêté est capturé aussi** : Incus capture une instance arrêtée, et l'état d'un
+  Spark arrêté est un état qu'on veut pouvoir retrouver. **Pas de prise** pour un Spark sans
+  cellule (`incus_name` vide) ou dans un état transitoire (`creating`, `deleting`…) : le pas
+  est noté `skipped`, avec sa raison, et rejoué au pas suivant.
+- **Un échec ne tait rien.** `last_status = error`, `last_error` porte le message d'Incus, la
+  ligne d'audit est un `error`. L'occurrence est **reprise après 5 minutes, trois fois au plus**,
+  puis abandonnée jusqu'à la suivante.
+- **Un arrêt de `sparkd` n'arrête pas la politique : il la suspend le temps de la panne.** Au
+  redémarrage, une occurrence échue est **rattrapée une seule fois** (pas une par occurrence
+  manquée), et la ligne d'audit dit « rattrapage » et combien d'occurrences ont été manquées.
+  C'est le défaut assumé de ce dessin : voir §74.12.
+
+### 74.6 La rétention : par âge et/ou par nombre, jamais au-delà de ce qui est à elle
+
+Après chaque prise réussie, à l'enregistrement d'une politique (§74.7) et, pour une politique
+active, à chaque heure :
+
+1. ne considérer que les instantanés `origin = 'sla'` **du Spark** ;
+2. **le plus récent n'est jamais supprimé**, quoi qu'il arrive. Une rétention de 1 jour et une
+   `sparkd` arrêtée trois jours ne doivent pas laisser un Spark sans aucun point de retour ;
+3. **par âge** : supprimer ceux dont `created_at` est antérieur à maintenant moins
+   `retention_days` ;
+4. **par nombre** : si, après cela, il en reste plus que `retention_count`, supprimer les plus
+   anciens jusqu'à l'atteindre ;
+5. quand les deux sont posées, **le premier critère atteint supprime** (l'union des deux).
+
+**Un instantané manuel n'est jamais supprimé par le SLA.** Et un instantané d'origine SLA qu'un
+humain supprime à la main reste un geste ordinaire.
+
+Les suppressions passent par `snapshots.delete` : même écriture, même audit, et — le jour où
+SPK-164 existera — **la même garde sur la sauvegarde externe** (§74.9). Une suppression en
+échec est journalisée et n'arrête pas les suivantes.
+
+**Au-delà du seuil de la restauration (§19.1)** : restaurer un instantané ancien détruit les plus
+récents, SLA compris ; ce refus par défaut est inchangé.
+
+### 74.7 Enregistrer une rétention est un geste sensible : l'aperçu précède l'écriture
+
+Poser ou resserrer une rétention peut supprimer **dès l'enregistrement** des instantanés
+existants. C'est une suppression irréversible décidée par une valeur saisie : le §6.23 du design
+system et le CLAUDE.md §9 (« privilégier une simulation ») s'appliquent.
+
+- `POST /v1/sparks/{nom}/sla/preview` rend, **sans rien écrire**, ce que la politique proposée
+  supprimerait (noms, âges, tailles connues), les trois prochaines prises et la phrase lisible de
+  la fréquence ;
+- `PUT /v1/sparks/{nom}/sla` **refuse** (`409 deletion_requires_confirmation`, qui **nomme** les
+  instantanés) quand l'enregistrement supprimerait quelque chose et que la requête ne porte pas
+  `accept_deletion: true`. C'est un **drapeau de la requête**, jamais un réglage, exactement comme
+  `accept_losing_newer` (§19.1) : une confirmation se donne pour ces suppressions-là.
+- Écrire une politique qui ne supprime rien n'exige aucune confirmation.
+
+### 74.8 Autorisation
+
+Tout est appliqué côté serveur (CLAUDE.md §10) ; l'interface n'en est que l'aide.
+
+- **Configurer, modifier, suspendre, retirer** sont des **écritures** : sur un Spark **protégé**
+  (§35), elles sont refusées comme toute écriture (`ensure_writable`), avant tout le reste.
+- **Le planificateur, lui, agit sur un Spark protégé** : il prend **et supprime** selon la politique
+  qu'un propriétaire a posée. La protection arrête le geste accidentel ; une politique est un acte
+  délibéré, posé protection levée. *Décision à confirmer (§74.11).*
+- Lire est ouvert.
+- Aucun nom d'instantané n'est accepté du client pour le planificateur : il les compose lui-même.
+
+### 74.9 Ce que cela touche ailleurs
+
+- **Le quota (§19.4).** Les instantanés SLA comptent comme les autres. L'écran montre leur nombre
+  et leur taille cumulée relevée (`sync_sizes`).
+- **La sauvegarde externe (lot 9, SPK-161 à SPK-168, non livré).** Une prise SLA est un instantané
+  créé : elle déclenchera une génération comme n'importe quel autre (§67). La suppression par
+  rétention, elle, **ne doit pas détruire un instantané dont la sauvegarde externe est en cours ou
+  attendue** — c'est la garde de SPK-164, que le SLA devra respecter : le SLA est un deuxième
+  chemin de destruction, et ne peut pas la contourner. Aucune garde n'est écrite ici ; la
+  dépendance est consignée.
+- **Le Journal.** Prises et suppressions d'un SLA sont des lignes d'audit d'acteur `sla`, visibles
+  à la supervision du journal (SPK-39).
+- **La restauration, le transfert.** La politique vit au registre : elle suit la fiche du Spark.
+
+### 74.10 Ce que la console en fait (SPK-183)
+
+Une **section** « SLA des instantanés » dans la facette Instantanés, **au-dessus** de la liste :
+un sujet de plus, donc une surface de plus (design system §5.4). Elle dit l'état (actif,
+suspendu), la fréquence **lisible**, la prochaine prise en UTC puis dans le fuseau du navigateur,
+la dernière prise et son résultat, la rétention, le nombre et la taille des instantanés SLA.
+Les commandes de section : **Programmer** (ou **Modifier**), **Suspendre** / **Reprendre**,
+**Retirer** ; la saisie passe par une **modale** (§6.27). Dans la liste, chaque instantané
+d'origine SLA porte un badge « SLA ». Détail visuel : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-50.
+
+### 74.11 Décisions du rédacteur, à confirmer par le responsable
+
+1. **UTC**, et non un fuseau par politique (§74.3). Ajouter un fuseau plus tard est additif.
+2. **Écart minimal de 15 minutes** (§74.3).
+3. **Un SLA par Spark** (§74.2).
+4. **Suspendre gèle aussi la suppression** (§74.2).
+5. **Le plus récent n'est jamais supprimé**, et **un instantané manuel jamais non plus** (§74.6).
+6. **Le planificateur agit sur un Spark protégé**, prises et suppressions comprises (§74.8). Le
+   contraire — ne pas supprimer sous protection — laisserait le quota se remplir seul.
+7. **Rattrapage unique** après une panne de `sparkd`, et **trois reprises espacées de 5 minutes**
+   après un échec (§74.5).
+8. **Aucune notification hors bande** d'un échec de SLA en v1 : l'échec se lit à l'écran et au
+   journal. Un SLA qui échoue en silence est le risque principal de cette fonctionnalité ; les
+   notifications sont la suite naturelle, à brancher sur le canal de SPK-62.
+
+### 74.12 Une alternative écartée, et ce qui la rouvrirait
+
+Incus sait **planifier lui-même** des instantanés : des clés de configuration d'instance pour une
+planification crontab, un motif de nommage et une expiration par âge, d'après ce que le rédacteur
+en connaît. **Rien de cela n'a été relevé ici** ; à mesurer avant d'y toucher. Cela
+rapprocherait la prise de la cellule : elle survivrait à une panne de `sparkd`.
+
+Écarté en v1 parce que : la **rétention par nombre n'est pas native** et exigerait `sparkd` de
+toute façon ; le **registre** doit rester la vérité (un instantané pris par Incus hors de lui
+serait à rapatrier) ; l'**historique**, l'échec et la reprise seraient à relire dans Incus ; et le
+**doublon de développement** ne planifie rien — la pile d'épreuve ne pourrait pas montrer un SLA
+(README §28.7). Ce qui rouvrirait la question : une panne de `sparkd` qui a **réellement** fait
+manquer des prises, ou une mesure qui montre le natif plus simple qu'estimé.
+
+### 74.13 Preuves attendues
+
+Unitaires : l'analyseur (chaque forme, chaque refus, la sémantique du jour, l'écart minimal), la
+prochaine occurrence (fins de mois, années bissextiles, dimanche à 0 et à 7), la sélection de
+rétention (âge seul, nombre seul, les deux, le plus récent gardé, le manuel intouché, liste
+vide). API contre le vrai registre : refus par requête directe (Spark protégé, rétention absente,
+fréquence trop rapprochée, alias refusé, suppression non confirmée avec les noms), aperçu sans
+écriture, `PUT` idempotent. Intégration : le planificateur, horloge injectée, prend un instantané
+réel contre `FakeIncus`, applique la rétention, rattrape une occurrence échue, reprend après un
+échec, saute un Spark sans cellule. Le seed pose un SLA et ses instantanés **par le même
+planificateur**, à des instants simulés (CLAUDE.md §8), et jamais par une écriture directe.
+

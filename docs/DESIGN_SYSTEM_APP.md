@@ -275,6 +275,58 @@ Le domaine d'une route, dans la section *Routes* d'un Spark, est un `a` qui s'ou
 Un joker (`*.monapi.fr`) ou un nom qui n'est pas un nom d'hôte valide **reste du texte** : un
 lien vers rien est une commande morte (§1.4).
 
+### SPK-DS-50 · Le SLA des instantanés : une section, une modale, et une suppression qui se montre avant
+
+Date : 2026-11-18 · `docs/DAT.md` §74 · `docs/DESIGN_SYSTEM.md` §1.3, §1.5, §6.9, §6.22, §6.23,
+§6.27, §9.7, §14.6.
+
+**La section.** Dans la facette Instantanés, **au-dessus** de la liste : un sujet de plus, donc
+une carte de plus (§5.4), sous un `h2` « SLA des instantanés ». Elle porte, en paires terme /
+valeur (§6.4) :
+
+- l'**état** — pastille « Actif » (`success`) ou « Suspendu » (`neutral`) : une politique en
+  pause n'est pas en panne ;
+- la **fréquence**, en clair (« tous les jours à 02:00 UTC ») ; la chaîne crontab en police
+  technique juste dessous ;
+- la **prochaine prise**, en UTC puis dans le fuseau du navigateur, jamais l'un sans l'autre ;
+- la **dernière prise** et son résultat : « OK », ou « Échec » en `danger-soft` avec la raison du
+  serveur, tel quel (§1.3) ; un rattrapage se dit ;
+- la **rétention** (« 14 jours · 20 instantanés au plus ») et ce que le SLA tient aujourd'hui :
+  nombre et taille cumulée.
+
+Sans politique : l'absence est **nommée** (« Aucun SLA : aucun instantané n'est pris
+automatiquement »), avec la seule commande qui a un objet, **Programmer** (§6.13, §1.4).
+Commandes d'une politique : **Modifier**, **Suspendre** / **Reprendre** (réparatrice, sans
+confirmation, §6.24), **Retirer** (confirmation dans le flux, qui dit que les instantanés pris
+**restent**).
+
+**La modale** (§6.27), nommée comme la section :
+
+- un `select` **« Fréquence courante »** dont la dernière option est « Personnalisée » ; choisir
+  une fréquence **écrit la chaîne** dans le champ voisin, et modifier la chaîne à la main
+  repositionne le menu sur la fréquence qui lui correspond, ou sur « Personnalisée » ;
+- le champ de la **chaîne crontab**, en `technique`, avec sous lui, annoncé en `aria-live="polite"`,
+  la **phrase lisible** et les **trois prochaines prises** (UTC) ; une chaîne invalide porte son
+  erreur sous le champ, `role="alert"`, avec la raison du serveur (§6.9) ;
+- **deux champs numériques**, « Conserver pendant … jours » et « Conserver au plus … instantanés ».
+  Des saisies et non des curseurs : les bornes sont larges et la granularité est entière
+  (§6.9 bis). Au moins un des deux, dit en aide ; si les deux, le premier atteint supprime ;
+- une case **« Actif »**.
+
+**La suppression se montre avant** (§6.23, CLAUDE.md §9) : tant que la modale est ouverte, l'aperçu
+du serveur s'affiche, et quand l'enregistrement **supprimerait des instantanés existants**, un
+bloc de confirmation **dans le flux** (§6.22) les **nomme** et dit « Cette suppression est
+définitive ». Le bouton d'engagement prend alors la variante **destructive** et dit
+« Enregistrer et supprimer N instantané(s) » ; sans suppression il reste primaire et dit
+« Enregistrer ». Un refus du serveur s'affiche **dans la modale** et n'efface rien de la saisie.
+
+**Dans la liste.** Chaque instantané d'origine SLA porte un badge « SLA » (`brand`, texte `*-on-soft`) :
+la provenance se **lit**, elle ne se déduit pas d'un nom. Les instantanés manuels ne changent pas.
+
+**Accessibilité.** Tout est au clavier ; le focus entre dans le menu à l'ouverture et revient à la
+commande d'origine ; une prise, un échec ou une suppression qui change l'écran est annoncé
+(`role="status"` / `role="alert"`). Aucune information ne repose sur la couleur seule (§1.5).
+
 ### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
 
 Les mesures d'un Spark viennent du runtime et se comparent à ses quotas

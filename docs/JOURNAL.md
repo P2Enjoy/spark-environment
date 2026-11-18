@@ -15811,3 +15811,35 @@ fragment de pile plutôt qu'une ligne cron.
 **Conséquences.** `docs/EXPLORATION_JOBS.md` créé, renvoi dans la section *Réservé* du
 backlog. Aucun identifiant réservé, aucun code, aucun changement de DAT ni de schéma.
 
+## 2026-11-18 · SPK-182 et SPK-183 : le SLA des instantanés
+
+**Demande du responsable**, « un truc important à faire » : dans l'onglet Instantanés, un SLA — la
+fréquence des instantanés automatiques se programme avec une chaîne crontab (et un menu
+déroulant des fréquences courantes), le nommage suit l'horodatage avec le préfixe `SLA_`, la
+rétention se règle par ancienneté et/ou par nombre total, avec suppression automatique.
+
+**Observations dans le code.**
+- `snapshots.NAME` n'accepte que minuscules, chiffres et tirets : **`SLA_…` est refusé
+  aujourd'hui**. La règle date de « rester lisible », ce n'est pas une contrainte d'Incus. Le
+  préfixe devient réservé au planificateur, et la rétention lit `snapshot.origin`, pas le nom.
+- Le registre ne sait pas qui a pris un instantané : il n'y a pas de provenance (SCHEMA §8).
+- `sparkd` a déjà deux fils d'arrière-plan sans réglage (historien, veilleur) : le planificateur
+  suit le même patron.
+- Les instantanés comptent dans le quota (§19.4) : une prise automatique sans rétention
+  remplirait le disque. D'où la rétention **obligatoire**, dans l'API et dans le `CHECK`.
+
+**Ce qui a pesé.** La suppression automatique est destructive et irréversible, décidée par une
+valeur saisie : l'enregistrement d'une rétention affiche **d'abord** ce qu'il supprimerait
+(aperçu) et refuse sans confirmation explicite qui nomme les instantanés (CLAUDE.md §9).
+
+**Alternative examinée et écartée en v1** : la planification native d'Incus. La rétention par
+nombre n'y est pas native, le registre doit rester la vérité, et la pile de développement ne
+pourrait pas montrer un SLA. Non mesuré ici ; ce qui la rouvrirait est au DAT §74.12.
+
+**Décisions du rédacteur à confirmer** (DAT §74.11) : UTC, écart minimal de 15 minutes, un SLA par
+Spark, suspendre gèle aussi la suppression, le plus récent jamais supprimé, planificateur actif
+sur un Spark protégé, rattrapage unique, pas de notification hors bande en v1.
+
+**Conséquences.** SPK-182 (service) et SPK-183 (écran) ouvertes, DAT §74, SCHEMA §8 ter et
+SPK-DS-50 écrits avant le code. À mesurer sur la VM : le nom `SLA_…` accepté par le vrai Incus.
+
