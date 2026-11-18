@@ -17301,54 +17301,64 @@ le quota du disque racine pour le disque.
 
 ### 68.3 Le bloc « Total de la Forge »
 
-*Révisé le 2026-11-18 sur demande du responsable : le total **sort du tableau** (il était
-un pied de tableau, livré en be5c710) pour devenir un bloc à part, plus visible, qui
-liste le **total alloué**, le **total disponible** et le **total utilisé**.*
+*Révisé deux fois le 2026-11-18 sur demande du responsable. D'abord : le total **sort du
+tableau** (il était un pied de tableau, be5c710) et liste l'**alloué**, le **disponible**
+et l'**utilisé**. Puis : **un graphique, pas une copie de l'écran de la Forge** — le
+premier jet de cette révision recopiait les quatre lignes terme / valeur de l'écran Forge,
+ce que le responsable a refusé. Le graphique est l'objet ; le texte n'en est que la légende.*
 
 Une carte placée **au-dessus** du tableau, **rendue seulement dans l'onglet « Tous »**.
 Dans l'onglet d'un projet, des totaux de toute la Forge se liraient comme la part du
 projet ; ils n'y sont donc pas rendus.
 
-Trois ressources, comme les colonnes de la liste : **Processeur**, **Mémoire**, **Disque**.
-Le réseau n'a pas de colonne dans la liste et n'y entre pas. Chacune porte quatre valeurs :
+**Un anneau (camembert) par ressource** — Processeur, Mémoire, Disque, comme les colonnes de
+la liste ; le réseau n'a pas de colonne et n'y entre pas. L'anneau représente la
+**capacité** que l'admission control peut engager (§7.7, `pools.<ressource>.capacity`) et la
+découpe en trois parts qui se **réconcilient** :
 
-| Valeur | Ce qu'elle est | D'où elle vient |
-|---|---|---|
-| **Capacité** | ce que l'admission control peut engager (§7.7) | `pools.<ressource>.capacity` de `/v1/forge` |
-| **Alloué** | ce que les Sparks ont **réservé** — le registre, pas la mesure | `pools.<ressource>.allocated` |
-| **Disponible** | ce qui reste à engager : capacité − alloué | `pools.<ressource>.available` |
-| **Utilisé** | ce que les Sparks **consomment** réellement, sommé | les relevés d'usage (§20) |
+| Part | Ce qu'elle est | Couleur | Source |
+|---|---|---|---|
+| **Utilisé** | ce que les Sparks consomment réellement, sommé | `--color-brand` | les relevés d'usage (§20) |
+| **Alloué, non consommé** | réservé par les Sparks, au-delà de ce qu'ils consomment | `--color-text-3` | `pools.<r>.allocated` − utilisé |
+| **Disponible** | ce qui reste à engager | `--color-border` | `pools.<r>.available` |
 
-Alloué et Disponible sont **lus**, jamais recomposés : ce sont les chiffres de l'écran
-Forge (§27.2), et un second calcul ferait diverger les deux écrans. Les quatre valeurs se
-réconcilient : alloué + disponible = capacité. « Utilisé » est d'une autre nature — une
-mesure, pas une réservation — et le bloc le **nomme** comme tel.
+Alloué et disponible sont **lus** de `/v1/forge` (les chiffres de l'écran Forge, §27.2),
+jamais recomposés. Utilisé + alloué non consommé = alloué ; alloué + disponible = capacité.
+Si l'utilisé dépasse l'alloué (le CPU consomme au-delà de sa réservation, §20.3 bis), la part
+« alloué non consommé » est nulle et l'utilisé est borné à la capacité : le chiffre dit la
+vérité, le dessin se borne.
 
-- **Une jauge par ressource**, à deux parts sur la capacité : l'utilisé (`brand`) dans
-  l'alloué (`brand-soft`). Au-delà de **90 % de la capacité allouée**, la part allouée
-  passe en `danger`, avec les chiffres en gras et un texte pour lecteurs d'écran
-  (« proche de la limite ») : la Forge n'accepte presque plus de Spark. Le seuil est
-  `SEUIL_ALERTE_RESSOURCE` (§68.2). L'utilisé n'alerte pas : le CPU consomme au-delà de
-  sa réservation sans défaut (§20.3 bis).
-- **Surengagement** : CPU et mémoire portent la pastille « surengagé ×N » de l'écran
-  Forge lorsque le facteur n'est pas 1 ; le disque n'en a aucun (§7.7).
-- **Utilisé du processeur** : somme des CPU mesurés des Sparks **du pool partagé** ; ceux
-  en mode `dedicated` en sont exclus, leurs cœurs ne sont pas dans la capacité du pool
-  partagé (§7.7). Le bloc le dit.
+- **Au centre de l'anneau** : la capacité, en grand, nommée (« sur 64 Gio »).
+- **Légende sous l'anneau** : les trois parts, chacune avec sa pastille de couleur, son nom
+  et sa valeur. La légende n'est pas décorative : sans elle la couleur seule porterait
+  l'information (design system §1.5). Les valeurs y sont, une fois ; il n'y a pas de seconde
+  liste.
+- **Alerte** : au-delà de **90 % de la capacité allouée**, la part « alloué non consommé »
+  passe en `--color-danger`, le centre et la ligne « Alloué » de la légende en gras, avec un
+  texte pour lecteurs d'écran (« proche de la limite ») : la Forge n'accepte presque plus de
+  Spark. Le seuil est `SEUIL_ALERTE_RESSOURCE` (§68.2). L'utilisé n'alerte pas.
+- **Surengagement** : CPU et mémoire portent la pastille « surengagé ×N » de l'écran Forge
+  lorsque le facteur n'est pas 1 ; le disque n'en a aucun (§7.7).
+- **Utilisé du processeur** : somme des CPU mesurés des Sparks **du pool partagé** ; ceux en
+  mode `dedicated` en sont exclus, leurs cœurs ne sont pas dans la capacité du pool partagé
+  (§7.7). Le bloc le dit.
 - **Somme partielle** : l'utilisé ne porte que sur les Sparks mesurés et le dit
-  (« 7 Sparks sur 9 mesurés », §6.13). Un Spark arrêté n'ajoute rien au CPU ni à la
-  mémoire, et ajoute son disque (§20.4). Premier relevé sans fenêtre : « Mesure en cours »
-  (§14.6), jamais zéro.
-- **Capacité non relevée** (`/v1/forge` en échec) : le bloc garde l'utilisé et **nomme**
-  l'absence (« Capacité de la Forge non relevée »). Il n'invente ni alloué ni disponible.
+  (« 7 Sparks sur 9 mesurés », §6.13). Un Spark arrêté n'ajoute rien au CPU ni à la mémoire,
+  et ajoute son disque (§20.4). Premier relevé sans fenêtre : la part « utilisé » est absente
+  de l'anneau et la légende dit « Mesure en cours » (§14.6), jamais zéro.
+- **Capacité non relevée** (`/v1/forge` en échec) : pas d'anneau — il n'y a pas de capacité à
+  découper. Le bloc garde l'utilisé en chiffres, **nomme** l'absence (« Capacité de la Forge
+  non relevée ») et n'invente ni alloué ni disponible.
 - La capacité est lue avec la liste ; un échec de cette lecture n'empêche pas la liste.
 
 ### 68.4 Preuves attendues
 
 Unitaires : proportion, borne à 100 %, seuil, absence d'usage / de limite (anneaux des
-lignes) ; bloc : quatre valeurs lues de `/v1/forge`, alloué + disponible = capacité, somme
-d'utilisé partielle, CPU dédié exclu, surengagement, capacité absente, absence du bloc hors
-onglet « Tous ». E2E depuis l'accueil à la souris : accord entre alerte et pourcentage dit,
+lignes) ; bloc : trois anneaux, parts qui se réconcilient (utilisé + alloué non consommé +
+disponible = capacité), valeurs de légende lues de `/v1/forge`, utilisé > alloué, alerte à
+90 % alloué, somme d'utilisé partielle, CPU dédié exclu, surengagement, capacité absente
+(pas d'anneau), absence du bloc hors onglet « Tous », aucune liste terme / valeur recopiée
+de l'écran Forge. E2E depuis l'accueil à la souris : accord entre alerte et pourcentage dit,
 bloc face à `/v1/forge`, absence du bloc dans l'onglet d'un projet, retour à « Tous »,
 captures (desktop, mobile). Le seed n'a pas à être modifié : le doublon fait
 déjà franchir 90 % de leur quota mémoire à plusieurs Sparks seedés, au fil de sa

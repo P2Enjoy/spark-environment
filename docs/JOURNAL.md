@@ -15607,3 +15607,16 @@ Le réseau n'y entre pas : la liste n'a pas de colonne réseau.
 **Conséquences.** DAT §68.3, SPK-DS-44 et le backlog réécrits avant le code. Le code, les
 tests, l'E2E, le manuel M8, le changelog et les captures suivent dans le commit de livraison.
 
+**SPK-173 révisée une seconde fois, le 2026-11-18 : un graphique, pas une copie de l'écran
+Forge.** Le premier jet du bloc de totaux (non committé) donnait, par ressource, quatre lignes
+Utilisé / Alloué / Disponible / Capacité et une barre fine : le responsable a répondu « no
+graphique pas une copie de l'écran de la Forge ». Défaut de lecture de ma part : j'avais pris
+« lister » pour « énumérer des valeurs », et recomposé dans la liste ce que l'écran Forge
+affiche déjà.
+
+**Décision** (à confirmer si elle ne convient pas) : un anneau par ressource, découpé en
+utilisé / alloué non consommé / disponible, la capacité au centre ; les valeurs ne vivent
+qu'en légende, une fois. C'est la forme que le responsable avait suggérée pour les cellules
+(le camembert) ; le bloc la reprend, en grand. Trois parts qui se réconcilient avec les pools
+de `/v1/forge`.
+

@@ -9166,8 +9166,9 @@ ligne des totaux face à ce que la Forge a au total. Arbitrages du jour : la for
 - Dépend de : SPK-18 (la liste), SPK-14 (les mesures), SPK-22 (la capacité de la Forge).
 - Portée : un anneau par cellule Mémoire et Disque dont l'usage et la limite sont
   connus ; **un bloc « Total de la Forge » au-dessus du tableau**, dans l'onglet « Tous »
-  seulement — capacité, **alloué, disponible, utilisé** par ressource (*révisé le
-  2026-11-18, remplace le pied de tableau livré en be5c710*) ; capacité, alloué et
+  seulement — **un graphique** (anneau par ressource : utilisé, alloué non consommé,
+  disponible, capacité au centre) et sa légende, **pas une copie de l'écran Forge** (*révisé
+  deux fois le 2026-11-18, remplace le pied de tableau livré en be5c710*) ; capacité, alloué et
   disponible viennent de `/v1/forge`, lue avec la liste.
 - Hors périmètre : la colonne CPU (inchangée) ; les onglets de projet (aucune ligne de
   totaux) ; tout nouveau champ de l'API ; toute variable d'environnement.

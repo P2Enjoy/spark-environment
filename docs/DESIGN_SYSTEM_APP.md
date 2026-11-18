@@ -240,15 +240,20 @@ socle.
   droite faisait suivre l'anneau à la largeur du texte — observé en capture).
 - Absence : pas d'anneau quand l'usage ou la limite manque ; la cellule garde son
   comportement du §14.6.
-- **Bloc « Total de la Forge »** *(révisé le 2026-11-18, remplace la ligne de pied)* : une
-  carte **au-dessus** du tableau, seulement dans l'onglet « Tous ». Trois colonnes —
-  Processeur, Mémoire, Disque — sous 1024 px elles s'empilent. Chacune : un titre, une
-  jauge à deux parts (utilisé `--color-brand` dans alloué `--color-brand-soft`, piste
-  `--color-border`), puis des paires terme / valeur (§6.4) **Utilisé**, **Alloué**,
-  **Disponible**, **Capacité**. Chiffres en `technique`. Alloué au-delà de 90 % de la
-  capacité : part en `--color-danger`, chiffres en gras, texte `sr-only` (§1.5). Pastille
-  « surengagé ×N » comme l'écran Forge. Capacité absente : l'utilisé seul, et l'absence
-  nommée. Pas d'icône décorative ; la carte est un `section` titré (`h2`).
+- **Bloc « Total de la Forge »** *(révisé deux fois le 2026-11-18 : d'un pied de tableau à un
+  bloc séparé, puis d'une liste de valeurs à un **graphique**)* : une carte **au-dessus** du
+  tableau, seulement dans l'onglet « Tous », sous un `h2`. **Le graphique est l'objet, pas une
+  copie de l'écran Forge** : un **anneau** par ressource (Processeur, Mémoire, Disque), trois
+  colonnes, empilées sous 1024 px. L'anneau est la capacité, découpée en **utilisé**
+  (`--color-brand`), **alloué non consommé** (`--color-text-3`) et **disponible**
+  (`--color-border`) ; la capacité est écrite au centre, nommée. La **légende** sous
+  l'anneau donne, une fois, pastille + nom + valeur de chaque part : sans elle la couleur
+  porterait seule l'information (§1.5). Alloué au-delà de 90 % de la capacité : la part
+  « alloué non consommé » en `--color-danger`, le centre et la ligne « Alloué » en gras,
+  texte `sr-only`. Dimension : 128 px de côté, trait de 16 px — dimensions du composant, hors
+  échelle d'espacement (même principe que les 288 px d'une colonne de board, design system
+  §6.2). Pastille « surengagé ×N » comme l'écran Forge. Capacité absente : pas d'anneau, l'utilisé
+  en chiffres et l'absence nommée. Pas de liste terme / valeur en plus de la légende.
 - Responsive : l'anneau ne se masque jamais ; le tableau défile dans son conteneur
   (§8.1), le pied avec lui.
 
