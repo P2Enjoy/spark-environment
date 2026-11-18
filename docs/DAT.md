@@ -12643,16 +12643,66 @@ et il reste celui d'un destinataire qui accepte du JSON structuré. Mesuré le
 2026-09-14 : ni Discord ni Slack n'en font partie, ce qui est exactement la raison
 d'être du gabarit.
 
-#### 47.3.2 Ce que le canal SMTP suppose, et ce qu'il coûte
+#### 47.3.2 Le canal SMTP : ce qu'il suppose, ce qu'il coûte, et comment il envoie
 
-Serveur, port, mode TLS, compte, mot de passe, adresse d'envoi et adresse de
-destination. Le mot de passe est un **secret** au sens du §43.3 : chiffré au
-repos, jamais rendu par l'API, jamais réaffiché, jamais journalisé.
+Serveur, port, mode TLS, compte, mot de passe, adresse d'envoi et adresse(s) de
+destination. **SMTP est une dépendance sortante qui peut pendre** : un serveur qui
+accepte la connexion puis ne répond plus tient la socket ouverte. C'est le cas que
+le §47.5 traite — délai borné, échec avalé, jamais de geste bloqué.
 
-Il faut le dire clairement : **SMTP est une dépendance sortante qui peut pendre.**
-Un serveur qui accepte la connexion puis ne répond plus tient la socket ouverte,
-et c'est exactement le cas que le §47.5 traite — délai borné, échec avalé,
-jamais de geste bloqué.
+**Contrat posé le 2026-11-18, avant le code (SPK-62, dernier chunk).** Décisions du
+rédacteur, à confirmer par le responsable (§47.3.2.8) :
+
+1. **Mode TLS : `starttls`, `tls` ou `none`.** `starttls` (port 587 d'ordinaire) ouvre
+   en clair puis exige la montée en TLS — un serveur qui ne l'annonce pas **fait échouer**
+   l'envoi, jamais un repli en clair ; `tls` (port 465) est le TLS implicite ; `none`
+   n'existe que pour un relais interne sans compte. Le port n'a **pas de valeur
+   par défaut silencieuse** : il se saisit, l'écran suggère 587.
+2. **Le certificat est toujours vérifié** (contexte par défaut du système), sans option pour
+   s'en dispenser : un réglage qui désactive la vérification affaiblirait le seul témoin qui
+   sert quand tout le reste a échoué.
+3. **Un mot de passe ne part jamais en clair** : un compte avec le mode `none` est refusé
+   **à l'enregistrement** (422). Un compte vide vaut « pas d'authentification » ; vider le
+   compte **efface aussi le mot de passe** stocké.
+4. **Le mot de passe est scellé** en AES-256-GCM avec la clé de la Forge (§43.5), le nom
+   `notify.smtp.password` en donnée associée, et rangé dans la colonne `smtp_password_secret`
+   — qui porte donc le **chiffré**, et non le nom d'une entrée du catalogue : une entrée de
+   portée Forge serait **proposée aux Sparks** (§43.6), ce que ce secret ne doit jamais être.
+   Il n'est jamais rendu par l'API (`password_set` seulement), ni journalisé, ni mis dans
+   une alerte. Absent du `PUT` ou vide, il est **conservé** ; non vide, il remplace.
+5. **Adresses.** `smtp_from` : une adresse. `smtp_to` : une à dix adresses séparées par des
+   virgules. Une adresse est `local@hôte`, sans espace, sans chevron, sans saut de ligne :
+   un en-tête ne se construit pas à partir d'un texte qui peut en injecter un autre.
+6. **Ce que le message porte** : du texte UTF-8. Sujet `[<forge>] <action> — <cible>`
+   (caractères de contrôle retirés, 200 caractères au plus) ; corps : les **dix champs du
+   §47.4**, une ligne `champ : valeur` chacun, issus de la **même** fonction (`corps()`) que
+   le webhook — donc le même filtre, et **jamais le `payload`**. Aucune pièce jointe, aucun HTML.
+7. **Qui s'envoie.** La même liste fermée (§47.2) alimente les deux canaux, `health.down` et
+   `health.up` compris. Un canal désactivé ou incomplet ne reçoit rien.
+8. **À confirmer** : le mode `none` autorisé sans compte ; le plafond de dix destinataires ;
+   l'absence de réessai (§47.7, comme le webhook) ; l'absence d'un bouton « essayer le canal »
+   (§47.3.0 bis, qui vaut aussi ici).
+
+**Aucune variable d'environnement nouvelle** : la configuration SMTP ne vit qu'au registre,
+réglée depuis l'onglet.
+
+#### 47.3.2 bis Deux témoins indépendants : ce que « indépendant » veut dire
+
+Chaque canal a **sa file, son fil, ses compteurs et sa dernière erreur**. Ils ne partagent
+rien que la ligne du journal qu'on leur remet. `Ensemble.poster` les alimente chacun dans son
+propre `try` : une exception, une file pleine ou un serveur muet d'un côté ne retarde pas
+l'autre d'une milliseconde. La preuve se fait **en coupant chacun des deux à tour de rôle** (un
+webhook vers un port fermé, un SMTP qui accepte puis se tait) et en constatant que l'autre
+reçoit son message.
+
+#### 47.3.2 ter Couper un canal le dit, par lui
+
+La règle du §47.3.3 bis se précise à deux canaux. Soit *vivants avant* l'ensemble des canaux
+qui veillaient, *vivants après* celui qui veillera une fois l'écriture faite. **Si un canal vivant
+avant ne l'est plus après**, un avis part — **après** l'écriture du registre et **avant** la
+reconfiguration — sur **tous les canaux vivants avant**, y compris ceux qui continueront :
+le premier dit qu'il se tait, le second sait qu'il reste seul. Le texte nomme le canal coupé et
+dit si un autre veille encore. Reprendre la configuration au registre n'est pas une coupure.
 
 #### 47.3.3 Toute modification demande un mot de passe
 
@@ -12790,6 +12840,15 @@ panne de traçabilité ne doit pas devenir une panne d'exploitation.
 `configured: false` quand aucune URL n'est réglée — et alors les compteurs valent
 zéro sans que cela signifie « tout va bien » : ils signifient « rien n'est
 surveillé », ce que l'écran doit dire autrement (§14.6).
+
+**À deux canaux (SPK-62).** `notify` est l'**agrégat** des canaux : `configured` vaut vrai si un
+canal au moins veille, `sent`, `failed` et `dropped` sont des sommes, `last_error` est celle du
+canal le plus récemment en échec, préfixée de son nom (« SMTP : … »), et `misconfigured` vaut
+vrai si un canal qui veille ne peut rien envoyer. Un objet `channels` donne le détail —
+`{"webhook": {…}, "smtp": {…}}`, chacun avec ses propres compteurs — pour que l'écran ne
+confonde jamais un canal qui parle et un canal muet : un agrégat qui dirait « tout est parti »
+quand l'un des deux est muet mentirait (§14.6). `GET /v1/notify/channels` garde `live` (le
+webhook, inchangé) et gagne `live_smtp`.
 
 **Pourquoi un état exposé plutôt qu'une ligne de journal**, et il faut le dire
 franchement : une ligne de journal serait meilleure — elle survivrait à un

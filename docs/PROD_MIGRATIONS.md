@@ -124,6 +124,24 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-48 · Le canal SMTP des alertes hors bande (SPK-62)
+
+```
+Quoi          : un second canal d'alerte, par courriel, aux côtés du webhook.
+Migration     : AUCUNE (la table notify_channels de la 016 porte déjà les colonnes).
+À redéployer  : sparkd (le code d'envoi) et la console (la carte « Courriel »).
+Variables     : AUCUNE. Le canal se règle depuis Forge > Alertes, au registre.
+Secrets       : le mot de passe SMTP est scellé avec la clé de la Forge
+                (SPARKD_SECRET_KEY_FILE, déjà en place). Si la clé change, le
+                mot de passe devient illisible : le canal se dit mal configuré.
+Vérifier      : régler le canal depuis l'onglet, lever puis remettre la protection
+                d'un Spark de test, et constater le courriel chez le destinataire.
+Retour arrière: désactiver le canal depuis l'onglet (un avis part par lui) ; le code
+                précédent ignore simplement les colonnes smtp_*.
+Risques       : un serveur SMTP muet tient un fil jusqu'à son délai de garde ; il ne
+                retarde jamais un geste ni l'autre canal. Aucune remise garantie.
+```
+
 ### OP-47 · La santé d'un Spark dans `sparkd` : migration 024, relevés et alertes (SPK-184)
 
 ```

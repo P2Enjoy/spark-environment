@@ -960,7 +960,7 @@ réponse (§14.6).
 | `guard_hash`, `guard_salt`, `guard_params`, `guard_set_at` | le mot de passe du §47.3.3, **même mécanisme que la protection d'un Spark** (§35.3) — `scrypt`, sel propre, empreinte seule. `NULL` tant qu'aucun n'a été fixé : le premier usage le pose |
 | `webhook_enabled` / `webhook_url` / `webhook_template` | `enabled` est distinct de « configuré » : on garde une URL en la désactivant, sans avoir à la retaper |
 | `smtp_*` | serveur, port, TLS, compte, expéditeur, destinataire |
-| `smtp_password_secret` | **le NOM** de l'entrée chiffrée du §43.3, jamais le mot de passe. Un secret ne vit qu'au coffre |
+| `smtp_password_secret` | le mot de passe SMTP **scellé** (AES-256-GCM, clé de la Forge, donnée associée `notify.smtp.password`, §47.3.2 point 4) — le chiffré, jamais la valeur en clair, et **pas** le nom d'une entrée du catalogue (une entrée de portée Forge serait proposée aux Sparks). Aucune migration : la colonne existe depuis 016 |
 
 **L'URL du webhook ne sort jamais de l'API**, même en lecture : elle EST un
 secret — qui la détient écrit dans le salon. `GET /v1/notify/channels` rend son

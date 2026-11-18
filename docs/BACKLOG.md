@@ -3014,7 +3014,8 @@ avant la première ligne de code.
   3. le **mot de passe** exigé pour toute modification (§47.3.3), et la
      **désactivation qui notifie par le canal qu'elle coupe** ;
   4. le **second canal, SMTP**, et la preuve que l'échec de l'un n'empêche pas
-     l'autre.
+     l'autre — **contrat écrit le 2026-11-18 (DAT §47.3.2, §47.3.2 bis, §47.3.2 ter),
+     avant le code**, voir « Chunk SMTP » ci-dessous.
 
   Ce n'est plus « une action humaine » qui manque : c'est du code, et il est
   spécifié.
@@ -3032,6 +3033,30 @@ avant la première ligne de code.
   "{champ_inconnu}"}' ./scripts/dev.sh --state … up` — puis Forge au clic :
   `spk62-canal-mal-configure.jpg` et `-mobile.jpg`, console vierge, aucun
   débordement à 390 px.
+
+**Chunk SMTP (2026-11-18) — le second canal et l'indépendance des deux.**
+
+- Spécification : `docs/DAT.md` **§47.3.2** (mode TLS, certificat toujours vérifié, mot de passe
+  scellé, adresses, message), **§47.3.2 bis** (deux témoins indépendants), **§47.3.2 ter** (couper
+  un canal le dit, par lui), §47.6 (agrégat et détail) · `docs/SCHEMA.md` §8 (la colonne porte le
+  chiffré) · manuel M11 · `docs/DESIGN_SYSTEM_APP.md` · `docs/DESIGN_SYSTEM.md` §6.11, §6.13, §14.6.
+- Portée : un `CanalSmtp` aux côtés du webhook (file, fil, compteurs propres), un `Ensemble` qui les
+  alimente chacun isolément ; le mot de passe scellé ; l'enregistrement qui valide l'ensemble
+  (hôte, port, mode, adresses, compte sans TLS refusé) ; l'avis de coupure par canal ; `live_smtp`
+  et `notify.channels` ; la carte « Courriel (SMTP) » de l'onglet Alertes et le détail par canal
+  sur l'écran de la Forge ; le manuel ; le seed (aucune donnée : un canal ne se seede pas, c'est
+  une configuration de la Forge, et le destinataire est un tiers).
+- DoD : un geste destructif produit un message **sur chacun des deux canaux** — prouvé contre un
+  **vrai serveur SMTP local** (socket), STARTTLS et TLS implicite compris avec un vrai certificat ;
+  l'échec de l'un n'empêche pas l'autre, prouvé **en coupant chacun à tour de rôle**, y compris un
+  serveur qui accepte puis se tait ; un geste n'est jamais retardé ; ce que le message porte est
+  mesuré sur un geste dont le payload contient un secret ; le mot de passe n'est jamais rendu ni
+  journalisé ; refus directs par l'API (mot de passe du garde, compte sans TLS, adresse injectant
+  un en-tête) ; parcours E2E depuis l'accueil, à la souris et au clavier, jusqu'à un courriel reçu
+  par un serveur SMTP local ; captures observées (desktop, mobile) ; manuel et changelog à jour.
+- **Ne pourra pas être prouvé ici** : l'acceptation par un vrai fournisseur (Scaleway TEM, Gmail,
+  un relais d'entreprise) — authentification, limites, anti-spam. L'unité reste `[~]` tant
+  qu'un courriel n'a pas été reçu d'une vraie Forge par un vrai destinataire.
 
 ### [x] SPK-63 · Frappe du nom sur les gestes destructifs
 

@@ -15958,3 +15958,19 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **Non prouvé** : le cas « aucun canal d'alerte » est prouvé au rendu seulement (la pile des parcours a un canal) ;
   rien contre une vraie Forge — Incus, Caddy et Docker réels.
 
+**SPK-62, dernier chunk : le canal SMTP — contrat écrit le 2026-11-18, avant le code.**
+
+- **Constat** : la configuration SMTP existe au registre depuis la migration 016, mais rien ne l'envoie et
+  l'onglet Alertes ne la montre pas. Le chunk 4 du backlog (« le second canal, SMTP, et la preuve que l'échec
+  de l'un n'empêche pas l'autre ») n'était pas construit.
+- **Décision de fond : le mot de passe est scellé dans la colonne, pas rangé au catalogue.** Le schéma disait
+  « le NOM d'une entrée du §43.3 ». Or une entrée de portée Forge est **proposée aux Sparks** (§43.6) : y mettre
+  le mot de passe SMTP l'offrirait à tout locataire. Le chiffré (AES-256-GCM, clé de la Forge, nom en donnée
+  associée) vit donc dans la colonne elle-même. SCHEMA §8 corrigé ; aucune migration.
+- **Autres décisions** (DAT §47.3.2, à confirmer) : trois modes TLS, certificat toujours vérifié sans
+  interrupteur, un compte avec `none` refusé, adresses validées pour interdire l'injection d'en-tête, dix
+  destinataires au plus, aucun réessai, aucun bouton « essayer ». Aucune variable d'environnement nouvelle.
+- **Indépendance** : file, fil et compteurs par canal ; un `Ensemble` qui isole chaque `poster` dans son `try`.
+  L'avis de coupure se précise à deux canaux (§47.3.2 ter) : il part par tous les canaux vivants avant.
+- **Reste à faire** : le code, les preuves (serveur SMTP local réel, STARTTLS compris), l'écran, le manuel.
+
