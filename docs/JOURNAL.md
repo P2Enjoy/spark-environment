@@ -15843,3 +15843,20 @@ sur un Spark protégé, rattrapage unique, pas de notification hors bande en v1.
 **Conséquences.** SPK-182 (service) et SPK-183 (écran) ouvertes, DAT §74, SCHEMA §8 ter et
 SPK-DS-50 écrits avant le code. À mesurer sur la VM : le nom `SLA_…` accepté par le vrai Incus.
 
+**SPK-182 : livraison du service, le 2026-11-18.** Implémenté contre le doublon et le vrai registre.
+
+- **Défaut trouvé par un test, corrigé** : `Planificateur.un_pas` ouvrait la connexion avant son
+  `try` ; un registre momentanément indisponible aurait tué le fil, et avec lui toutes les prises à
+  venir, sans bruit. L'historien (`historian.Historien.un_tic`) a la même forme — **non touché ici**,
+  hors périmètre, à signaler au responsable.
+- **Effet de bord prévu, et voulu** : les prises SLA sont plus récentes que les instantanés manuels ;
+  restaurer le plus ancien en détruirait aussi cinq, et le refus du §19.1 les nomme. Le test du seed
+  qui attendait `["apres-migration"]` seul est adapté. Les trois tests du retour arrière de la 022
+  supposaient qu'elle était la dernière migration ; ils défont d'abord les suivantes.
+- **Le seed passe par le vrai chemin** : politiques posées par `sla.programmer`, prises rejouées par
+  `Planificateur.un_pas` à des instants passés. L'échec d'« orphelin » n'est pas simulé : sa cellule a
+  disparu hors du produit (SPK-52), la prise échoue par le chemin d'erreur réel.
+- **Contrat OpenAPI régénéré** (`make contract`) ; la génération des types TypeScript n'a pas pu tourner
+  — `pnpm` est absent de ce poste — mais `src/types.d.ts` n'est pas versionné.
+- **Reste** : mesurer sur la VM que le vrai Incus accepte `SLA_…` ; SPK-183, l'écran.
+

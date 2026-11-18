@@ -124,6 +124,44 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-46 · Le SLA des instantanés dans `sparkd` : migration 023 et planificateur (SPK-182)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable.
+Objectif      : sparkd porte la politique de prise automatique et de
+                rétention des instantanés (DAT §74). Migration 023 : la table
+                sla (une politique par Spark) et snapshot.origin ('manual' ou
+                'sla'). Un fil, « sparkd-sla », démarre avec sparkd : il prend
+                les instantanés échus, nommés SLA_AAAAMMJJ-HHMMSS, et applique
+                la rétention. Cinq routes : GET, PUT, DELETE
+                /v1/sparks/{nom}/sla, POST .../sla/preview et
+                .../sla/{suspend|resume}. Aucune variable d'environnement.
+Dépend de     : rien. L'écran (SPK-183) n'est PAS livré : sans lui la
+                politique se règle par l'API seulement.
+Ordre         : 1. sauvegarder le registre (§ 2 bis) ; 2. mettre à jour
+                sparkd (bloc « Code déployé » de la console) — la migration
+                023 s'applique au démarrage ; 3. relancer la console.
+Vérification  : GET /v1/sparks/<nom>/sla rend {"configured": false, ...} ;
+                les instantanés existants portent origin "manual" ; une
+                politique posée par l'API prend sa première prise à l'heure
+                dite (journal : snapshot.create, acteur « sla », classe runtime).
+À MESURER     : que le vrai Incus accepte le nom SLA_… (majuscule et
+                souligné) pour un instantané — jamais mesuré (DAT §74.4). Si
+                la prise échoue pour ce motif, le journal porte l'erreur
+                d'Incus ; repli prévu : un nom en minuscules, sans migration.
+Retour arrière: réinstaller la build précédente ; la migration 023 se défait
+                (sparkd rollback), ce qui supprime les politiques et la
+                colonne origin, JAMAIS un instantané. Les instantanés nommés
+                SLA_… restent dans Incus et se suppriment à la main.
+Risques       : une rétention supprime sans qu'on le lui demande. Elle ne
+                touche que origin = 'sla', garde toujours le plus récent, et
+                l'enregistrement d'une rétention qui supprimerait refuse sans
+                confirmation (DAT §74.7). Un SLA mal borné n'est pas possible :
+                au moins une rétention est exigée. Les instantanés comptent
+                dans le quota du Spark (§19.4). Pas de notification hors
+                bande d'un échec de SLA en v1 : il se lit au journal.
+```
+
 ### OP-45 · Appliquer les mises à jour du système depuis la console : `sparkd` et la console (SPK-181)
 
 ```

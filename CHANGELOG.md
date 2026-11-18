@@ -3,6 +3,20 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-182 — le SLA des instantanés dans `sparkd` : prise automatique et rétention.** Un Spark
+  peut porter une politique : une fréquence en **chaîne crontab à cinq champs** (UTC, écart minimal
+  de 15 minutes, analyseur écrit dans le dépôt), une **rétention par âge et/ou par nombre**
+  (au moins une, dans l'API et dans la base), un état actif ou suspendu. Un planificateur, sur son
+  propre fil, prend les instantanés échus — nommés `SLA_AAAAMMJJ-HHMMSS` — rattrape **une seule**
+  occurrence après une panne, reprend trois fois après un échec, et applique la rétention. **La
+  suppression automatique ne détruit que ce qui est à elle** : seuls les instantanés d'origine SLA,
+  jamais le plus récent, rien tant que la politique est suspendue ; enregistrer une rétention qui
+  supprimerait des instantanés existants **refuse sans confirmation** et les nomme (aperçu
+  `POST …/sla/preview`). Chaque instantané porte désormais sa provenance (`manual` ou `sla`) ; le
+  nom `SLA_…` est réservé au planificateur. Retirer la politique ne supprime aucun instantané ;
+  un Spark protégé refuse toute écriture du SLA. Cinq routes, migration 023, trois SLA au seed
+  (actif, suspendu, en échec). **L'écran est SPK-183, non livré** : la politique se règle par l'API.
+  DAT §74 ; SCHEMA §8 ter ; `docs/PROD_MIGRATIONS.md` OP-46.
 - **SPK-181 — les mises à jour du système s'appliquent depuis l'onglet Forge → Mises à
   jour.**
   - **Le choix** : une case par paquet, décochée. *Tout sélectionner* et *Sécurité

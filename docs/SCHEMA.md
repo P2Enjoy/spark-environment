@@ -363,10 +363,11 @@ la file sont des tables de registre ; les supprimer **ne touche pas au S3**. Les
 qu'elles portent partent avec elles : sans la clé de sauvegarde gardée par le
 propriétaire, les archives du S3 deviennent illisibles (`docs/DAT.md` §67.4).
 
-## 8 ter. `sla` et `snapshot.origin` : le SLA des instantanés (contrat, SPK-182 — non livré)
+## 8 ter. `sla` et `snapshot.origin` : le SLA des instantanés (SPK-182, migration 023)
 
-*Contrat écrit le 2026-11-18, avant le code. La migration prend le numéro suivant au moment de
-l'écrire.*
+*Contrat écrit le 2026-11-18, avant le code ; livré par la migration
+`023_sla_instantanes.sql`, dont le `down` supprime la politique et la colonne, jamais un
+instantané.*
 
 ```sql
 CREATE TABLE sla (

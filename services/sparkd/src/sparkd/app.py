@@ -52,6 +52,7 @@ from . import metrics as metrics_service
 from . import historian as historian_service
 from . import veilleur as veilleur_service
 from . import snapshots as snapshot_service
+from . import sla as sla_service
 from . import protection as protection_service
 from . import isolation as isolation_service
 from . import systeme as systeme_service
@@ -143,11 +144,18 @@ def create_app(config: Config) -> FastAPI:
         veilleur = application.state.veilleur
         if not veilleur.is_alive():
             veilleur.start()
+        # SPK-182 · docs/DAT.md §74.5 : le planificateur du SLA prend les
+        # instantanés échus et applique la rétention. Son premier pas rattrape
+        # une occurrence manquée pendant un arrêt de `sparkd`.
+        planificateur = application.state.planificateur_sla
+        if not planificateur.is_alive():
+            planificateur.start()
         try:
             yield
         finally:
             historien.arreter()
             veilleur.arreter()
+            planificateur.arreter()
 
     app = FastAPI(
         title="sparkd",
@@ -230,6 +238,12 @@ def create_app(config: Config) -> FastAPI:
         incus=app.state.incus,
         reposer=lambda connection, spark_id: _apply_env(
             connection, service.get(connection, spark_id)),
+    )
+    # SPK-182 · docs/DAT.md §74.5 : il ouvre SA connexion, comme les deux fils
+    # ci-dessus, et son pas n'est pas un réglage (§74.5).
+    app.state.planificateur_sla = sla_service.Planificateur(
+        ouvrir=lambda: connect(config.database),
+        incus=app.state.incus,
     )
     # SPK-62 · docs/DAT.md §47.1 : le canal hors bande est posé sur `audit`, qui
     # est le SEUL chemin vers le journal. S'accrocher à la console laisserait
@@ -1824,6 +1838,101 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=502, detail={
                     "error": "incus_failed", "message": str(erreur)}) from erreur
             return {"deleted": snapshot}
+
+    # --- SPK-182 · le SLA des instantanés (docs/DAT.md §74) -------------------
+
+    def _corps_sla(body: dict) -> dict:
+        """Les champs d'une politique, types vérifiés ; le sens est celui du service."""
+        accept = body.get("accept_deletion", False)
+        enabled = body.get("enabled", True)
+        if not isinstance(accept, bool) or not isinstance(enabled, bool):
+            raise HTTPException(status_code=422, detail={
+                "error": "invalid_sla",
+                "message": "« enabled » et « accept_deletion » sont des booléens."})
+        return {"schedule": body.get("schedule", ""),
+                "retention_days": body.get("retention_days"),
+                "retention_count": body.get("retention_count"),
+                "enabled": enabled, "accept_deletion": accept}
+
+    def _erreurs_sla(erreur: Exception, spark: dict | None = None) -> HTTPException:
+        if isinstance(erreur, service.NotFound):
+            return HTTPException(status_code=404, detail={
+                "error": "not_found", "message": str(erreur)})
+        if isinstance(erreur, sla_service.DeletionRequiresConfirmation):
+            return HTTPException(status_code=409, detail={
+                "error": "deletion_requires_confirmation", "message": str(erreur),
+                "deletions": erreur.deletions})
+        if isinstance(erreur, InstanceAbsente) and spark is not None:
+            return _refus_cellule_perdue(spark)
+        if isinstance(erreur, IncusError):
+            return HTTPException(status_code=502, detail={
+                "error": "incus_failed", "message": str(erreur)})
+        return HTTPException(status_code=422, detail={
+            "error": "invalid_sla", "message": str(erreur)})
+
+    @app.get("/v1/sparks/{name}/sla", tags=["instantanes"])
+    def get_sla(name: str) -> dict:
+        with registry() as connection:
+            try:
+                return sla_service.vue(connection, service.by_name(connection, name))
+            except service.NotFound as erreur:
+                raise _erreurs_sla(erreur) from erreur
+
+    @app.post("/v1/sparks/{name}/sla/preview", tags=["instantanes"])
+    def preview_sla(name: str, body: dict = Body(...)) -> dict:
+        """Ce que la politique proposée ferait, SANS rien écrire (§74.7)."""
+        champs = _corps_sla(body)
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                return sla_service.apercu(
+                    connection, spark, schedule=champs["schedule"],
+                    retention_days=champs["retention_days"],
+                    retention_count=champs["retention_count"], enabled=champs["enabled"])
+            except (service.NotFound, sla_service.SlaError) as erreur:
+                raise _erreurs_sla(erreur) from erreur
+
+    @app.put("/v1/sparks/{name}/sla", tags=["instantanes"])
+    def put_sla(name: str, body: dict = Body(...)) -> dict:
+        champs = _corps_sla(body)
+        with registry() as connection:
+            spark = None
+            try:
+                spark = service.by_name(connection, name)
+                # §74.8 : configurer est une ÉCRITURE ; la protection s'applique avant tout.
+                protection_service.ensure_writable(connection, name, "sla")
+                return sla_service.programmer(
+                    connection, spark, app.state.incus, schedule=champs["schedule"],
+                    retention_days=champs["retention_days"],
+                    retention_count=champs["retention_count"], enabled=champs["enabled"],
+                    accept_deletion=champs["accept_deletion"])
+            except (service.NotFound, sla_service.SlaError, InstanceAbsente, IncusError) as erreur:
+                raise _erreurs_sla(erreur, spark) from erreur
+
+    @app.post("/v1/sparks/{name}/sla/{geste}", tags=["instantanes"])
+    def basculer_sla(name: str, geste: str) -> dict:
+        """`suspend` ou `resume` : suspendre gèle la prise ET la suppression (§74.2)."""
+        if geste not in ("suspend", "resume"):
+            raise HTTPException(status_code=404, detail={
+                "error": "not_found", "message": f"Geste « {geste} » inconnu."})
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "sla")
+                return sla_service.basculer(connection, spark, enabled=(geste == "resume"))
+            except (service.NotFound, sla_service.SlaError) as erreur:
+                raise _erreurs_sla(erreur) from erreur
+
+    @app.delete("/v1/sparks/{name}/sla", tags=["instantanes"])
+    def delete_sla(name: str) -> dict:
+        """Retire la politique ; **aucun instantané n'est supprimé** (§74.2)."""
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "sla")
+                return sla_service.retirer(connection, spark)
+            except (service.NotFound, sla_service.SlaError) as erreur:
+                raise _erreurs_sla(erreur) from erreur
 
     # --- la protection (SPK-34, docs/DAT.md §35.5) --------------------------
 

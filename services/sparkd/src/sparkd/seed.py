@@ -30,7 +30,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from . import historian, metrics
+from . import historian, metrics, sla
 from .app import create_app
 from .config import Config, load
 from .translate import CLES_ISOLATION
@@ -971,6 +971,100 @@ def verify(client: TestClient) -> None:
             f"({refus.status_code}) : le badge mentirait")
 
 
+def _verifier_sla(client: TestClient) -> None:
+    """Les trois SLA sont dans l'état que les écrans doivent montrer (SPK-182)."""
+    actif = _attendu(client.get("/v1/sparks/crm-production/sla"), 200, quoi="SLA actif").json()
+    if not actif["enabled"] or actif["last_status"] != "ok":
+        raise SeedError(f"le SLA de « crm-production » devait être actif et sain : {actif}")
+    liste = _attendu(client.get("/v1/sparks/crm-production/snapshots"), 200,
+                     quoi="instantanés de « crm-production »").json()["snapshots"]
+    origines = [x["origin"] for x in liste]
+    if origines.count("manual") != 2 or origines.count("sla") != 5:
+        raise SeedError(
+            "« crm-production » devait porter ses 2 instantanés manuels et 5 instantanés "
+            f"SLA (la rétention en a supprimé un) : {origines}")
+    suspendu = _attendu(client.get("/v1/sparks/ubuntu-24/sla"), 200, quoi="SLA suspendu").json()
+    if suspendu["enabled"] or suspendu["next_run_at"] is not None or suspendu["snapshots"]["count"] < 1:
+        raise SeedError(f"le SLA d'« ubuntu-24 » devait être suspendu, avec des instantanés : {suspendu}")
+    echec = _attendu(client.get("/v1/sparks/orphelin/sla"), 200, quoi="SLA en échec").json()
+    if echec["last_status"] != "error" or not echec["last_error"]:
+        raise SeedError(f"le SLA d'« orphelin » devait être en échec, avec sa raison : {echec}")
+
+
+def _declarer_sla(app, config: Config) -> dict[str, int]:
+    """Les SLA de démonstration (SPK-182, docs/DAT.md §74), produits par le VRAI chemin.
+
+    @spec docs/BACKLOG.md#SPK-182 · docs/DAT.md §74.13 (le seed pose un SLA et ses
+          instantanés par le même planificateur, à des instants simulés, jamais par
+          une écriture directe) · CLAUDE.md §8
+
+    **Aucune ligne n'est fabriquée à la main.** Les politiques sont posées par
+    `sla.programmer`, les instantanés par le planificateur lui-même — `un_pas`, avec
+    une horloge injectée sur des instants passés —, et la rétention est appliquée par
+    la même fonction que celle de la Forge. Les noms `SLA_AAAAMMJJ-HHMMSS` et les
+    dates de création sont donc ceux que la Forge produira.
+
+    Trois situations, pas une de moins : un SLA **actif** dont la rétention a déjà
+    supprimé ; un SLA **suspendu** ; un SLA en **échec**, et celui-là est authentique :
+    la cellule d'« orphelin » a disparu hors du produit (SPK-52), la prise échoue donc
+    par le vrai chemin d'erreur, à chaque occurrence, sans qu'on la simule.
+    """
+    maintenant = datetime.now(timezone.utc).replace(microsecond=0)
+    plan = app.state.planificateur_sla
+    incus = app.state.incus
+    connection = connect(config.database)
+
+    def spark(nom: str) -> dict:
+        return dict(connection.execute("SELECT * FROM spark WHERE name = ?", (nom,)).fetchone())
+
+    def pas(instant: datetime) -> list[dict]:
+        rendus = plan.un_pas(instant, retention=False)
+        if rendus is None:
+            raise SeedError(f"le planificateur du SLA a échoué à {instant.isoformat()}")
+        return rendus
+
+    try:
+        # 1. Actif : une prise chaque jour à 02:00 UTC, sept jours et au plus cinq
+        #    instantanés. Six prises sont rejouées : la rétention par nombre a donc DÉJÀ
+        #    supprimé la plus ancienne, et l'écran peut le montrer.
+        debut = (maintenant - timedelta(days=6)).replace(hour=1, minute=0, second=0)
+        sla.programmer(connection, spark("crm-production"), incus, schedule="0 2 * * *",
+                       retention_days=7, retention_count=5, now=debut)
+        connection.commit()
+        for jours in range(6, -1, -1):
+            instant = (maintenant - timedelta(days=jours)).replace(hour=2, minute=0, second=5)
+            if instant <= maintenant:
+                if [r["resultat"] for r in pas(instant)] != ["ok"]:
+                    raise SeedError("la prise SLA de « crm-production » devait réussir")
+
+        # 2. Suspendu : une prise par semaine, le dimanche à 03:00 UTC. Au moins une
+        #    prise est rejouée avant la pause : un SLA suspendu sans rien d'autre à
+        #    montrer n'éprouverait pas ce qu'une pause GÈLE.
+        sla.programmer(connection, spark("ubuntu-24"), incus, schedule="0 3 * * 0",
+                       retention_days=30, retention_count=None,
+                       now=maintenant - timedelta(days=8))
+        connection.commit()
+        due = sla._lire_iso(sla.lire(connection, spark("ubuntu-24")["id"])["next_run_at"])
+        while due + timedelta(seconds=5) <= maintenant:
+            pas(due + timedelta(seconds=5))
+            due = sla._lire_iso(sla.lire(connection, spark("ubuntu-24")["id"])["next_run_at"])
+        sla.basculer(connection, spark("ubuntu-24"), enabled=False, now=maintenant)
+        connection.commit()
+
+        # 3. En échec : la cellule d'« orphelin » n'existe plus (SPK-52).
+        sla.programmer(connection, spark("orphelin"), incus, schedule="0 * * * *",
+                       retention_days=None, retention_count=3,
+                       now=maintenant - timedelta(hours=2))
+        connection.commit()
+        due = sla._lire_iso(sla.lire(connection, spark("orphelin")["id"])["next_run_at"])
+        if [r["resultat"] for r in pas(due + timedelta(seconds=5))] != ["error"]:
+            raise SeedError("la prise SLA d'« orphelin » devait échouer : sa cellule est perdue")
+        connection.commit()
+        return {"sla": 3}
+    finally:
+        connection.close()
+
+
 def run(config: Config | None = None) -> dict[str, int]:
     """Recrée le registre et le peuple. Rejouable à l'identique (§28.6)."""
     config = config or load()
@@ -985,6 +1079,10 @@ def run(config: Config | None = None) -> dict[str, int]:
     client = TestClient(app)
     compte = populate(client, app.state.incus, app.state.caddy, app.state.sondes)
     verify(client)
+    # SPK-182 · §74.13 : les SLA viennent APRÈS la vérification, comme l'historique :
+    # ce sont les Sparks qui font le seed, la politique les décrit.
+    compte.update(_declarer_sla(app, config))
+    _verifier_sla(client)
     # SPK-93 · §52.9 : l'historien ne remplit jamais le passé. Sans cet
     # historique, tout écran de supervision démarre vide pendant des minutes et
     # aucune capture n'est possible. Il vient APRÈS la vérification : ce sont

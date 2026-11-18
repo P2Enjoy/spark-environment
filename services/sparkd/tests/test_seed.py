@@ -205,14 +205,20 @@ def test_un_spark_a_ses_cles_et_un_autre_n_en_a_aucune(seede):
 def test_deux_instantanes_rendent_le_refus_de_restauration_atteignable(seede):
     """§19.1, §28.5 — restaurer le plus ancien doit être refusé."""
     instantanes = seede.get("/v1/sparks/crm-production/snapshots").json()["snapshots"]
-    assert [s["incus_name"] for s in instantanes] == ["avant-deploiement", "apres-migration"]
+    # SPK-182 : les prises du SLA sont PLUS RÉCENTES que les deux instantanés manuels ;
+    # on regarde donc ceux-ci par leur provenance, et le refus nomme aussi celles-là.
+    manuels = [s["incus_name"] for s in instantanes if s["origin"] == "manual"]
+    sla_pris = [s["incus_name"] for s in instantanes if s["origin"] == "sla"]
+    assert manuels == ["avant-deploiement", "apres-migration"]
+    assert len(sla_pris) == 5
 
     refus = seede.post("/v1/sparks/crm-production/snapshots/avant-deploiement/restore",
                        json={})
     assert refus.status_code == 409
     detail = refus.json()["detail"]
     assert detail["error"] == "blocked_by_newer_snapshots"
-    assert detail["blocking"] == ["apres-migration"]
+    # §19.1 : restaurer le plus ancien détruirait AUSSI les prises du SLA, et le dit.
+    assert detail["blocking"] == ["apres-migration", *sla_pris]
 
 
 def test_un_spark_dedie_retire_des_coeurs_du_pool(seede):
@@ -336,3 +342,32 @@ def test_le_diagnostic_en_direct_montre_ses_etats_en_developpement(seede):
 
     boutique = seede.get("/v1/ingress/diagnostic", params={"spark": "boutique"}).json()
     assert boutique["routes"]["*.boutique.example.com"]["certificate"]["state"] == "wildcard"
+
+
+# --- SPK-182 : les trois SLA de démonstration, produits par le vrai chemin ---------------
+
+def test_les_trois_sla_de_demonstration_couvrent_actif_suspendu_et_echec(seede):
+    """§74.13 — sans eux, l'onglet Instantanés ne pourrait montrer aucun de ses états."""
+    actif = seede.get("/v1/sparks/crm-production/sla").json()
+    assert actif["enabled"] and actif["last_status"] == "ok"
+    assert (actif["retention_days"], actif["retention_count"]) == (7, 5)
+    assert actif["snapshots"]["count"] == 5            # six prises rejouées, la rétention en a ôté une
+
+    suspendu = seede.get("/v1/sparks/ubuntu-24/sla").json()
+    assert suspendu["enabled"] is False and suspendu["next_run_at"] is None
+    assert suspendu["snapshots"]["count"] >= 1
+
+    echec = seede.get("/v1/sparks/orphelin/sla").json()
+    assert echec["last_status"] == "error" and echec["last_error"]
+
+
+def test_les_prises_du_seed_sont_celles_du_planificateur_pas_des_lignes_inventees(seede):
+    """CLAUDE.md §8 : les noms et les dates sont ceux que la Forge produira."""
+    import re
+    instantanes = seede.get("/v1/sparks/crm-production/snapshots").json()["snapshots"]
+    sla_pris = [s for s in instantanes if s["origin"] == "sla"]
+    assert all(re.fullmatch(r"SLA_\d{8}-\d{6}", s["incus_name"]) for s in sla_pris)
+    # Un nom de prise commence par sa date de création : un seul instant les relie.
+    for s in sla_pris:
+        horodatage = s["created_at"][:19].replace("-", "").replace(":", "").replace("T", "-")
+        assert s["incus_name"] == f"SLA_{horodatage}"

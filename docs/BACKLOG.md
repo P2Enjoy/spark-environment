@@ -9249,7 +9249,7 @@ sert, on le recopie dans la barre d'adresse.
   fraîche (README §28.7). Le seed n'a pas été modifié : il porte déjà une route avec TLS,
   un joker, une route sans TLS et une route non appliquée.
 
-### [ ] SPK-182 · Le SLA des instantanés dans `sparkd` : prise automatique et rétention
+### [~] SPK-182 · Le SLA des instantanés dans `sparkd` : prise automatique et rétention
 
 **Demandé le 2026-11-18** par le responsable, comme « un truc important à faire » : dans
 l'onglet Instantanés, un **SLA** — on y programme la **fréquence** des instantanés
@@ -9277,6 +9277,19 @@ rétention et l'API. L'écran est SPK-183.
   requête directe (Spark protégé, rétention absente, fréquence trop rapprochée, suppression non
   confirmée) ; une prise et une rétention réelles par le planificateur contre le doublon ;
   migration et `docs/PROD_MIGRATIONS.md` à jour.
+- **État au 2026-11-18 : implémenté et vérifié contre le doublon Incus et le vrai registre,
+  pas sur une Forge réelle — reste `[~]`.** Prouvé : l'analyseur crontab (55 tests : formes,
+  refus avec raison, « ou » du jour, bissextile, écart minimal, phrases) ; le service (50 tests,
+  horloge injectée : sélection de la rétention, aperçu, confirmation, rattrapage unique, reprises,
+  Spark sans cellule, provenance, acteur `sla`/`runtime`) ; l'API (23 tests, **refus par requête
+  directe** : Spark protégé 423 sur chaque écriture, rétention absente, alias, fréquence trop
+  rapprochée, suppression non confirmée qui nomme les instantanés, aperçu sans écriture) ; la
+  migration dans les deux sens (10 tests) ; le seed (trois SLA par le vrai planificateur) ; la
+  suite complète de `sparkd` verte, contrat OpenAPI régénéré. **Défaut trouvé par les tests** :
+  `Planificateur.un_pas` ouvrait la connexion avant son `try`, donc une panne du registre tuait le
+  fil. **Non prouvé** : que le vrai Incus accepte le nom `SLA_…` (DAT §74.4) ; une prise et une
+  suppression réelles sur la VM d'installation fraîche (README §28.7) ; le comportement après un
+  vrai arrêt de `sparkd`. Décisions du rédacteur à confirmer : DAT §74.11.
 
 ### [ ] SPK-183 · Le SLA des instantanés dans la console : le panneau et sa modale
 

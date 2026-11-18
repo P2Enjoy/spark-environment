@@ -85,13 +85,25 @@ def test_les_declencheurs_de_protection_sont_recrees(db):
         db.execute("UPDATE spark SET protected_at = 't' WHERE id = 'S1'")
 
 
+def _revenir_a(db, version):
+    """Défait les migrations POSTÉRIEURES à `version`, pour éprouver la sienne.
+
+    Ces preuves visent le retour arrière de la 022. Elles supposaient qu'elle était la
+    dernière ; chaque migration ajoutée depuis (SPK-182 : la 023) a donc à être défaite
+    d'abord, sans rien changer à ce qui est éprouvé ici.
+    """
+    while max(migrations.applied(db)) > version:
+        migrations.downgrade(db)
+
+
 def test_aller_retour_sans_perdre_les_lignes_filles(db):
     """Le cœur du §12.3 bis : la reconstruction, dans les deux sens, garde les filles."""
     _spark(db)
     _note(db)
+    _revenir_a(db, 22)
     assert migrations.downgrade(db) == [22]
     assert _notes(db) == 1
-    assert migrations.upgrade(db) == [22]
+    assert migrations.upgrade(db)[0] == 22            # la 022 d'abord, les suivantes après
     assert _notes(db) == 1
     assert db.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     # La cascade fonctionne de nouveau : la table reconstruite est bien la mère.
@@ -102,6 +114,7 @@ def test_aller_retour_sans_perdre_les_lignes_filles(db):
 def test_le_retour_arriere_est_refuse_tant_qu_un_spark_est_dans_le_mode(db):
     _spark(db, cpu_mode="shared-capped", cpu_reservation=0.5, cpu_max=1.0)
     _note(db)
+    _revenir_a(db, 22)
     with pytest.raises(sqlite3.IntegrityError, match="repassez-le dans un autre mode"):
         migrations.downgrade(db)
     assert 22 in migrations.applied(db)
@@ -109,6 +122,7 @@ def test_le_retour_arriere_est_refuse_tant_qu_un_spark_est_dans_le_mode(db):
 
 
 def test_apres_le_retour_arriere_le_mode_n_existe_plus(db):
+    _revenir_a(db, 22)
     migrations.downgrade(db)
     with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
         _spark(db, cpu_mode="shared-capped", cpu_reservation=0.5, cpu_max=1.0)

@@ -2,6 +2,9 @@
 
 @spec docs/BACKLOG.md#SPK-13 · docs/DAT.md §8.3 (pourquoi), §19 (comment),
       §19.1 (le refus est conservé), §19.4 (le quota) · docs/SCHEMA.md §8
+@spec docs/BACKLOG.md#SPK-182 · docs/DAT.md §74.4 (le nom `SLA_…` est réservé au
+      planificateur ; la provenance est une donnée, pas un préfixe) · docs/SCHEMA.md
+      §8 ter — pour `NOM_SLA`, `ORIGINES` et le paramètre `origin` de `create`
 
 Un instantané rend l'état complet de la cellule — système, images Docker,
 Compose, volumes, configuration — ce qu'une sauvegarde applicative ne restaure
@@ -23,6 +26,15 @@ from .db import transaction
 
 #: Incus impose un nom simple ; on reste plus strict pour rester lisible.
 NAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+
+#: Le nom d'un instantané pris par le SLA : `SLA_AAAAMMJJ-HHMMSS`, en UTC (DAT §74.4).
+#: Il porte une majuscule et un souligné, que `NAME` refuse : le préfixe est donc
+#: RÉSERVÉ au planificateur, et un instantané manuel ne peut jamais s'appeler ainsi.
+NOM_SLA = re.compile(r"^SLA_[0-9]{8}-[0-9]{6}$")
+
+#: Provenance d'un instantané (SCHEMA §8 ter). La rétention du SLA ne supprime que
+#: `sla` — elle lit cette donnée, jamais le nom.
+ORIGINES = ("manual", "sla")
 
 
 class SnapshotError(RuntimeError):
@@ -86,11 +98,26 @@ def newer_than(connection: sqlite3.Connection, spark_id: str, name: str) -> list
 
 def create(
     connection: sqlite3.Connection, spark: dict, name: str,
-    incus, actor: str | None = None,
+    incus, actor: str | None = None, origin: str = "manual",
+    created_at: str | None = None,
 ) -> dict:
-    """Prend un instantané. N'interrompt pas le Spark (docs/DAT.md §19.2)."""
+    """Prend un instantané. N'interrompt pas le Spark (docs/DAT.md §19.2).
+
+    `origin` dit QUI le prend : un humain (`manual`) ou le planificateur du SLA
+    (`sla`). `created_at` n'est posé que par le planificateur, qui connaît l'instant
+    de la prise (et par le seed, qui rejoue des instants passés par ce même chemin).
+    Seul `sla` peut porter un nom `SLA_…` ; seul `manual` est soumis à
+    `NAME`. Le réserver ainsi garantit que la rétention ne peut pas confondre un
+    instantané manuel avec un des siens (DAT §74.4).
+    """
+    if origin not in ORIGINES:
+        raise SnapshotError(f"Provenance « {origin} » inconnue, attendu {ORIGINES}.")
     nom = name.strip()
-    if not NAME.match(nom):
+    if origin == "sla":
+        if not NOM_SLA.match(nom):
+            raise SnapshotError(
+                f"Nom « {name} » invalide pour un instantané SLA : SLA_AAAAMMJJ-HHMMSS.")
+    elif not NAME.match(nom):
         # On refuse plutôt que de mettre en minuscules en silence : l'exploitant
         # a choisi une étiquette, la changer sous ses yeux est une surprise.
         raise SnapshotError(
@@ -110,12 +137,12 @@ def create(
     identifiant = token_hex(12)
     with transaction(connection):
         connection.execute(
-            "INSERT INTO snapshot (id, spark_id, incus_name, created_at, stateful)"
-            " VALUES (?, ?, ?, ?, 0)",
-            (identifiant, spark["id"], nom, _now()),
+            "INSERT INTO snapshot (id, spark_id, incus_name, created_at, stateful, origin)"
+            " VALUES (?, ?, ?, ?, 0, ?)",
+            (identifiant, spark["id"], nom, created_at or _now(), origin),
         )
         _audit(connection, actor, "snapshot.create", identifiant,
-               {"spark": spark["name"], "snapshot": nom}, "ok",
+               {"spark": spark["name"], "snapshot": nom, "origin": origin}, "ok",
                f"Instantané « {nom} » de « {spark['name']} » pris.")
     return dict(connection.execute(
         "SELECT * FROM snapshot WHERE id = ?", (identifiant,)
