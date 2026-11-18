@@ -1131,8 +1131,8 @@ sda5 / sdb5   ~5,2 To  zpool miroir    — déclaré à l'hébergeur (§66.8)
 
 Le schéma de partitionnement remis à l'hébergeur — que produit
 `scripts/preparer-forge.py` (§66) — **déclare le pool** : la partition 5 de chaque
-disque porte le libellé `zfs`, et la section `zfs` du schéma décrit un miroir `spark`
-sur les deux partitions (§66.8). L'amorce **adopte** ce pool au premier démarrage
+disque porte le libellé `data`, et la section `zfs` du schéma décrit un miroir `spark`
+en `ashift=12` sur les deux partitions, clé pour clé celui de `spark-experiment` (§66.8). L'amorce **adopte** ce pool au premier démarrage
 (`zpool import`, puis `incus storage create … source=spark`) ; elle ne le crée par
 `creer-pool.sh` que si aucun pool n'est importable et que `--pool-source` est donné
 (§66.2 point 6) — le repli, aussi celui d'un schéma produit avec `--sans-zfs`.
