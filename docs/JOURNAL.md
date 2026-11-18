@@ -16042,3 +16042,17 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 - **Le mot de passe des canaux de spark-010** a été fixé au premier usage et vit dans `~/.config/spark/op48-garde-spark-010`
   (0600) sur le poste. Il n'est écrit nulle part dans le dépôt.
 
+**SPK-62 : la preuve réelle s'achève, le 2026-11-18 (suite).**
+
+- **Une erreur de ma part, relevée par le responsable.** J'avais pris `admin@lelabs.tech` comme destinataire, en l'inférant de la
+  configuration du SSO de l'autre Forge, sans pouvoir le vérifier. Cette boîte n'existe pas. Le responsable a donné la bonne
+  (`martino@p2enjoy.studio`) ; le canal a été corrigé depuis l'écran (le mot de passe du compte conservé). Leçon : une adresse
+  qui reçoit des alertes ne se déduit pas d'un fichier de configuration d'une autre application — elle se demande, ou se lit
+  quelque part qui l'affirme.
+- **Réception constatée** : le courriel `[spark-01] snapshot.delete — e2a0ec3a…`, expéditeur `no-reply@noreply.lelabs.tech`,
+  est arrivé à 21:10:02 dans la boîte de `martino@p2enjoy.studio` (lu par le connecteur Gmail, objet et expéditeur seulement).
+- **Les deux canaux sur une même Forge réelle** : un récepteur HTTP jetable (processus utilisateur sur spark-010, boucle
+  locale) a servi de webhook. Même geste → webhook reçu ET courriel envoyé ; récepteur arrêté → le webhook échoue et le dit
+  (« Connection refused »), **le courriel part malgré tout**. Webhook désactivé depuis l'écran, récepteur et fichiers retirés.
+- **SPK-62 passe à `[x]`.** La Forge est revenue à son seul Spark d'origine ; le canal courriel reste actif, comme demandé.
+

@@ -129,9 +129,10 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ```
 État          : APPLIQUÉ le 2026-11-18 sur spark-010, sur instruction du responsable. Canal réglé depuis
                 l'écran avec les réglages du relais de l'autre Forge (secrets compris, jamais affichés) ;
-                un vrai geste a produit des courriels acceptés par le relais (2 envoyés, 0 en échec).
-                RESTE : confirmer la réception chez le destinataire ; le mot de passe des canaux de spark-010
-                vit dans ~/.config/spark/op48-garde-spark-010 (0600, sur le poste).
+                destinataire martino@p2enjoy.studio ; un vrai geste a produit un courriel REÇU dans la boîte
+                (21:10:02), et les deux canaux (courriel + webhook) ont été prouvés ensemble puis indépendants
+                sur cette Forge. Le webhook d'épreuve a été retiré ; le courriel reste actif. Le mot de passe
+                des canaux de spark-010 vit dans ~/.config/spark/op48-garde-spark-010 (0600, sur le poste).
 Quoi          : un second canal d'alerte, par courriel, aux côtés du webhook.
 Migration     : AUCUNE (la table notify_channels de la 016 porte déjà les colonnes).
 À redéployer  : sparkd (le code d'envoi) et la console (la carte « Courriel »).

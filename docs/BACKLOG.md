@@ -2854,7 +2854,7 @@ committé avant la première ligne de code.
   Poser la ligne sur la vraie Forge est un geste humain (`CLAUDE.md` §9), et
   OP-10 le décrit pas à pas — **nécessite une action humaine**.
 
-### [~] SPK-62 · Notification hors bande des actions sensibles
+### [x] SPK-62 · Notification hors bande des actions sensibles
 
 **Trois des quatre chunks sont BÂTIS le 2026-09-14**, et éprouvés sur la Forge
 réelle avec un vrai webhook Discord. Ce qui a été mesuré, par l'écran :
@@ -3063,12 +3063,18 @@ avant la première ligne de code.
   registre en clair ni au journal, la reprise au démarrage, le mot de passe illisible, l'avis de coupure par les deux
   canaux ; 14 tests de composant ; parcours E2E depuis l'accueil (souris et clavier) jusqu'à un courriel reçu par un
   serveur SMTP, le refus affiché dans son formulaire, la coupure dite par les deux canaux ; captures desktop et
-  mobile observées ; manuel M11. **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable)** — canal courriel réglé depuis l'écran avec le relais de l'AUTRE Forge
-  (Scaleway TEM, TLS implicite, port 2465, identifiants lus dans la cellule qui les porte et jamais affichés), puis un **vrai geste**
-  (créer et supprimer un instantané, puis supprimer le Spark d'essai) : **le relais a accepté les courriels** — 2 envoyés, 0 en
-  échec, certificat vérifié —, et le mot de passe ne ressort pas de l'API. **Non prouvé** : la **réception dans une boîte** par
-  un humain (destinataire `admin@lelabs.tech`, non joignable ici) ; les DEUX canaux ensemble sur une même Forge réelle (spark-010 n'a
-  pas de webhook) ; les modes TLS par l'écran (le serveur de parcours est sans TLS — prouvés par l'API Python).
+  mobile observées ; manuel M11. **Preuve sur FORGE RÉELLE (spark-010, 2026-11-18, sur instruction du responsable) — `[x]`.** Canal courriel réglé depuis l'écran
+  avec le relais de l'AUTRE Forge (Scaleway TEM, TLS implicite, port 2465, certificat vérifié ; identifiants lus dans la cellule qui
+  les porte et jamais affichés ni capturés ; mot de passe scellé, absent de l'API). **Un vrai geste** (supprimer un instantané) a
+  produit **le courriel `[spark-01] snapshot.delete — …`, REÇU dans la boîte de `martino@p2enjoy.studio` à 21:10:02**, avec les dix
+  champs du §47.4. **Les DEUX canaux sur la même Forge réelle** : un webhook posé à côté du courriel a reçu le même geste de son
+  côté ; **le webhook coupé, le geste suivant l'a fait échouer et le dire** (« Connection refused ») **et le courriel est parti
+  malgré tout** — l'indépendance de §47.3.2 bis, sur de vrais serveurs. Couper le webhook depuis l'écran a envoyé l'avis par les
+  canaux qui veillaient. **Un défaut de ma part, corrigé à la demande du responsable** : j'avais choisi `admin@lelabs.tech` comme
+  destinataire, déduit de la configuration du SSO sans pouvoir le vérifier ; cette boîte n'existe pas, le destinataire est
+  `martino@p2enjoy.studio`. Les six premiers courriels sont partis vers une adresse inexistante ; seule la réception du septième,
+  à la bonne adresse, a été constatée. **Reste à savoir, sans bloquer** : l'objet du courriel porte l'identifiant interne de la cible,
+  pas le nom du Spark (le corps, lui, le nomme) — un confort à décider.
 - **Ne pourra pas être prouvé ici** : l'acceptation par un vrai fournisseur (Scaleway TEM, Gmail,
   un relais d'entreprise) — authentification, limites, anti-spam. L'unité reste `[~]` tant
   qu'un courriel n'a pas été reçu d'une vraie Forge par un vrai destinataire.

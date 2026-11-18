@@ -11,7 +11,7 @@
  * la fois (CLAUDE.md §15 bis) : le verrou est pris à l'import. Les phases se jouent l'une après l'autre :
  *
  *   node e2e/forge-reelle/op48-preuves.mjs <phase> [serveur] [spark] [--garde-fichier=CHEMIN] [--destinataire=ADRESSE]
- *   phases : image | creer | sla | sante | smtp | geste | nettoyer
+ *   phases : image | creer | sla | sante | smtp | destinataire | webhook | geste | nettoyer
  *   --garde-fichier  (phase smtp) fichier 0600 qui porte le mot de passe des canaux ; il n'est jamais affiché
  *   --destinataire   (phase smtp) l'adresse qui reçoit les alertes
  *
@@ -233,10 +233,53 @@ try {
     await capturer('smtp-actif');
   }
 
+  if (phase === 'destinataire') {
+    // SPK-62 : changer SEULEMENT l'adresse de destination du canal courriel (le mot de passe du compte est conservé).
+    if (!nommes['garde-fichier'] || !nommes.destinataire) throw new Error('--garde-fichier et --destinataire requis');
+    const garde = (await readFile(nommes['garde-fichier'], 'utf8')).trim();
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.click('.onglets a[href="#/forge/alertes"]');
+    await page.waitForSelector('#formulaire-smtp', { timeout: 30000 });
+    await page.fill('#smtp-a', nommes.destinataire);
+    await page.fill('#smtp-mot', garde);
+    await page.click('#formulaire-smtp button[type="submit"]');
+    await page.waitForFunction(() => /canal courriel enregistrée|refus/.test(document.querySelector('#formulaire-smtp')?.innerText ?? ''), null, { timeout: 30000 });
+    const vu = lire('/v1/notify/channels').smtp;
+    verifier(vu.to === nommes.destinataire && vu.password_set && vu.enabled, 'le destinataire est changé, le mot de passe du compte conservé');
+  }
+
+  if (phase === 'webhook') {
+    // SPK-62 : le SECOND canal, sur la même Forge réelle. `--adresse` est l'adresse du récepteur ; `--coupe` le désactive.
+    if (!nommes['garde-fichier']) throw new Error('--garde-fichier manquant');
+    const garde = (await readFile(nommes['garde-fichier'], 'utf8')).trim();
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.click('.onglets a[href="#/forge/alertes"]');
+    await page.waitForSelector('#formulaire-alertes', { timeout: 30000 });
+    if (nommes.coupe !== undefined) {
+      await page.uncheck('#alerte-actif');
+    } else {
+      if (!nommes.adresse) throw new Error('--adresse manquant');
+      await page.fill('#alerte-url', nommes.adresse);
+      await page.check('#alerte-actif');
+    }
+    await page.fill('#alerte-mot', garde);
+    await page.click('#formulaire-alertes button[type="submit"]');
+    await page.waitForFunction(() => /Configuration enregistrée|refusé/.test(document.querySelector('#formulaire-alertes')?.innerText ?? ''), null, { timeout: 30000 });
+    const vu = lire('/v1/notify/channels');
+    verifier(nommes.coupe !== undefined ? !vu.webhook.enabled : (vu.webhook.enabled && vu.live.configured),
+      nommes.coupe !== undefined ? 'le webhook est désactivé' : 'le webhook est actif sur la Forge réelle, à côté du courriel');
+    await capturer(nommes.coupe !== undefined ? 'webhook-coupe' : 'deux-canaux');
+  }
+
   if (phase === 'geste') {
     // SPK-62 : un VRAI geste sensible (supprimer un instantané) depuis l'écran, sur le Spark d'essai ; les
     // compteurs de la Forge disent ensuite si le courriel est parti (relais joint, message accepté).
-    const avantEnvoi = lire('/v1/notify/channels').live_smtp.sent;
+    const avantVu = lire('/v1/notify/channels');
+    const avantEnvoi = avantVu.live_smtp.sent;
+    const avantWebhook = avantVu.live.sent;
+    const avantWebhookEchec = avantVu.live.failed;
     await ouvrir(nom, 'instantanes');
     await page.click('[data-ouvre="snapshot"]');
     await page.waitForSelector('#instantane-nom', { timeout: 10000 });
@@ -255,6 +298,11 @@ try {
     }
     console.log(`  canal courriel : envoyées ${live.sent}, en échec ${live.failed}, dernier motif : ${live.last_error ?? '—'}`);
     verifier(live.sent > avantEnvoi, 'le relais a ACCEPTÉ le courriel de l\'alerte (geste réel sur la Forge réelle)');
+    const apresVu = lire('/v1/notify/channels');
+    console.log(`  webhook : envoyées ${apresVu.live.sent} (avant ${avantWebhook}), en échec ${apresVu.live.failed} (avant ${avantWebhookEchec}), dernier motif : ${apresVu.live.last_error ?? '—'}`);
+    if (nommes.webhook === 'ok') verifier(apresVu.live.sent > avantWebhook, 'le webhook a reçu le MÊME geste, de son côté');
+    if (nommes.webhook === 'coupe') verifier(apresVu.live.failed > avantWebhookEchec && live.sent > avantEnvoi,
+      'webhook injoignable : il échoue et le DIT, et le courriel est parti malgré tout');
     await ouvrir(nom, 'instantanes');
     await page.click('nav a[href="#/forge"]');
     await page.click('.onglets a[href="#/forge/alertes"]');
@@ -270,7 +318,13 @@ try {
     await page.click('[data-confirme]');
     await page.waitForFunction((n) => ![...document.querySelectorAll('tbody a')]
       .some((a) => a.textContent.trim() === n), nom, { timeout: 90000 });
-    verifier(!lire('/v1/sparks').sparks.some((s) => s.name === nom), `Spark jetable « ${nom} » supprimé de la Forge réelle`);
+    // La suppression est asynchrone côté Forge : on la CONSTATE, on ne la suppose pas.
+    let present = true;
+    for (let i = 0; i < 30 && present; i += 1) {
+      present = lire('/v1/sparks').sparks.some((s) => s.name === nom);
+      if (present) await page.waitForTimeout(2000);
+    }
+    verifier(!present, `Spark jetable « ${nom} » supprimé de la Forge réelle`);
   }
 } catch (erreur) {
   ok = false;
