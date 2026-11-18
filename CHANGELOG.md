@@ -47,6 +47,15 @@
   formulaires d'Alertes **retiennent leur saisie** à chaque frappe (jamais les mots de passe). Preuve : un parcours
   qui retarde la lecture de la Forge de 2,5 s, passe à l'onglet Alertes, tape, et constate que la saisie survit —
   rouge sans les deux remèdes, vert avec.
+- **SPK-189 — l'aperçu du SLA dit le taux d'occupation de chaque prise, et recalcule un autre horaire.** Demandé par le
+  responsable. Sous chacune des trois prochaines prises, une **barre** et sa phrase : combien d'**autres SLA** prennent dans la
+  même tranche de 15 minutes **ce jour-là** (la sémantique du planificateur, jour de mois et de semaine compris), et lesquels —
+  « 1 autre prise dans cette tranche (02:00–02:15 UTC) : orphelin · 100 % » ou « aucune autre prise ». Le taux est relatif à la
+  tranche la plus chargée de la semaine des autres SLA ; le SLA du Spark qu'on édite n'y entre pas, un SLA suspendu non plus. Un
+  bouton **« Calculer un autre horaire »** ouvre **Heure (UTC)** et **Minute** et **remplace la minute et l'heure** de la chaîne (jour,
+  mois, jour de semaine gardés ; `*/15` devient quotidien) en relançant l'aperçu ; Entrée calcule sans soumettre ; une valeur hors
+  bornes se refuse dans la modale. Rien n'est enregistré avant « Enregistrer ». `POST /v1/sparks/{name}/sla/preview` gagne `load`.
+  Manuel M9, deux illustrations, runbook. DAT §74.14 ; SPK-DS-55.
 - **SPK-187 — le briefing d'un Spark dit la surveillance et les instantanés, et la règle pour que cela dure.** Le SLA et la
   santé n'étaient pas dans ce qu'un agent lit, sauf la paire `health.?`. `BRIEFING.md` gagne **« Surveillance de ce Spark »** (les
   sondes en place, ce qu'un script a le droit de faire — compte de la pile, 60 s, code de sortie seul —, les limites, comment en

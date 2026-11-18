@@ -52,7 +52,58 @@ export const SLA_VIDE = {
   refusal: null,       // le refus d'un geste, dit DANS la modale
   confirmingRetrait: false,
   refusGeste: null,    // le refus d'un geste de section (suspendre, reprendre, retirer)
+  // SPK-189 · §74.14 : « Calculer un autre horaire » — la zone, ses deux champs, et leur refus de forme.
+  autre: { open: false, heure: '', minute: '', erreur: null },
 };
+
+// --- SPK-189 · §74.14 : calculer un autre horaire ---------------------------------------------------
+
+const ENTIER = /^\d{1,2}$/;
+
+/** L'heure et la minute de la chaîne ACTUELLE quand ses deux premiers champs sont des entiers ; sinon, vides. */
+export function valeursHoraire(schedule) {
+  const champs = String(schedule ?? '').trim().split(/\s+/);
+  const [minute, heure] = champs;
+  return ENTIER.test(minute ?? '') && ENTIER.test(heure ?? '') ? { heure, minute } : { heure: '', minute: '' };
+}
+
+/**
+ * La chaîne qui REMPLACE la minute et l'heure, les trois autres champs gardés (§74.14).
+ *
+ * @spec docs/BACKLOG.md#SPK-189 · docs/DAT.md §74.14 · docs/DESIGN_SYSTEM_APP.md SPK-DS-55
+ *
+ * Une fréquence plus fine qu'un jour (`*\/15 * * * *`) devient quotidienne à cet instant : c'est dit à l'écran. Les
+ * bornes se refusent ICI, sans appel au serveur ; tout le reste — la règle des 15 minutes, la validité — est celui du
+ * serveur, qui répond dans l'aperçu.
+ */
+export function horaireAutre(schedule, heure, minute) {
+  const h = String(heure ?? '').trim();
+  const m = String(minute ?? '').trim();
+  if (!ENTIER.test(h) || Number(h) > 23) return { erreur: 'L’heure est un entier de 0 à 23 (UTC).' };
+  if (!ENTIER.test(m) || Number(m) > 59) return { erreur: 'La minute est un entier de 0 à 59.' };
+  const champs = String(schedule ?? '').trim().split(/\s+/);
+  const reste = champs.length === 5 ? champs.slice(2) : ['*', '*', '*'];
+  return { schedule: `${Number(m)} ${Number(h)} ${reste.join(' ')}` };
+}
+
+// --- SPK-189 · §74.14 : le taux d'occupation de chaque prise -------------------------------------------
+
+const hhmm = (iso) => String(iso ?? '').slice(11, 16);
+
+/** La phrase d'une prise : le nombre et les noms SONT le texte — la couleur ne porte jamais seule (§1.5). */
+export function phraseCharge(run) {
+  const tranche = `${hhmm(run.slot_start)}–${hhmm(run.slot_end)} UTC`;
+  if (!run.others) return `aucune autre prise dans cette tranche (${tranche})`;
+  const n = run.others;
+  return `${n} autre${n > 1 ? 's' : ''} prise${n > 1 ? 's' : ''} dans cette tranche (${tranche}) : `
+    + `${(run.sparks ?? []).join(', ')} · ${Math.round(run.rate * 100)} %`;
+}
+
+function barreCharge(run) {
+  const pct = Math.round((run?.rate ?? 0) * 100);
+  return `<span class="charge" role="img" aria-label="Taux d’occupation : ${pct} %">`
+    + `<span class="charge__barre" style="width:${pct}%"></span></span>`;
+}
 
 /** Les valeurs de la modale, depuis la politique AFFICHÉE : jamais des champs vides. */
 export function valeursDe(sla) {
@@ -141,7 +192,15 @@ export function renderZoneApercu(ui) {
   if (!a) {
     return `<p class="note">${ui.chargement ? 'Calcul de l’aperçu…' : 'Saisissez une fréquence et une rétention.'}</p>`;
   }
-  const prises = (a.next_runs ?? []).map((iso) => `<li class="technique">${echapper(dateUtc(iso))}</li>`).join('');
+  const charges = a.load?.runs ?? [];
+  const prises = (a.next_runs ?? []).map((iso, i) => {
+    const run = charges[i];
+    return `<li><span class="technique">${echapper(dateUtc(iso))}</span>${
+      run ? ` ${barreCharge(run)} <span class="note">${echapper(phraseCharge(run))}</span>` : ''}</li>`;
+  }).join('');
+  const legende = charges.length
+    ? `<p class="note">Taux d’occupation : la part de la tranche de 15 minutes la plus chargée de la semaine que
+       remplissent les prises des autres Spark (sans celle-ci).</p>` : '';
   const suppression = (a.would_delete ?? []).length
     ? `<div class="confirmation" role="group" aria-label="Instantanés qui seraient supprimés">
          <p><strong>Cet enregistrement supprimerait ${a.would_delete.length}
@@ -154,7 +213,7 @@ export function renderZoneApercu(ui) {
        </div>`
     : '';
   return `<p id="sla-phrase"><strong>${echapper(a.description)}</strong></p>`
-    + (prises ? `<p class="note">Prochaines prises :</p><ul class="liste-simple">${prises}</ul>` : '')
+    + (prises ? `<p class="note">Prochaines prises :</p><ul class="liste-simple liste-charge">${prises}</ul>${legende}` : '')
     + suppression;
 }
 
@@ -167,6 +226,31 @@ export function engagementSla(ui) {
 export const detruit = (ui) => (ui.apercu?.would_delete?.length ?? 0) > 0;
 
 // --- la modale ---------------------------------------------------------------------------------------
+
+/** « Calculer un autre horaire » : dans le flux de la modale, jamais une seconde modale (§6.27). Hors de la zone d'aperçu
+ *  qu'on réécrit sur place : l'ouvrir ou la remplir ne perd rien quand l'aperçu se recalcule. */
+function renderAutreHoraire(ui) {
+  const a = ui.autre ?? SLA_VIDE.autre;
+  return `<div class="champ sla-autre">
+        <button type="button" class="bouton" data-sla-autre aria-expanded="${a.open ? 'true' : 'false'}"
+                aria-controls="sla-autre-champs">Calculer un autre horaire</button>
+        <div id="sla-autre-champs"${a.open ? '' : ' hidden'}>
+          <p class="champ__aide">Remplace la minute et l’heure de la chaîne ; jour, mois et jour de la semaine sont
+          conservés. Une fréquence plus fine qu’un jour devient quotidienne à cet instant. Rien n’est enregistré avant
+          « Enregistrer ».</p>
+          <div class="sla-autre__champs">
+            <div class="champ"><label for="sla-heure">Heure (UTC)</label>
+              <input class="controle" id="sla-heure" type="text" inputmode="numeric" autocomplete="off"
+                     maxlength="2" value="${echapper(a.heure)}"></div>
+            <div class="champ"><label for="sla-minute">Minute</label>
+              <input class="controle" id="sla-minute" type="text" inputmode="numeric" autocomplete="off"
+                     maxlength="2" value="${echapper(a.minute)}"></div>
+            <button type="button" class="bouton bouton--primaire" data-sla-calculer>Calculer</button>
+          </div>
+          <p class="refus" id="sla-autre-refus" role="alert"${a.erreur ? '' : ' hidden'}>${echapper(a.erreur ?? '')}</p>
+        </div>
+      </div>`;
+}
 
 function renderModaleSla(ui) {
   const v = ui.values;
@@ -209,7 +293,8 @@ function renderModaleSla(ui) {
         <label for="sla-enabled"><input id="sla-enabled" name="enabled" type="checkbox"${
           v.enabled ? ' checked' : ''}> Actif</label>
       </div>
-      <div id="sla-apercu" aria-live="polite">${renderZoneApercu(ui)}</div>`,
+      <div id="sla-apercu" aria-live="polite">${renderZoneApercu(ui)}</div>
+      ${renderAutreHoraire(ui)}`,
   });
 }
 

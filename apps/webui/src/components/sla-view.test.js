@@ -171,7 +171,7 @@ test('la modale fermée ne rend rien', () => {
 test('l\'aperçu dit la phrase lisible et les trois prochaines prises, en UTC', () => {
   const zone = renderZoneApercu(ui({ apercu: APERCU }));
   assert.match(zone, /<strong>Tous les jours à 02:00 UTC<\/strong>/);
-  assert.equal((zone.match(/<li class="technique">/g) ?? []).length, 3);
+  assert.equal((zone.match(/<li><span class="technique">/g) ?? []).length, 3);
   assert.match(zone, /2026-11-20 02:00 UTC/);
 });
 
@@ -243,4 +243,105 @@ test('libelleRetention : singulier, pluriel, les deux, aucune', () => {
   assert.equal(libelleRetention(14, 20), '14 jours · 20 instantanés au plus');
   assert.equal(libelleRetention(null, 1), '1 instantané au plus');
   assert.equal(libelleRetention(null, null), 'aucune');
+});
+
+
+// --- SPK-189 · DAT §74.14 : le taux d'occupation de chaque prise, et « Calculer un autre horaire » ----------------
+// @verifies docs/BACKLOG.md#SPK-189 · docs/DAT.md §74.14 · docs/DESIGN_SYSTEM_APP.md SPK-DS-55 · docs/DESIGN_SYSTEM.md §1.5, §6.27
+
+import { horaireAutre, valeursHoraire, phraseCharge } from './sla-view.js';
+
+const RUN = (extra = {}) => ({ at: '2026-11-20T02:00:00+00:00', slot_start: '2026-11-20T02:00:00+00:00',
+  slot_end: '2026-11-20T02:15:00+00:00', others: 0, sparks: [], rate: 0, ...extra });
+const APERCU_CHARGE = (runs) => ({ schedule: '0 2 * * *', description: 'Tous les jours à 02:00 (UTC)',
+  next_runs: runs.map((r) => r.at), would_delete: [], load: { slot_minutes: 15, peak: 2, runs } });
+const zone = (runs) => renderZoneApercu({ ...SLA_VIDE, apercu: APERCU_CHARGE(runs) });
+
+test('chaque prise porte SA barre de taux, à côté de sa phrase', () => {
+  const html = zone([RUN({ others: 2, sparks: ['crm', 'gram'], rate: 1 }), RUN({ at: '2026-11-21T02:00:00+00:00' })]);
+  assert.equal((html.match(/class="charge"/g) ?? []).length, 2);
+  assert.match(html, /role="img" aria-label="Taux d’occupation : 100 %"/);
+  assert.match(html, /class="charge__barre" style="width:100%"/);
+  assert.match(html, /class="charge__barre" style="width:0%"/);
+});
+
+test('la phrase NOMME les Sparks et le taux : la couleur ne porte jamais seule', () => {
+  assert.equal(phraseCharge(RUN({ others: 2, sparks: ['crm', 'gram'], rate: 1 })),
+    '2 autres prises dans cette tranche (02:00–02:15 UTC) : crm, gram · 100 %');
+  assert.equal(phraseCharge(RUN({ others: 1, sparks: ['gram'], rate: 0.5 })),
+    '1 autre prise dans cette tranche (02:00–02:15 UTC) : gram · 50 %');
+});
+
+test('l’absence est NOMMÉE : un zéro vrai, jamais un silence', () => {
+  assert.equal(phraseCharge(RUN()), 'aucune autre prise dans cette tranche (02:00–02:15 UTC)');
+  assert.match(zone([RUN()]), /aucune autre prise dans cette tranche/);
+});
+
+test('la légende dit ce que 100 % veut dire — une seule fois, sous la liste', () => {
+  const html = zone([RUN({ others: 1, sparks: ['a'], rate: 1 }), RUN({ at: '2026-11-21T02:00:00+00:00' })]);
+  assert.equal((html.match(/Taux d’occupation : la part de la tranche/g) ?? []).length, 1);
+  assert.match(html, /sans celle-ci/);
+});
+
+test('un aperçu SANS charge (ancien serveur) n’affiche ni barre ni légende, et ne casse rien', () => {
+  const html = renderZoneApercu({ ...SLA_VIDE, apercu: { schedule: '0 2 * * *', description: 'x',
+    next_runs: ['2026-11-20T02:00:00+00:00'], would_delete: [] } });
+  assert.doesNotMatch(html, /class="charge"|Taux d’occupation/);
+  assert.match(html, /2026-11-20 02:00/);
+});
+
+test('un nom de Spark hostile est échappé dans la phrase', () => {
+  const html = zone([RUN({ others: 1, sparks: ['<img onerror=1>'], rate: 1 })]);
+  assert.ok(!html.includes('<img onerror=1>'));
+  assert.match(html, /&lt;img onerror=1&gt;/);
+});
+
+test('la modale porte « Calculer un autre horaire », replié, avec ses deux champs étiquetés', () => {
+  const html = renderSlaSection({ configured: false, snapshots: { count: 0 } }, { ...SLA_VIDE, open: true });
+  assert.match(html, /data-sla-autre aria-expanded="false"/);
+  assert.match(html, /id="sla-autre-champs" hidden/);
+  assert.match(html, /<label for="sla-heure">Heure \(UTC\)<\/label>/);
+  assert.match(html, /<label for="sla-minute">Minute<\/label>/);
+  assert.match(html, /data-sla-calculer/);
+  assert.match(html, /Rien n’est enregistré avant/);
+});
+
+test('ouverte, la zone l’est — et reprend ce qu’on y avait saisi, refus compris', () => {
+  const html = renderSlaSection({ configured: false, snapshots: { count: 0 } },
+    { ...SLA_VIDE, open: true, autre: { open: true, heure: '25', minute: '3', erreur: 'L’heure est un entier de 0 à 23 (UTC).' } });
+  assert.match(html, /aria-expanded="true"/);
+  assert.doesNotMatch(html, /id="sla-autre-champs" hidden/);
+  assert.match(html, /id="sla-heure"[^>]*value="25"/);
+  assert.match(html, /id="sla-autre-refus" role="alert">L’heure est un entier de 0 à 23/);
+});
+
+test('horaireAutre remplace MINUTE et HEURE, et garde jour, mois et jour de la semaine', () => {
+  assert.deepEqual(horaireAutre('0 2 * * *', '3', '30'), { schedule: '30 3 * * *' });
+  assert.deepEqual(horaireAutre('0 2 1 * *', '4', '5'), { schedule: '5 4 1 * *' });
+  assert.deepEqual(horaireAutre('0 3 * * 0', '23', '59'), { schedule: '59 23 * * 0' });
+});
+
+test('une fréquence plus fine qu’un jour devient quotidienne à l’instant choisi', () => {
+  assert.deepEqual(horaireAutre('*/15 * * * *', '2', '0'), { schedule: '0 2 * * *' });
+  assert.deepEqual(horaireAutre('0 */6 * * *', '2', '0'), { schedule: '0 2 * * *' });
+});
+
+test('une chaîne illisible retombe sur « tous les jours » plutôt que d’inventer', () => {
+  assert.deepEqual(horaireAutre('n’importe quoi', '2', '0'), { schedule: '0 2 * * *' });
+});
+
+test('les bornes se refusent ICI, avec leur raison, sans rien proposer', () => {
+  for (const [h, m] of [['24', '0'], ['-1', '0'], ['x', '0'], ['', '0'], ['2', '60'], ['2', 'abc'], ['2', '']]) {
+    const r = horaireAutre('0 2 * * *', h, m);
+    assert.ok(r.erreur && !r.schedule, `${h}:${m}`);
+  }
+  assert.match(horaireAutre('0 2 * * *', '24', '0').erreur, /heure.*0 à 23/i);
+  assert.match(horaireAutre('0 2 * * *', '2', '60').erreur, /minute.*0 à 59/i);
+});
+
+test('les champs partent de la chaîne actuelle quand minute et heure sont des entiers', () => {
+  assert.deepEqual(valeursHoraire('30 3 * * *'), { heure: '3', minute: '30' });
+  assert.deepEqual(valeursHoraire('*/15 * * * *'), { heure: '', minute: '' });
+  assert.deepEqual(valeursHoraire('0 */6 * * *'), { heure: '', minute: '' });
+  assert.deepEqual(valeursHoraire(''), { heure: '', minute: '' });
 });

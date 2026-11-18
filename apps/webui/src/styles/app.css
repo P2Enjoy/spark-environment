@@ -1609,3 +1609,16 @@ tbody tr:hover { background: var(--color-hover); }
 /* Les noms de variable d'un message d'absence se lisent droits : l'italique de
    `.absence` les déformait (observé en capture le 2026-11-18). */
 .depot-cle .absence .technique { font-style: normal; }
+
+/* SPK-189 · SPK-DS-55 : le taux d'occupation de chaque prise du survol du SLA, et la zone « autre horaire ». La barre est
+   bleue et neutre — une collision est un fait, pas un refus ; le texte à côté porte l'information (§1.5). */
+.liste-charge li { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2); row-gap: var(--space-1); margin-bottom: var(--space-3); }
+/* La phrase passe SOUS sa date, jamais à côté de la suivante : l'espace entre deux prises est plus grand qu'entre une prise et sa phrase. */
+.liste-charge li > .note { flex-basis: 100%; }
+.charge { display: inline-block; width: 6rem; height: 0.5rem; background: var(--color-border); border-radius: 999px; overflow: hidden; }
+.charge__barre { display: block; height: 100%; background: var(--color-brand); }
+.sla-autre { margin-top: var(--space-3); }
+.sla-autre__champs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); }
+.sla-autre__champs .champ { margin: 0; }
+.sla-autre__champs .controle { width: 5rem; }
+#sla-autre-champs[hidden], #sla-autre-refus[hidden] { display: none; }

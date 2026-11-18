@@ -70,7 +70,29 @@ la rétention saisie **supprimerait** des instantanés qui existent déjà — *
 
 ![L'aperçu d'une rétention de deux instantanés : trois sont nommés avant d'être supprimés](images/m9-sla-apercu.png)
 
-Dans ce cas le bouton dit **Enregistrer et supprimer 3 instantanés** et prend la couleur de
+### Où tombent les prises : le taux d'occupation
+
+Sous chacune des trois prochaines prises, l'aperçu dessine une **barre** et dit en toutes lettres ce qu'elle
+représente : combien **d'autres SLA** — ceux des autres Sparks, **pas celui-ci** — prennent leur instantané dans
+**la même tranche de 15 minutes**, et lesquels. Prendre tous au même moment fait travailler le disque d'un coup : cet
+aperçu sert à choisir un moment plus calme.
+
+![L'aperçu d'un SLA à 02:00 : chaque prise coïncide avec celle d'un autre Spark](images/m9-sla-charge.png)
+
+Le **taux** est relatif : **100 %** veut dire « aussi chargée que la tranche la plus chargée de la semaine », pas
+« saturée » ; **0 %**, « aucune autre prise ». Il compte des **débuts de prise**, pas leur durée, que la Forge ne
+connaît pas. Un SLA **suspendu** ne prend rien et ne compte pas. La couleur ne dit rien seule : le nombre et les noms
+sont écrits.
+
+Pour essayer un autre moment, **Calculer un autre horaire** ouvre deux champs, **Heure** et **Minute** (en UTC). *Calculer*
+**remplace la minute et l'heure** de la chaîne — le jour, le mois et le jour de la semaine sont conservés — et
+l'aperçu se recalcule aussitôt, avec la charge de chaque prise. Une fréquence plus fine qu'un jour, comme
+`*/15 * * * *`, devient **quotidienne à l'heure choisie**. Vous pouvez recalculer autant de fois que vous voulez :
+**rien n'est enregistré** avant *Enregistrer*.
+
+![Le même SLA à 02:30 : plus aucune prise ne coïncide](images/m9-sla-charge-libre.png)
+
+Dans le cas d'une suppression, le bouton dit **Enregistrer et supprimer 3 instantanés** et prend la couleur de
 l'alerte : la suppression est définitive. Sans suppression, il dit simplement **Enregistrer**.
 
 ### Ce que le SLA supprime, et ce qu'il ne supprime jamais

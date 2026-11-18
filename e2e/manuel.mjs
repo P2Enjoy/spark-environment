@@ -411,6 +411,15 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await capturer('m9-sla', { hauteur: 700 });
     await page.click('[data-ouvre="sla"]');
     await page.waitForSelector('#sla-phrase', { timeout: 10000 });
+    // SPK-189 · §74.14 : le taux d'occupation de chaque prise, puis un autre horaire calculé par l'heure et la minute.
+    await page.waitForSelector('#sla-apercu .liste-charge li', { timeout: 10000 });
+    await capturer('m9-sla-charge', { hauteur: 1100 });
+    await page.click('[data-sla-autre]');
+    await page.fill('#sla-minute', '30');
+    await page.click('[data-sla-calculer]');
+    await page.waitForFunction(() => /aucune autre prise dans cette tranche/.test(
+      document.querySelector('#sla-apercu')?.textContent ?? ''), null, { timeout: 10000 });
+    await capturer('m9-sla-charge-libre', { hauteur: 1300 });
     await page.fill('#sla-count', '2');
     await page.waitForFunction(
       () => /supprimerait 3/.test(document.querySelector('#sla-apercu')?.textContent ?? ''),

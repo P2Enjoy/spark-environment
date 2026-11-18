@@ -551,7 +551,7 @@ mais ses relevés continuent. L'agent **dans** la cellule ne pose rien : il **pr
 **Le SLA des instantanés** (`docs/DAT.md` §74) :
 
 ```bash
-curl -s -X POST http://127.0.0.1:19876/v1/sparks/<spark>/sla/preview -H 'content-type: application/json' -d '{…}'  # ce que la politique supprimerait
+curl -s -X POST http://127.0.0.1:19876/v1/sparks/<spark>/sla/preview -H 'content-type: application/json' -d '{…}'  # ce que la politique supprimerait, et `load` : où tombent ses trois prochaines prises face aux autres SLA
 curl -s -X PUT  http://127.0.0.1:19876/v1/sparks/<spark>/sla -H 'content-type: application/json' \
      -d '{"schedule":"0 3 * * *","retention_days":7,"retention_count":3,"enabled":true}'
 curl -s -X POST http://127.0.0.1:19876/v1/sparks/<spark>/sla/suspend     # gèle la prise ET la suppression ; /resume

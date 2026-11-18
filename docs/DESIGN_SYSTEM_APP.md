@@ -2243,7 +2243,7 @@ Date : 2026-11-19 · `docs/DAT.md` §74.14 · `docs/DESIGN_SYSTEM.md` §1.5, §6
 **Sous chaque prise du survol, une barre.** Une jauge fine (`.charge`, `role="img"`, un équivalent texte en `aria-label`) dont la
 largeur est le **taux d'occupation** de la tranche de 15 minutes, et **à côté, la phrase** : « aucune autre prise dans cette
 tranche (00:00–00:15 UTC) » ou « 2 autres prises dans cette tranche : crm-production, gram · 100 % ». Le nombre et les noms sont le
-texte : **la couleur ne porte jamais seule** (§1.5). La barre est en **bleu primaire** (`--color-primary`), jamais en rouge — une
+texte : **la couleur ne porte jamais seule** (§1.5). La barre est en **bleu primaire** (`--color-brand`), jamais en rouge — une
 collision est un fait, pas un refus du serveur (SPK-DS-08) —, sur un fond neutre.
 
 **Une légende, une fois**, sous la liste : « Taux d'occupation : la part de la tranche de 15 minutes la plus chargée de la semaine

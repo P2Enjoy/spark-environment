@@ -258,6 +258,54 @@ def charge_semaine(politiques: list[tuple[str, str]], now: datetime) -> dict:
     }
 
 
+def charge_des_prises(autres: list[tuple[str, str]], prises: list[datetime], now: datetime) -> dict:
+    """Le taux d'occupation des tranches où tombent des prises candidates (SPK-189, DAT §74.14).
+
+    @spec docs/BACKLOG.md#SPK-189 · docs/DAT.md §74.14 (les AUTRES SLA, jamais le candidat ; débuts de prise ;
+          taux relatif à la tranche la plus chargée de la semaine), §76.3 bis (la même tranche de 15 minutes)
+
+    `autres` : les couples (nom du Spark, chaîne crontab) des SLA qui PRENNENT, celui du Spark qu'on édite exclu.
+    Pour chaque prise candidate : combien de ces SLA prennent dans la même tranche de 15 minutes **ce jour-là** —
+    `convient_jour`, la sémantique du planificateur, jour de mois et de semaine compris —, et lesquels. Le taux est
+    `others / peak`, borné à 1 ; il vaut 0 quand personne d'autre ne prend (et `peak` vaut alors 0 : jamais de division
+    par zéro). Pure : l'instant est un argument.
+    """
+    pic = charge_semaine(autres, now)["peak"]
+    horaires = [(nom, cron.analyser(chaine)) for nom, chaine in autres]
+    rendu = []
+    for prise in prises:
+        minute_du_jour = prise.hour * 60 + prise.minute
+        debut_minutes = minute_du_jour - minute_du_jour % TRANCHE_MINUTES
+        debut = prise.replace(hour=debut_minutes // 60, minute=debut_minutes % 60, second=0, microsecond=0)
+        noms: set[str] = set()
+        nombre = 0
+        for nom, horaire in horaires:
+            if not horaire.convient_jour(prise.date()):
+                continue
+            for heure in horaire.heures:
+                for minute in horaire.minutes:
+                    if debut_minutes <= heure * 60 + minute < debut_minutes + TRANCHE_MINUTES:
+                        nombre += 1
+                        noms.add(nom)
+        rendu.append({
+            "at": _iso(prise), "slot_start": _iso(debut),
+            "slot_end": _iso(debut + timedelta(minutes=TRANCHE_MINUTES)),
+            "others": nombre, "sparks": sorted(noms),
+            "rate": round(min(1.0, nombre / pic), 3) if pic else 0.0,
+        })
+    return {"slot_minutes": TRANCHE_MINUTES, "peak": pic, "runs": rendu}
+
+
+def politiques_des_autres(connection: sqlite3.Connection, spark_id: str) -> list[tuple[str, str]]:
+    """Les SLA qui PRENNENT sur la Forge, sauf celui de ce Spark (sa politique en place est celle qu'on remplace).
+
+    Un SLA suspendu ne prend rien et ne charge rien (DAT §76.3 bis) ; actif ou en échec, il prend.
+    """
+    return [(r["name"], r["schedule"]) for r in connection.execute(
+        "SELECT spark.name AS name, sla.schedule AS schedule FROM sla JOIN spark ON spark.id = sla.spark_id"
+        " WHERE sla.enabled = 1 AND sla.spark_id != ? ORDER BY spark.name", (spark_id,))]
+
+
 def parc(connection: sqlite3.Connection, sparks: list[dict], now: datetime | None = None) -> dict:
     """Le SLA de TOUTE la Forge, lu dans le registre et nulle part ailleurs.
 
@@ -315,10 +363,13 @@ def apercu(connection: sqlite3.Connection, spark: dict, *, schedule: str,
     existants = _instantanes_sla(connection, spark["id"])
     noms = a_supprimer(existants, now, retention_days, retention_count) if enabled else []
     par_nom = {s["incus_name"]: s for s in existants}
+    prises = horaire.occurrences(now, 3)
     return {
         "schedule": horaire.source,
         "description": cron.decrire(horaire),
-        "next_runs": [_iso(o) for o in horaire.occurrences(now, 3)],
+        "next_runs": [_iso(o) for o in prises],
+        # SPK-189 · §74.14 : où tombent ces prises, face aux SLA des AUTRES Sparks.
+        "load": charge_des_prises(politiques_des_autres(connection, spark["id"]), prises, now),
         "would_delete": [
             {"name": n, "created_at": par_nom[n]["created_at"],
              "size_bytes": par_nom[n]["size_bytes"]} for n in noms],

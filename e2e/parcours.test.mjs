@@ -7820,6 +7820,104 @@ test('le SLA des instantanés se programme depuis l\u2019onglet Instantanés : f
   });
 });
 
+test('l’aperçu du SLA dit le taux d’occupation de chaque prise, et recalcule un autre horaire', async () => {
+  await parcours('sla-charge-apercu', async () => {
+    // @verifies docs/BACKLOG.md#SPK-189 · docs/DAT.md §74.14 · docs/DESIGN_SYSTEM_APP.md SPK-DS-55
+    //
+    // Le seed porte « orphelin » : un SLA horaire à `0 * * * *` qui PREND (en échec, donc actif) ; « ubuntu-24 » est
+    // suspendu et ne charge rien. Depuis « crm-production », dont la politique est `0 2 * * *`, chaque prise du survol
+    // tombe donc dans la tranche 02:00–02:15 — celle de « orphelin ».
+    const orphelin = (await pile.lireSparkd('/v1/sparks/orphelin/sla')).corps;
+    assert.equal(orphelin.schedule, '0 * * * *', 'le préalable : le seed porte l’horaire attendu');
+    await ouvrir('crm-production', 'instantanes');
+    await page.waitForSelector('section[aria-labelledby="titre-sla"]', { timeout: 10000 });
+    await page.click('[data-ouvre="sla"]');
+    await page.waitForSelector('#sla-phrase', { timeout: 10000 });
+
+    // --- le taux de CHAQUE prise : une barre, et sa phrase qui nomme celui avec qui elle coïncide -----------------
+    const lignes = page.locator('#sla-apercu .liste-charge li');
+    await lignes.first().waitFor({ timeout: 10000 });
+    assert.equal(await lignes.count(), 3, 'une ligne par prise du survol');
+    assert.equal(await page.locator('#sla-apercu .charge').count(), 3, 'une barre par prise');
+    for (let i = 0; i < 3; i += 1) {
+      assert.match(await lignes.nth(i).textContent(), /1 autre prise dans cette tranche \(02:00–02:15 UTC\) : orphelin · 100 %/);
+      assert.equal(await lignes.nth(i).locator('.charge').getAttribute('aria-label'), 'Taux d’occupation : 100 %');
+    }
+    assert.match(await page.textContent('#sla-apercu'), /sans celle-ci/, 'la légende dit ce que le taux compte');
+    // La barre est PLEINE : on lit sa largeur rendue, pas seulement l'attribut.
+    const largeurs = await page.$$eval('#sla-apercu .charge', (e) => e.map((b) =>
+      Math.round(b.querySelector('.charge__barre').getBoundingClientRect().width / b.getBoundingClientRect().width * 100)));
+    assert.deepEqual(largeurs, [100, 100, 100]);
+    await capturer('spk189-sla-charge-collision', { hauteur: 1200 });
+    await capturer('spk189-sla-charge-collision-mobile', { largeur: 390, hauteur: 1700 });
+
+    // --- « Calculer un autre horaire », AU CLAVIER : Entrée ouvre, les champs partent de la chaîne actuelle ---------
+    const ouvrir_ = page.locator('[data-sla-autre]');
+    assert.equal(await ouvrir_.getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#sla-autre-champs').isHidden(), true, 'replié tant qu’on ne le demande pas');
+    await ouvrir_.focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await ouvrir_.getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'sla-heure', 'le focus entre dans la zone');
+    assert.equal(await page.inputValue('#sla-heure'), '2');
+    assert.equal(await page.inputValue('#sla-minute'), '0');
+
+    // Une minute à 30 : Entrée CALCULE — et ne soumet pas la modale, qui enregistrerait.
+    await page.fill('#sla-minute', '30');
+    await page.focus('#sla-minute');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => /aucune autre prise dans cette tranche \(02:30–02:45 UTC\)/.test(
+      document.querySelector('#sla-apercu')?.textContent ?? ''), null, { timeout: 10000 });
+    assert.equal(await page.inputValue('#sla-schedule'), '30 2 * * *', 'la chaîne est réécrite, minute et heure seulement');
+    assert.equal(await page.locator('dialog#sla[open]').count(), 1, 'la modale est restée ouverte');
+    assert.equal(await page.locator('#sla-apercu .charge').count(), 3);
+    const apres = await page.$$eval('#sla-apercu .charge__barre', (e) => e.map((b) => Math.round(b.getBoundingClientRect().width)));
+    assert.deepEqual(apres, [0, 0, 0], 'plus aucune collision : les barres sont vides');
+    for (let i = 0; i < 3; i += 1) assert.match(await lignes.nth(i).textContent(), /aucune autre prise dans cette tranche/);
+    await capturer('spk189-sla-charge-libre', { hauteur: 1200 });
+    // RIEN n'est enregistré : la politique de la Forge est celle d'avant.
+    assert.equal((await pile.lireSparkd('/v1/sparks/crm-production/sla')).corps.schedule, '0 2 * * *',
+      'calculer n’enregistre rien');
+
+    // --- à la SOURIS : une autre heure, une autre minute ; les autres champs de la chaîne sont gardés -------------------
+    await page.fill('#sla-schedule', '0 3 * * 0');
+    await page.waitForFunction(() => /dimanche/.test(document.querySelector('#sla-phrase')?.textContent ?? ''), null, { timeout: 10000 });
+    await page.fill('#sla-heure', '5');
+    await page.fill('#sla-minute', '45');
+    await page.click('[data-sla-calculer]');
+    await page.waitForFunction(() => document.querySelector('#sla-schedule')?.value === '45 5 * * 0', null, { timeout: 10000 });
+    await page.waitForFunction(() => /dimanche/.test(document.querySelector('#sla-phrase')?.textContent ?? ''), null, { timeout: 10000 });
+    assert.equal(await page.inputValue('#sla-preset'), '', 'chaîne inconnue du menu : « Personnalisée »');
+
+    // --- une fréquence plus fine qu'un jour devient quotidienne ---------------------------------------------------
+    await page.fill('#sla-schedule', '*/15 * * * *');
+    await page.waitForFunction(() => /15 minutes/.test(document.querySelector('#sla-phrase')?.textContent ?? ''), null, { timeout: 10000 });
+    await page.fill('#sla-heure', '2');
+    await page.fill('#sla-minute', '0');
+    await page.click('[data-sla-calculer]');
+    await page.waitForFunction(() => document.querySelector('#sla-schedule')?.value === '0 2 * * *', null, { timeout: 10000 });
+
+    // --- une valeur hors bornes se refuse ICI, avec sa raison, sans appel au serveur -------------------------------
+    const avantRefus = await page.inputValue('#sla-schedule');
+    await page.fill('#sla-heure', '24');
+    await page.click('[data-sla-calculer]');
+    assert.match(await page.textContent('#sla-autre-refus'), /L’heure est un entier de 0 à 23/);
+    assert.equal(await page.locator('#sla-autre-refus[role="alert"]').isVisible(), true);
+    assert.equal(await page.inputValue('#sla-schedule'), avantRefus, 'un refus ne change pas la chaîne');
+    await page.fill('#sla-heure', '2');
+    await page.fill('#sla-minute', '60');
+    await page.click('[data-sla-calculer]');
+    assert.match(await page.textContent('#sla-autre-refus'), /La minute est un entier de 0 à 59/);
+    await capturer('spk189-sla-charge-refus-bornes', { hauteur: 1200 });
+
+    // Échap ferme sans rien enregistrer ; le déclencheur reprend le focus.
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog#sla', { state: 'detached', timeout: 10000 });
+    assert.equal((await pile.lireSparkd('/v1/sparks/crm-production/sla')).corps.schedule, '0 2 * * *');
+  });
+});
+
+
 
 test('l\u2019onglet Santé montre les sondes d\u2019un Spark, relit leur proposition ligne par ligne, et règle une sonde par une modale', async () => {
   // SPK-186 · docs/DAT.md §75.10 · docs/DESIGN_SYSTEM_APP.md SPK-DS-51.

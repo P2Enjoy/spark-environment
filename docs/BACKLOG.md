@@ -9541,7 +9541,7 @@ bon onglet** — « un dashboard de tous les SLA et de toutes les santés déplo
   la synthèse répétait le mot de l'état à côté de sa pastille, et la taille cumulée des instantanés n'était pas affichée.
   Décisions du rédacteur à confirmer : DAT §76.7.
 
-### [ ] SPK-189 · L'aperçu du SLA dit le taux d'occupation de chaque prise, et recalcule un autre horaire
+### [~] SPK-189 · L'aperçu du SLA dit le taux d'occupation de chaque prise, et recalcule un autre horaire
 
 **Demandé le 2026-11-19** par le responsable : « lors de la création du SLA, voir le taux d'occupation du preview des 3 exécutions
 planifiées, visualisé, et avec un bouton pour calculer un autre horaire (modifier heure et minutes) ».
@@ -9555,6 +9555,15 @@ planifiées, visualisé, et avec un bouton pour calculer un autre horaire (modif
   Forge (SPK-188, déjà livré).
 - DoD : tests de service, d'API contre le vrai registre et de composant ; E2E depuis l'accueil, souris et clavier ; captures
   observées (desktop, mobile, collision, aucune autre prise, horaire recalculé) ; manuel et changelog à jour.
+
+**État (2026-11-19) : livré, `[~]` — pas encore vu sur une Forge réelle.** Prouvé : 14 tests de service et d'API contre le vrai
+registre (`test_sla_charge_apercu.py`, 13 rouges avant : collision exacte, bornes de la tranche, deux SLA qui s'additionnent,
+taux relatif au pic, jour de semaine, jour de mois, taux borné à 1, zéro sans division, SLA du Spark et suspendus exclus, aucun
+écrit) ; 13 tests de composant (barre, phrase nommée, absence nommée, légende une fois, nom hostile échappé, zone repliée et
+ouverte, remplacement de minute et d'heure, `*/15` devenu quotidien, bornes) ; parcours E2E depuis l'accueil, **au clavier et à la
+souris** (le taux de chaque prise lu à l'écran et en largeur rendue, Entrée ouvre puis calcule sans soumettre, la chaîne réécrite,
+les barres qui se vident, aucune écriture, jour de semaine gardé, bornes refusées, Échap) ; captures desktop et mobile observées.
+**Défaut vu à la capture et corrigé** : la phrase d'une prise semblait collée à la date suivante.
 
 ---
 

@@ -20,7 +20,7 @@ import { SANTE_VIDE, definitionDe as definitionSante, valeursDeSonde, presetPour
          renderZoneTest as renderZoneTestSante } from './components/sante-view.js';
 import { definitionDe as definitionDeProposee } from './components/sante-import.js';
 import { SLA_VIDE, valeursDe as valeursSla, corpsDe as corpsSla, presetPour, PERSONNALISEE,
-         renderZoneApercu, engagementSla, detruit as detruitSla } from './components/sla-view.js';
+         renderZoneApercu, engagementSla, detruit as detruitSla, horaireAutre, valeursHoraire } from './components/sla-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE, valeursDesQuotas,
   corpsDesQuotas } from './components/spark-detail.js';
 import { IDENTITE_VIDE } from './components/spark-identity.js';
@@ -3412,6 +3412,8 @@ function brancherSla() {
     bouton.addEventListener('click', () => {
       sla.open = true;
       sla.values = valeursSla(etat.detail?.sla);
+      // SPK-189 · §74.14 : la zone « autre horaire » repart REPLIÉE, ses champs de la chaîne actuelle.
+      sla.autre = { open: false, ...valeursHoraire(sla.values.schedule), erreur: null };
       sla.apercu = null; sla.erreur = null; sla.refusal = null;
       sla.confirmingRetrait = false; sla.refusGeste = null;
       peindre();
@@ -3456,6 +3458,39 @@ function brancherSla() {
     sla.values.enabled = e.target.checked;
     planifierApercuSla();
   });
+
+  // SPK-189 · §74.14 : « Calculer un autre horaire ». Tout se met à jour SUR PLACE — la modale n'est jamais repeinte,
+  // le focus ne bouge pas (§14.3) — et rien n'est enregistré avant « Enregistrer ».
+  const ouvrirAutre = formulaire.querySelector('[data-sla-autre]');
+  const zoneAutre = formulaire.querySelector('#sla-autre-champs');
+  const champHeure = formulaire.querySelector('#sla-heure');
+  const champMinute = formulaire.querySelector('#sla-minute');
+  const refusAutre = formulaire.querySelector('#sla-autre-refus');
+  ouvrirAutre?.addEventListener('click', () => {
+    sla.autre.open = !sla.autre.open;
+    zoneAutre.hidden = !sla.autre.open;
+    ouvrirAutre.setAttribute('aria-expanded', String(sla.autre.open));
+    if (sla.autre.open) champHeure.focus();
+  });
+  const calculer = () => {
+    sla.autre.heure = champHeure.value;
+    sla.autre.minute = champMinute.value;
+    const r = horaireAutre(sla.values.schedule, champHeure.value, champMinute.value);
+    sla.autre.erreur = r.erreur ?? null;
+    refusAutre.textContent = r.erreur ?? '';
+    refusAutre.hidden = !r.erreur;
+    if (r.erreur) return;
+    sla.values.schedule = r.schedule;
+    chaine.value = r.schedule;
+    menu.value = presetPour(r.schedule);
+    planifierApercuSla();
+  };
+  formulaire.querySelector('[data-sla-calculer]')?.addEventListener('click', calculer);
+  for (const champ of [champHeure, champMinute]) {
+    champ?.addEventListener('input', () => { sla.autre[champ === champHeure ? 'heure' : 'minute'] = champ.value; });
+    // Entrée calcule — et ne soumet PAS la modale (qui enregistrerait).
+    champ?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); calculer(); } });
+  }
   formulaire.addEventListener('submit', (evenement) => {
     evenement.preventDefault();
     if (sla.busy || sla.erreur || !sla.apercu) return;
