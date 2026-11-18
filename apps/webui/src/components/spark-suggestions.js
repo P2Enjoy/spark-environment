@@ -63,6 +63,7 @@ const NATURES = {
   variables: { titre: 'Variables proposées', unite: 'variable' },
   secrets: { titre: 'Secrets proposés', unite: 'secret' },
   routes: { titre: 'Routes proposées', unite: 'route' },
+  health: { titre: 'Sondes proposées', unite: 'sonde' },
 };
 
 /**

@@ -589,6 +589,20 @@ def populate(client: TestClient, incus, caddy, sondes) -> dict[str, int]:
          "\n"
          "# Jeton du service de cartes, à demander au fournisseur.\n"
          "MAPS_TOKEN=\n"),
+        # SPK-185 · §75.9 : une proposition de SONDES, avec ses trois cas — une page
+        # publique (valide), un SCRIPT, qui se montre avec sa commande exacte avant
+        # d'être accepté, et un domaine qui n'est PAS une route du Spark, que le serveur
+        # refuse ligne par ligne. Sans la troisième, l'écran ne montrerait jamais un
+        # refus de validation ; sans la deuxième, jamais la commande d'un script.
+        ("crm-production", "health",
+         "# Page d'accueil publique du CRM.\n"
+         "accueil http */5 * * * * 3 200 https://crm.example.com/\n"
+         "\n"
+         "# Si la base ne répond pas, le site non plus.\n"
+         "base script */10 * * * * 2 0 docker compose -f /srv/crm/compose.yml exec -T db pg_isready\n"
+         "\n"
+         "# Le tableau de bord interne.\n"
+         "interne http */5 * * * * 3 200 https://crm.interne.example/sante\n"),
     ]
     cellule = client.app.state.incus
     for spark, kind, texte in propositions:

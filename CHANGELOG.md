@@ -3,6 +3,16 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-185 — la paire `health` / `health.?` : un agent propose une sonde.** Septième paire du fichier `.?`
+  (DAT §55) : `/etc/spark/health` est régénéré depuis le registre — il porte chaque sonde et son **état au
+  dernier relevé**, jamais la sortie d'un script — et `/etc/spark/health.?` est le seul endroit où la
+  cellule peut **proposer** une sonde, une ligne `<nom> <type> <cadence> <seuil> <attendu> <cible…>`. Son
+  en-tête apprend la grammaire à l'agent, et dit qu'un script s'exécute dans la cellule et que
+  **le propriétaire verra la commande exacte**. Une proposition **ne pose rien et ne retire rien** ;
+  l'accepter valide **toutes** les lignes avant d'en poser une, par le chemin normal, et un refus du
+  produit **ne vide pas** le fichier. `POST …/health/validate` valide sans exécuter ni écrire. La grammaire
+  est lue par la console (`sante-import.js`). Une proposition de trois lignes (une page, un script, un
+  domaine étranger refusable) au seed. **L'écran (SPK-186) n'est pas livré.** DAT §75.9.
 - **SPK-184 — la santé d'un Spark dans `sparkd` : sondes HTTPS et scripts, états et alertes.** Un Spark
   peut porter jusqu'à vingt sondes. Une sonde **HTTPS** part de la Forge **par la boucle locale**
   (127.0.0.1:443, le nom en SNI) : elle ne peut viser qu'un **domaine non joker, servi en TLS, que le

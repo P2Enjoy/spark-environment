@@ -9349,7 +9349,7 @@ l'écran SPK-186.
   un vrai certificat, une alerte vers un vrai destinataire (SPK-62). Décisions du rédacteur à confirmer :
   DAT §75.11.
 
-### [ ] SPK-185 · La paire `health` / `health.?` : l'agent propose une sonde
+### [~] SPK-185 · La paire `health` / `health.?` : l'agent propose une sonde
 
 Suite de SPK-184 : le fichier réel `/etc/spark/health`, régénéré depuis le registre, et sa
 proposition `/etc/spark/health.?`, comme les six paires du DAT §55.
@@ -9361,6 +9361,15 @@ proposition `/etc/spark/health.?`, comme les six paires du DAT §55.
   acceptation ; l'en-tête qui apprend la grammaire à l'agent ; le dossier et le brief.
 - DoD : tests unitaires de la grammaire ; API (une proposition ne pose rien, ne retire rien, écarter
   n'est pas refuser) ; la proposition d'un script se montre avec sa commande exacte.
+- **État au 2026-11-18 : implémenté et vérifié contre le doublon, pas sur une Forge réelle — reste `[~]`.**
+  Prouvé : la septième paire (en-tête qui apprend la grammaire et le script ; fichier réel régénéré après
+  chaque geste, qui dit l'état au dernier relevé sans jamais une sortie, et qu'écrire à la main ne
+  change pas) ; une proposition **ne pose aucune sonde** ; l'acceptation passe par le chemin normal et
+  **vide** le fichier ; une ligne refusable refuse **tout**, laisse la première **non posée** et **ne
+  consomme pas** la proposition ; accepter ne retire rien et remplace par nom ; `validate` sans écriture,
+  ouvert sur un Spark protégé ; le brief nomme `health.?` ; la grammaire console (15 tests : cible
+  jusqu'à la fin de ligne, refus nommés, nom doublé dit, étiquette). **Non fait ici, c'est SPK-186** :
+  l'écran qui montre la proposition avec la commande exacte d'un script, et ses refus ligne par ligne.
 
 ### [ ] SPK-186 · L'onglet « Santé » dans la console
 

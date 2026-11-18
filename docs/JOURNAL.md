@@ -15908,3 +15908,16 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   montrer « instable ».
 - **Reste** : SPK-185 (`health.?`), SPK-186 (l'écran).
 
+**SPK-185 : livraison de la paire, le 2026-11-18.**
+
+- **La grammaire vit dans la console, le serveur la revalide** — la règle du §55.8, déjà tenue pour
+  `.env`. Le serveur n'a donc pas d'analyseur de `health.?` : il reçoit des définitions structurées, et
+  `validate` lui sert à dire, ligne par ligne, ce qu'une proposition a de refusable **avant** que le
+  propriétaire n'accepte.
+- **Atomicité de l'acceptation** : toutes les lignes sont validées avant que la première ne soit posée. Sans
+  cela, une ligne refusable aurait laissé les précédentes à moitié acceptées, avec une proposition qui
+  resterait en attente — et deux acceptations, la seconde les reposant.
+- **Un défaut évité en écrivant le test** : un test du brief lisait le code source au lieu du brief rendu ;
+  il n'aurait rien prouvé. Remplacé par un test sur le texte produit.
+- **Reste** : SPK-186, l'écran — la proposition d'un script s'y montre avec sa commande exacte.
+

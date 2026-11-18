@@ -1340,6 +1340,23 @@ def create_app(config: Config) -> FastAPI:
                 ingress_service.listing(connection), spark["id"]),
             mode="0600")
 
+    def _apply_health_file(connection, spark: dict) -> None:
+        """Pose `/etc/spark/health`, le fichier réel du §75.9, depuis le registre.
+
+        @spec docs/BACKLOG.md#SPK-185 · docs/DAT.md §75.9
+
+        Comme `/etc/spark/routes` : il ne dépend pas du relevé d'amorçage, porte la MÊME
+        grammaire que sa proposition, et ne porte jamais une sortie de script — seulement
+        le motif court du dernier relevé.
+        """
+        if not spark.get("incus_name"):
+            return
+        sondes = [dict(r) for r in connection.execute(
+            "SELECT * FROM health_check WHERE spark_id = ?", (spark["id"],))]
+        app.state.incus.push_file(
+            spark["incus_name"], suggestions_service.FICHIER_SANTE,
+            suggestions_service.rendre_sante(sondes), mode="0600")
+
     def _apply_briefing(connection, spark: dict) -> None:
         """Projette le briefing unique dans une cellule déjà amorcée.
 
@@ -1357,6 +1374,7 @@ def create_app(config: Config) -> FastAPI:
         # changent — l'accrocher là évite d'énumérer une seconde fois les sept
         # appelants de `_rattraper_briefing`, et d'en oublier un demain.
         _apply_routes_file(connection, spark)
+        _apply_health_file(connection, spark)
         releve = briefing_service.observation(connection, spark["id"])
         if releve is None:
             return
@@ -1458,6 +1476,7 @@ def create_app(config: Config) -> FastAPI:
         # Le fichier réel d'abord : l'en-tête de `routes.?` le nomme, et un
         # voisin annoncé mais absent enverrait chercher une panne.
         _apply_routes_file(connection, spark)
+        _apply_health_file(connection, spark)
         suggestions_service.poser_manquants(_lecteur(spark), _pousseur(spark))
         # §55.6 : les `.?` sont les SEULS fichiers que le groupe écrit. Le
         # répertoire, lui, reste fermé — sans quoi on pourrait y supprimer
@@ -1949,6 +1968,17 @@ def create_app(config: Config) -> FastAPI:
 
     # --- SPK-184 · la santé d'un Spark (docs/DAT.md §75) -------------------------
 
+    def _reposer_sante(connection, spark: dict) -> None:
+        """Réécrit `/etc/spark/health` après un geste. Une projection : jamais bloquante.
+
+        Le registre fait foi et vient d'être écrit ; si la cellule ne répond pas, le
+        fichier sera réécrit à la prochaine lecture de l'écran (§75.9).
+        """
+        try:
+            _apply_health_file(connection, spark)
+        except (IncusError, InstanceAbsente):
+            pass
+
     def _erreurs_sante(erreur: Exception) -> HTTPException:
         if isinstance(erreur, service.NotFound):
             return HTTPException(status_code=404, detail={
@@ -1964,6 +1994,23 @@ def create_app(config: Config) -> FastAPI:
             except service.NotFound as erreur:
                 raise _erreurs_sante(erreur) from erreur
             return health_service.lister(connection, spark)
+
+    @app.post("/v1/sparks/{name}/health/validate", tags=["sante"])
+    def validate_health(name: str, body: dict = Body(...)) -> dict:
+        """Valide une définition SANS l'exécuter ni l'écrire (SPK-185, §75.9).
+
+        C'est ce qui permet à la console de dire, ligne par ligne, ce qu'une proposition
+        de `health.?` a de refusable AVANT que le propriétaire n'accepte : un domaine qui
+        n'est pas une route du Spark, une cadence trop serrée, un seuil hors bornes. Ce
+        n'est pas une écriture : elle ne demande pas que le Spark soit inscriptible.
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                return {"valid": True, **health_service.valider(
+                    connection, spark, {"name": "essai", **body})}
+            except (service.NotFound, health_service.SanteError) as erreur:
+                raise _erreurs_sante(erreur) from erreur
 
     @app.post("/v1/sparks/{name}/health/test", tags=["sante"])
     def test_health(name: str, body: dict = Body(...)) -> dict:
@@ -1992,7 +2039,9 @@ def create_app(config: Config) -> FastAPI:
                 spark = service.by_name(connection, name)
                 # §75.8 : poser une sonde est une ÉCRITURE ; la protection s'applique avant tout.
                 protection_service.ensure_writable(connection, name, "sante")
-                return health_service.poser(connection, spark, definition)
+                resultat = health_service.poser(connection, spark, definition)
+                _reposer_sante(connection, spark)
+                return resultat
             except (service.NotFound, health_service.SanteError) as erreur:
                 raise _erreurs_sante(erreur) from erreur
 
@@ -2005,8 +2054,10 @@ def create_app(config: Config) -> FastAPI:
             try:
                 spark = service.by_name(connection, name)
                 protection_service.ensure_writable(connection, name, "sante")
-                return health_service.basculer(connection, spark, sonde,
-                                               enabled=(geste == "resume"))
+                resultat = health_service.basculer(
+                    connection, spark, sonde, enabled=(geste == "resume"))
+                _reposer_sante(connection, spark)
+                return resultat
             except (service.NotFound, health_service.SanteError) as erreur:
                 raise _erreurs_sante(erreur) from erreur
 
@@ -2016,7 +2067,9 @@ def create_app(config: Config) -> FastAPI:
             try:
                 spark = service.by_name(connection, name)
                 protection_service.ensure_writable(connection, name, "sante")
-                return health_service.retirer(connection, spark, sonde)
+                resultat = health_service.retirer(connection, spark, sonde)
+                _reposer_sante(connection, spark)
+                return resultat
             except (service.NotFound, health_service.SanteError) as erreur:
                 raise _erreurs_sante(erreur) from erreur
 
@@ -3777,6 +3830,21 @@ def create_app(config: Config) -> FastAPI:
                 pass
             return {"routes": posees}
 
+        if kind == "health":
+            # SPK-185 · §75.9 : chaque ligne retenue est posée PAR LE CHEMIN NORMAL —
+            # `health.poser`, qui revalide tout : le serveur garde le dernier mot, comme à
+            # la saisie. TOUT est validé avant que la première ne soit posée : une ligne
+            # refusable ne doit pas laisser les précédentes à moitié acceptées.
+            definitions = [dict(e) for e in entrees if isinstance(e, dict)]
+            if len(definitions) != len(entrees):
+                raise suggestions_service.SuggestionError(
+                    "Une entrée n'est pas une sonde.", "invalid_entry")
+            for definition in definitions:
+                health_service.valider(connection, spark, definition)
+            posees = [health_service.poser(connection, spark, d) for d in definitions]
+            _reposer_sante(connection, spark)
+            return {"checks": [p["name"] for p in posees]}
+
         lot = env_service.importer(
             connection, _cle_de_forge(), "spark", spark["id"],
             [(str(e.get("name", "")), str(e.get("value", "")),
@@ -3828,6 +3896,10 @@ def create_app(config: Config) -> FastAPI:
             except env_service.EnvError as erreur:
                 raise HTTPException(status_code=422, detail={
                     "error": erreur.code, "message": str(erreur)}) from erreur
+            except health_service.SanteError as erreur:
+                # Un refus du PRODUIT ne vide pas : la proposition reste, son auteur la corrige.
+                raise HTTPException(status_code=422, detail={
+                    "error": "health_refused", "message": str(erreur)}) from erreur
             except (ingress_service.IngressError, ValueError, TypeError) as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "route_refused", "message": str(erreur)}) from erreur

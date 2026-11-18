@@ -18408,6 +18408,16 @@ base    script  */10 * * * *        2      0        docker compose -f /srv/app/c
 - `script` : la cible est la commande, jusqu'à la fin de la ligne ; l'attendu est un code de sortie ;
 - l'en-tête du fichier apprend cette grammaire à l'agent (§55.7).
 
+**Ce que le serveur offre pour cela (SPK-185).** `POST /v1/sparks/{nom}/health/validate` valide une
+définition **sans l'exécuter ni l'écrire** — ce n'est pas une écriture, il reste ouvert sur un Spark
+protégé. L'acceptation passe par `POST …/suggestions/health/apply` : les entrées structurées sont
+**toutes validées avant que la première ne soit posée** (une ligne refusable ne laisse pas les
+précédentes à moitié acceptées), puis posées par `health.poser`, le chemin normal. Un refus du produit
+(`422 health_refused`) **ne vide pas** le fichier : son auteur le corrige. Le fichier réel
+`/etc/spark/health` est régénéré après chaque geste et à chaque lecture de l'écran ; il porte l'état au
+dernier relevé et le motif court, **jamais** une sortie de script. La grammaire est lue par la console
+(`sante-import.js`), comme celle d'un `.env` collé.
+
 **Valider avant d'accepter.** Chaque ligne est validée par le serveur : un domaine qui n'est pas une route du
 Spark, un joker, une cadence trop rapprochée, un seuil hors bornes sont **refusés avec leur raison, ligne
 par ligne**. **Une ligne `script` se montre avec sa commande exacte et le compte qui l'exécutera**, par la

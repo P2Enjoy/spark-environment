@@ -2739,6 +2739,63 @@
         ]
       }
     },
+    "/v1/sparks/{name}/health/validate": {
+      "post": {
+        "description": "Valide une définition SANS l'exécuter ni l'écrire (SPK-185, §75.9).\n\nC'est ce qui permet à la console de dire, ligne par ligne, ce qu'une proposition\nde `health.?` a de refusable AVANT que le propriétaire n'accepte : un domaine qui\nn'est pas une route du Spark, une cadence trop serrée, un seuil hors bornes. Ce\nn'est pas une écriture : elle ne demande pas que le Spark soit inscriptible.",
+        "operationId": "validate_health_v1_sparks__name__health_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Validate Health V1 Sparks  Name  Health Validate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Health",
+        "tags": [
+          "sante"
+        ]
+      }
+    },
     "/v1/sparks/{name}/health/{sonde}": {
       "delete": {
         "operationId": "delete_health_v1_sparks__name__health__sonde__delete",

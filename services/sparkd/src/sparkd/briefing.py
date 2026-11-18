@@ -522,9 +522,10 @@ def _lignes_canal(model: dict[str, Any],
     lignes.extend([
         "",
         "Grammaire : `NOM=valeur` pour les deux `.env`, "
-        "`<domaine> <port écouté ici> [tls|clair]` pour les routes, du texte "
-        "libre pour les trois notes. Chaque fichier porte son en-tête, qui le "
-        "redit.",
+        "`<domaine> <port écouté ici> [tls|clair]` pour les routes, "
+        "`<nom> <type> <cadence> <seuil> <attendu> <cible…>` pour les sondes de "
+        "santé, du texte libre pour les trois notes. Chaque fichier porte son "
+        "en-tête, qui le redit.",
         "",
         # SPK-112 · §55.3.1 : un agent a lu « servez en clair » comme une valeur
         # de la grammaire, et proposé `clair` pour un site public.

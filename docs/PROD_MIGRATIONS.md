@@ -133,9 +133,11 @@ Objectif      : sparkd porte les sondes de santé (DAT §75) : HTTPS vers une ro
                 la cellule sous le compte de la pile. Migration 024 : health_check
                 et health_result (au plus 100 relevés par sonde). Un fil,
                 « sparkd-sante », à pool de quatre, relève les sondes échues.
-                Cinq routes : GET .../health, POST .../health/test,
-                PUT|DELETE .../health/{sonde}, POST .../health/{sonde}/
-                {suspend|resume}. health.down et health.up entrent dans la liste
+                Six routes : GET .../health, POST .../health/validate,
+                POST .../health/test, PUT|DELETE .../health/{sonde},
+                POST .../health/{sonde}/{suspend|resume}. Septième paire
+                `.?` (SPK-185) : /etc/spark/health, régénéré depuis le registre,
+                et /etc/spark/health.?, que la cellule remplit pour PROPOSER. health.down et health.up entrent dans la liste
                 fermée de la notification (DAT §47.2), avec leur exception
                 `runtime` nommée. Aucune variable d'environnement.
 Dépend de     : OP-46 (la migration 023 précède la 024) ; SPK-62 pour que
@@ -161,8 +163,8 @@ Risques       : un script s'exécute dans la cellule sans qu'une personne regard
                 sous le compte de la pile : il consomme le quota du Spark. La
                 sortie d'un script n'est ni stockée ni envoyée. Si la Forge
                 tombe, plus aucune sonde ni alerte ne part (DAT §75.7). L'écran
-                (SPK-186) et la paire health.? (SPK-185) ne sont PAS livrés :
-                sans eux les sondes se règlent par l'API seulement.
+                (SPK-186) n'est PAS livré : sans lui les sondes se règlent par
+                l'API, et une proposition health.? ne se lit que par l'API.
 ```
 
 ### OP-46 · Le SLA des instantanés dans `sparkd` : migration 023 et planificateur (SPK-182)

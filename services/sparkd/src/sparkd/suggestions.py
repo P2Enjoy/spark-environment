@@ -49,6 +49,8 @@ SUFFIXE = ".?"
 #: lire les routes qui la visent qu'en analysant `BRIEFING.md`, c'est-à-dire une
 #: présentation faite pour être lue.
 FICHIER_ROUTES = "/etc/spark/routes"
+#: SPK-185 · §75.9 : les sondes de santé. Septième paire, même règle que les autres.
+FICHIER_SANTE = "/etc/spark/health"
 FICHIER_VARIABLES = "/etc/spark/env"
 FICHIER_SECRETS = "/run/spark/secrets"
 
@@ -94,6 +96,15 @@ PAIRES: tuple[dict[str, Any], ...] = (
         "attendu": "<domaine> <port écouté DANS la cellule> [tls|clair], une par "
                    "ligne. Le port public ne se choisit pas : la Forge écoute "
                    "443 et fait suivre.",
+    },
+    {
+        "kind": "health",
+        "reel": FICHIER_SANTE,
+        "nature": ENTREES,
+        "commentaire": DIESE,
+        "titre": "Sondes de santé souhaitées",
+        "attendu": "<nom> <type> <cadence : 5 champs> <seuil> <attendu> <cible…>, une "
+                   "par ligne. Le type est « http » ou « script ».",
     },
     {
         "kind": "readme",
@@ -145,6 +156,32 @@ DERNIER_MOT_ROUTE = (
     "« tls », le site est servi en https://, avec un certificat ; « clair », il",
     "est publié en http://, sans certificat. Votre pile écoute en HTTP simple",
     "dans les deux cas : c'est la Forge qui termine le TLS.",
+)
+
+#: SPK-185 · §75.9 : la grammaire d'une sonde, dite partout où elle se montre — l'en-tête
+#: de `health.?` et `/etc/spark/health`. La cible va EN DERNIER : une commande contient
+#: des espaces, une adresse n'en contient pas.
+GRAMMAIRE_SANTE = (
+    "<nom> <type> <cadence : 5 champs> <seuil> <attendu> <cible…>",
+    "",
+    "  nom      minuscules, chiffres et tirets (42 caractères au plus)",
+    "  type     « http » ou « script »",
+    "  cadence  une chaîne crontab à cinq champs, lue en UTC, 5 minutes au plus serré :",
+    "           */5 * * * *   (toutes les 5 minutes)   0 * * * *   (toutes les heures)",
+    "  seuil    combien d'échecs CONSÉCUTIFS mettent la sonde « en panne » (1 à 20) ;",
+    "           l'alerte part à ce moment-là, une fois, et une autre au rétablissement",
+    "  attendu  http : le statut HTTP attendu (200) · script : le code de sortie (0)",
+    "  cible    http : https://<un domaine de VOS routes>/<chemin>, rien d'autre —",
+    "           ni port, ni identifiant, ni joker, ni adresse IP ;",
+    "           script : la commande, jusqu'à la fin de la ligne",
+)
+
+#: SPK-185 · §75.5 : ce qu'un script SAIT de son exécution, dit à l'agent qui l'écrit.
+SCRIPT_SANTE = (
+    "UN SCRIPT s'exécute DANS la cellule, sous le compte de la pile (root, ou le compte",
+    "rootless qui possède Docker), sans variable de la pile, au plus 60 secondes. Seul son",
+    "CODE DE SORTIE compte : sa sortie n'est ni gardée ni envoyée. Le propriétaire verra la",
+    "commande EXACTE avant d'accepter — il autorise son exécution répétée.",
 )
 
 MARQUEUR = "spark:suggestion"
@@ -261,6 +298,10 @@ def entete(kind: str) -> str:
         # SPK-112 · §55.3.1 : la grammaire se lisait sans dire ce que règle son
         # dernier mot, et un agent a proposé `clair` pour un site public.
         corps.extend(["", *DERNIER_MOT_ROUTE, "", "    app.exemple.fr 8080"])
+    if paire["kind"] == "health":
+        corps.extend(["", *GRAMMAIRE_SANTE, "", *SCRIPT_SANTE, "",
+                      "    api    http    */5 * * * *  3  200  https://app.exemple.fr/healthz",
+                      "    base   script  */10 * * * * 2  0    docker compose exec -T db pg_isready"])
     if paire["kind"] == "secrets":
         # §55.6.1 : le seul des six dont la proposition est périssable. Le taire
         # ferait chercher un refus qui n'a pas eu lieu.
@@ -341,6 +382,46 @@ def rendre_routes(routes: list[dict[str, Any]], spark_id: str) -> str:
         f"{route['domain']} {route['target_port']} "
         f"{'tls' if route['tls'] else 'clair'}"
         for route in sorted(visees, key=lambda r: r["domain"]))
+    return "\n".join(lignes) + "\n"
+
+
+_ETATS_SANTE = {
+    "unknown": "jamais relevée", "healthy": "saine", "unstable": "instable",
+    "down": "EN PANNE", "stopped": "arrêtée (le Spark est arrêté)",
+}
+
+
+def rendre_sante(sondes: list[dict[str, Any]]) -> str:
+    """Rend `/etc/spark/health` depuis le registre (§75.9).
+
+    La MÊME grammaire que sa proposition : l'agent lit et écrit la même chose. Chaque
+    sonde est précédée, en commentaire, de son ÉTAT au dernier relevé — c'est ainsi
+    qu'un agent apprend que sa demande a été accordée, et ce que la sonde en dit. Une
+    sonde suspendue figure aussi, dite telle : elle existe, elle ne relève rien.
+
+    Ne porte jamais de sortie de script ni de corps de réponse : seulement le motif
+    court que le registre garde (§75.5).
+    """
+    lignes = [
+        "# Les sondes de santé de ce Spark, telles que le plan de contrôle les connaît.",
+        "# Posé par sparkd, réécrit à chaque changement. Une sonde qui échoue au-delà de",
+        "# son seuil envoie une alerte hors bande au propriétaire.",
+        "#",
+        *(f"# {ligne}" if ligne else "#" for ligne in GRAMMAIRE_SANTE),
+        "#",
+        f"# Pour en demander une autre, écrivez dans « {FICHIER_SANTE}{SUFFIXE} ».",
+    ]
+    if not sondes:
+        lignes.extend(["#", "# Aucune sonde ne surveille ce Spark."])
+    for sonde in sorted(sondes, key=lambda x: x["name"]):
+        etat = _ETATS_SANTE.get(sonde["state"], sonde["state"])
+        suspendue = "" if sonde["enabled"] else " — SUSPENDUE : aucun relevé"
+        detail = f" ({sonde['last_detail']})" if sonde.get("last_detail") else ""
+        lignes.append("#")
+        lignes.append(f"# {sonde['name']} : {etat}{detail}{suspendue}")
+        lignes.append(
+            f"{sonde['name']} {sonde['kind']} {sonde['schedule']} {sonde['threshold']} "
+            f"{sonde['expected']} {sonde['target']}")
     return "\n".join(lignes) + "\n"
 
 

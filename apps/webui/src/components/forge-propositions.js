@@ -29,6 +29,8 @@ export const NATURES_FORGE = {
   variables: { libelle: 'Variables proposées', facette: 'environnement' },
   secrets: { libelle: 'Secrets proposés', facette: 'environnement' },
   routes: { libelle: 'Routes proposées', facette: 'routes' },
+  // SPK-185 · DAT §75.9 : une proposition de sondes se tranche dans la facette Santé.
+  health: { libelle: 'Sondes proposées', facette: 'sante' },
   readme: { libelle: 'README.md', facette: 'notes' },
   contributors: { libelle: 'CONTRIBUTORS.md', facette: 'notes' },
   install: { libelle: 'INSTALL.md', facette: 'notes' },
