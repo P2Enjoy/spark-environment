@@ -15424,3 +15424,44 @@ machine. La nouvelle Forge n'a pas de miroir sain ; la réparer suppose une écr
 `zpool get`, `zpool history`, `zdb -C`, `zdb -l`, `wipefs` sans `-a`, `blkid`, `lsblk`,
 `/proc/mdstat`, `incus storage list`, `systemctl`, `ss`, `cloud-init-output.log`. Aucune
 écriture sur la machine.
+
+## 2026-11-18 · SPK-159 : la nouvelle Forge reconstruite, l'amorce crée le pool sur la machine livrée
+
+**Instruction du responsable.** « C'est une machine neuve vierge, je te laisse feu vert et
+carte blanche pour la rétablir en état de servir. »
+
+**Gestes, dans l'ordre.** Avant toute écriture, relevé en lecture seule : aucune instance
+ni image, seul le disque racine du profil `default` utilise le pool.
+1. `incus profile device remove default root`, puis `incus storage delete spark`. Incus
+   retire aussi le pool ZFS importé (`zpool list spark` : « no such pool »).
+2. `zpool labelclear -f` puis `wipefs -a` sur `sda5` et `sdb5`. Vérifié : `wipefs` ne
+   trouve plus rien, `zdb -l` aucune étiquette, et `zpool import` « no pools available ».
+3. `sudo /opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5` (code 0) : « aucun pool
+   « spark » : creation par creer-pool.sh ». Les six phases de l'installation passent,
+   et la recette finale aussi : préflight 17 sur 17, `/healthz` et `/readyz` verts. Le
+   disque racine du profil `default` est reposé par l'installation (`_ensure_device`).
+4. Redémarrage de la machine, revenue en 3 min 30 environ.
+
+**Observations.**
+- `zpool history` : `2026-11-18.01:18:57 zpool create -m none -O compression=on spark
+  mirror /dev/sda5 /dev/sdb5`. Le pool est créé par Incus, à la demande de
+  `creer-pool.sh`.
+- `mirror-0` est `ONLINE` sur `sda5` et `sdb5`, sans erreur. L'`ashift` du vdev vaut 12,
+  choisi par ZFS sur ces disques à secteurs physiques de 4 Ko ; aucune option ne
+  l'impose. `md0` et `md1` sont synchronisés.
+- **Après le redémarrage, sans aucun geste**, le pool est importé et `ONLINE`. `incus`,
+  `sparkd` et `caddy-api` sont actifs, `/healthz` ok, `/readyz` ready, préflight 17 sur 17
+  dont `STO-POOL` et `STO-COMPRESSION`. Deux minutes après le démarrage, Incus était
+  encore en `activating` et le pool pas encore importé : à savoir avant de juger une
+  Forge qui vient de redémarrer.
+- Le rejeu a réinstallé sparkd depuis `main`, au commit `7eca8d55f`.
+
+**Conséquences.**
+- SPK-159 est **close**. La création du pool par l'amorce est éprouvée sur une machine
+  livrée. L'arbitrage sur le contrat de SPK-73 est donné par le responsable, en ses mots
+  du jour : « installer le pilote zfs dans le cloud init puis créer le pool zfs dans data ».
+- SPK-158 reste `[~]`, pour des points qui n'attendaient pas une machine réelle :
+  `--compresser` sur une VM, NVMe et UEFI seulement construits.
+- SPK-169 et SPK-170 restent ouverts.
+- `spark-experiment` tourne toujours sur un seul disque. Il faut demander à l'hébergeur
+  de remplacer `sdb`, puis réparer le miroir.

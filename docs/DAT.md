@@ -16268,8 +16268,9 @@ et à la lecture du dépôt :
    reformule le contrat de SPK-73**, qui disait « l'amorce ne crée jamais » : la
    protection qui comptait — un rejeu ne détruit pas les Sparks — tient par
    construction (l'argument est absent du rejeu) et par le refus de
-   `creer-pool.sh`, plus par l'absence totale du geste. *Arbitrage du responsable
-   demandé : c'est lui qui a fixé l'ancien contrat.*
+   `creer-pool.sh`, plus par l'absence totale du geste. **Arbitré par le responsable le
+   2026-11-18** : « installer le pilote zfs dans le cloud init puis créer le pool zfs dans
+   data ». C'est ce chemin qui a monté la première Forge EM-B311X-SATA.
 7. **Le plafond de l'ARC reste 16 Gio par défaut.** Le dériver de la RAM serait
    une décision de dimensionnement qui n'a pas été prise ; `--arc-gib` se règle
    dans la commande, donc à la vue. Un défaut dérivé reste possible, séparément.
@@ -16360,15 +16361,20 @@ croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
   plafond de l'ARC (1 Gio) et le débit déclaré deviennent des arguments de la
   commande, et non plus un remplacement de texte dans l'amorce ; restent la roue
   construite sur le poste, la clé SSH jetable et ce plafond de 1 Gio.
-- **Non prouvé par la session** : l'acceptation de la sortie `partitionnement`
-  par l'hébergeur, sur une offre réelle (SPK-158, « Reste ») ; la variante
-  `--carte virtio` du banc, qui éprouve `--net-mbit` sur l'argument, n'a pas été
-  rejouée ; `--compresser` n'a pas été joué sur une VM.
+- **Sur une machine livrée, le 2026-11-18** (EM-B311X-SATA, Ubuntu 24.04) : la console
+  accepte la sortie `partitionnement` sans pool déclaré et le cloud-init léger ; la
+  machine télécharge les scripts au commit épinglé. Sur des partitions `data` vierges,
+  **l'amorce crée le pool** par `creer-pool.sh` (`mirror-0`, `sda5` et `sdb5` `ONLINE`,
+  `ashift` 12, compression active), puis la recette finale passe : préflight 17 sur 17,
+  `/healthz`, `/readyz`. **Après un redémarrage**, tout revient sans geste. La variante
+  `--carte virtio` du banc est verte depuis le 2026-11-10.
+- **Non prouvé** : `--compresser` n'a pas été joué sur une VM.
 
 ### 66.6 Ce qui reste ouvert
 
-- Jamais exécuté sur une machine livrée par l'hébergeur : la VM du banc n'en est
-  qu'une approximation.
+- Une machine réinstallée garde ses partitions : l'amorce importe un pool laissé par
+  une installation précédente, même dégradé (SPK-170), et le préflight ne lit pas
+  l'état du miroir (SPK-169).
 - Limite de taille du champ cloud-init chez l'hébergeur : inconnue.
 - `creer-pool.sh` lit toujours ses réglages dans l'environnement
   (`SPARK_POOL_*`, documentées au README) : non modifié ici.
@@ -16469,8 +16475,8 @@ une preuve tient la commande et l'amorce ensemble.
 **`--sans-zfs`** : l'ancien comportement du 2026-11-10 (même partition `data`, aucun
 pool déclaré, l'amorce crée le pool). C'est le repli quand l'installateur de l'hébergeur
 bloque sur la création du pool, et la règle de l'offre EM-B311X-SATA (décision 3). Il
-s'installe sur cette offre (2026-11-18) ; la création du pool par l'amorce est éprouvée
-sur le banc, pas encore sur une machine livrée aux partitions vierges.
+s'installe sur cette offre, et l'amorce y crée le pool sur des partitions vierges
+(2026-11-18, §66.5).
 
 **Le cloud-init est le même dans les deux modes** : il lance l'amorce avec
 `--pool-source`. Pool déclaré, l'amorce l'adopte ; l'argument ne sert alors que de repli
@@ -16528,9 +16534,9 @@ la commande produit est identique pour cette offre (preuve). Sur EM-B311X-SATA e
 cependant pas un pool créé par l'amorce** : c'est un pool `spark` laissé sur les
 partitions par une installation ratée du 2026-11-16 (`zpool history` : créé à 22:18:50 par
 l'installateur de l'hébergeur), que l'amorce a importé. Sa moitié `sdb5` est en faute, et
-le préflight ne l'a pas vu (journal du 2026-11-18, SPK-169 et SPK-170). La création du
-pool par `creer-pool.sh` sur une machine livrée reste à éprouver sur des partitions
-vierges.
+le préflight ne l'a pas vu (journal du 2026-11-18, SPK-169 et SPK-170). Ce pool a été
+détruit, les deux partitions effacées, et l'amorce rejouée : elle a **créé** le miroir par
+`creer-pool.sh`, sain, et la Forge revient seule après un redémarrage (§66.5).
 
 ### 66.9 Le cloud-init léger : il télécharge les scripts à un commit épinglé et vérifie leur empreinte
 

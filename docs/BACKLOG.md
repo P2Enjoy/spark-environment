@@ -9767,7 +9767,7 @@ lien et en place des textes bruts ».
   - **Reste `[~]`** : le mode `--compresser` n'a pas été joué sur une VM ; les schémas
     NVMe et UEFI sont construits, pas relevés.
 
-### [~] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
+### [x] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
 
 **Constaté le 2026-11-10**, en lisant l'amorce contre le schéma : elle adopte un
 pool « livré », or le schéma ne déclare pas de pool (`"zfs": null`, §8.6). Au
@@ -9815,7 +9815,7 @@ en éditant le fichier, serveur par serveur.
     absent) ; la forme `source=mirror=…` **rouge avant correction** ; aucune
     variable d'environnement lue. Suite sparkd : **1 809 sur 1 809**.
   - Contrat de SPK-73 reformulé (« jamais » → « seulement sur `--pool-source` ») :
-    **arbitrage du responsable demandé** (DAT §66.2 point 6).
+    **arbitré par le responsable le 2026-11-18** (DAT §66.2 point 6, ci-dessous).
   - **Éprouvé sur un Incus réel le 2026-11-10** (`make forge-vm`, VM Ubuntu 26.04
     à deux disques vierges) : le banc ne crée plus le pool, **l'amorce le crée**
     par `creer-pool.sh` sur `--pool-source`, et le verdict ajouté relève
@@ -9834,9 +9834,20 @@ en éditant le fichier, serveur par serveur.
     non vérifiée : la synchronisation de `md1` de l'installation par défaut, intercalée entre
     les deux, a recopié `sda` sur `sdb` sur cette zone. Le miroir n'en est pas un. La création
     par `creer-pool.sh` sur une machine livrée n'est donc **pas éprouvée** (SPK-170).
-  - **Reste `[~]`** : l'arbitrage du responsable sur le contrat de SPK-73
-    (DAT §66.2 point 6) ; la création du pool par l'amorce sur une machine livrée aux
-    partitions vierges.
+  - **Création éprouvée sur la machine livrée, le 2026-11-18**, avec le feu vert du
+    responsable : pool importé détruit, `sda5` et `sdb5` effacés (`zpool labelclear`,
+    `wipefs -a`), puis `sudo /opt/spark-amorce.sh --pool-source /dev/sda5,/dev/sdb5`.
+    L'amorce écrit « aucun pool « spark » : creation par creer-pool.sh », Incus crée le
+    miroir (`zpool history` : `zpool create … spark mirror /dev/sda5 /dev/sdb5`),
+    `mirror-0` `ONLINE` sur les deux partitions, `ashift` 12, compression active. Recette
+    finale : préflight 17 sur 17, `/healthz` et `/readyz` verts. **Après un redémarrage**,
+    le pool, Incus, sparkd et Caddy reviennent sans geste, et le préflight reste 17 sur 17.
+  - **Arbitrage du responsable sur le contrat de SPK-73, le 2026-11-18** : « faire un
+    partitionnement sans zfs mais installer le pilote zfs dans le cloud init puis créer
+    le pool zfs dans data ». L'amorce crée donc le pool quand `--pool-source` est donné
+    (DAT §66.2 point 6). Le rejeu sans l'argument ne crée toujours rien.
+  - **Close le 2026-11-18.** Reste ouvert, hors de cette unité : l'adoption silencieuse
+    d'un pool étranger (SPK-170).
 
 ### [ ] SPK-169 · Le préflight dit l'état du miroir, pas seulement son pilote
 
