@@ -157,6 +157,13 @@
   et §37.7.4 révisés ; SPK-DS-35 ; manuels M8 et M6 ; OP-31.
 
 ### Modifié
+- **SPK-158 — qui crée le pool se décide par offre.** Sur l'offre EM-B311X-SATA (Ubuntu
+  24.04), l'installateur de l'hébergeur se fige quand le schéma déclare le pool, et
+  s'installe quand il ne le déclare pas (2026-11-18). La commande porte donc, pour chaque
+  offre versionnée, qui crée le pool : `hebergeur` ou `amorce`. Le JSON de partition
+  versionné d'EM-B311X-SATA ne déclare plus le pool, et l'amorce le crée au premier
+  démarrage. Une offre versionnée sans cette donnée est refusée. `--sans-zfs` force
+  toujours la création par l'amorce.
 - **SPK-159 — l'amorce cloud-init prend des arguments nommés, et crée le pool sur
   demande explicite.** `--pool-source`, `--arc-gib`, `--net-mbit` et `--help`
   remplacent `ARC_GIB` et `NET_MBIT`, qu'il fallait éditer dans le texte, serveur

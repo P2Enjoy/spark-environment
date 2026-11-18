@@ -15368,3 +15368,59 @@ la règle pour les installations en 24.04, sur décision du responsable (DAT §6
 `modinfo zfs`, `cloud-init status`, `tune2fs -l`. Aucune écriture sur la machine. La
 nouvelle clé d'hôte est enregistrée dans un fichier temporaire de session : le
 `known_hosts` du poste n'est pas modifié.
+
+## 2026-11-18 · SPK-158 et SPK-159 : la nouvelle Forge s'installe sans pool déclaré, mais son pool est un reste d'installation ratée
+
+**Contexte.** Le responsable a réinstallé la machine EM-B311X-SATA en Ubuntu 24.04, avec le
+schéma **sans pool déclaré** (`--sans-zfs`) et le cloud-init léger épinglé au commit
+`3e9e6e9`. Le serveur démarre. Sa décision : « pour cette configuration matérielle il faut
+retenir ce setup ».
+
+**Observations** (lecture seule, par SSH, le 2026-11-18 vers 01:06 UTC) :
+- cloud-init `done`, sans erreur. L'amorce va au bout : préflight 17 sur 17 sans blocage,
+  `/healthz` ok (commit `3e9e6e917`), `/readyz` ready (registre, Incus, Caddy). Incus 7.6
+  et le pool `spark` sont `CREATED`. `sparkd` et Caddy sont actifs ;
+- topologie relevée : 20 cœurs et 40 fils, 252 Gio de RAM, 1 Gbit/s mesuré, 10,6 Tio de
+  stockage. L'ARC est plafonné au défaut de l'amorce, 16 Gio ;
+- `md0` est sain et `md1` en synchronisation (75 %), sur `sda` et `sdb` ;
+- **le pool `spark` est DEGRADED** : `sdb5` est FAULTED, « label missing or invalid »,
+  `not_present: 1` dans `zdb -C` ;
+- **il n'a pas été créé par l'amorce.** `zpool history` : `2026-11-16.22:18:50 zpool
+  create spark mirror /dev/sda5 /dev/sdb5`, puis `2026-11-18.00:59:26 zpool import -f
+  spark`. L'étiquette porte le nom d'hôte `linuxkit-44a8421c3c28` : c'est l'installateur
+  de l'hébergeur, lors d'une tentative ratée avec le pool déclaré. L'`ashift` du vdev
+  vaut 12 ;
+- `blkid` donne à `sda5` **et** à `sdb5` le même `UUID_SUB` (6129757788492420236), celui
+  de `sda5`. L'étiquette de `sdb5` est donc une copie de celle de `sda5`.
+
+**Explication vraisemblable, non vérifiée.** L'installateur de l'hébergeur n'efface pas les
+disques entre deux installations. L'installation par défaut du 2026-11-17 a construit un
+`md1` de 12 To sur `sda4`/`sdb4`, puis l'a synchronisé de `sda` vers `sdb` ; la machine a été
+réinstallée au cours de cette synchronisation. Les partitions de cette installation
+recouvraient la zone où se trouvent aujourd'hui `sda5` et `sdb5`. La synchronisation a
+recopié sur `sdb` les étiquettes ZFS que `sda` portait encore. Le nouveau schéma a recréé
+les partitions aux mêmes positions ; l'amorce y a trouvé un pool importable et l'a adopté.
+
+**Deux défauts du produit, révélés par la machine réelle.**
+1. Le préflight rend `STO-POOL` « miroir ZFS natif », OK, sans lire l'état du pool. Il est
+   vert ici, et vert sur `spark-experiment`, dégradée elle aussi depuis une date inconnue
+   (`sdb` en faute dans le pool et dans les deux RAID ; dernier scrub propre le
+   2026-10-11). → **SPK-169**.
+2. L'amorce importe, avec `-f`, n'importe quel pool `spark` importable, même étranger à
+   l'installation et dégradé. Le refus de `creer-pool.sh` n'est jamais atteint. → **SPK-170**,
+   règle à arbitrer par le responsable.
+
+**Décision du responsable.** Sur l'offre EM-B311X-SATA, le pool n'est pas déclaré à
+l'hébergeur : c'est l'amorce qui le crée. La commande porte qui crée le pool pour chaque
+offre versionnée (DAT §66.8, décision 3 ; SPK-158 point 9).
+
+**Ce qui n'est pas clos.** SPK-158 l'est presque : l'acceptation par l'hébergeur est
+établie, mais le point 9 n'est pas codé et `--compresser`, NVMe et UEFI restent ouverts.
+SPK-159 ne l'est pas : la création du pool par l'amorce n'a pas été jouée sur cette
+machine. La nouvelle Forge n'a pas de miroir sain ; la réparer suppose une écriture sur
+`sdb5`, qui demande l'instruction du responsable.
+
+**Vérifications.** Commandes en lecture seule : `cloud-init status`, `zpool status`,
+`zpool get`, `zpool history`, `zdb -C`, `zdb -l`, `wipefs` sans `-a`, `blkid`, `lsblk`,
+`/proc/mdstat`, `incus storage list`, `systemctl`, `ss`, `cloud-init-output.log`. Aucune
+écriture sur la machine.

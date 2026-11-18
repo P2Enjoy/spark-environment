@@ -9665,7 +9665,12 @@ lien et en place des textes bruts ».
      19 431 octets)* le cloud-init est **léger par défaut** : il télécharge les deux
      scripts à un commit épinglé et vérifie leur sha256, environ 1,5 Ko ; `--embarquer`
      garde l'ancien mode, **sans les lignes de commentaire des scripts** (suggestion du
-     responsable : 19,7 Ko → 11,4 Ko, 6,8 Ko avec `--compresser`) (DAT §66.9).
+     responsable : 19,7 Ko → 11,4 Ko, 6,8 Ko avec `--compresser`) (DAT §66.9) ;
+  9. *(décision du responsable du 2026-11-18)* **qui crée le pool se décide par offre** :
+     chaque offre versionnée porte `hebergeur` (le schéma déclare le pool) ou `amorce`
+     (aucun pool déclaré, l'amorce le crée) ; EM-B311X-SATA est `amorce`, et son JSON
+     de partition versionné est celui sans pool déclaré ; une offre versionnée sans
+     cette donnée est refusée (DAT §66.8, décision 3).
 - Aucune migration, aucune variable d'environnement, aucune opération de
   production.
 - DoD : preuves unitaires (dérivation, refus, NVMe, UEFI, YAML relu, contenu
@@ -9745,9 +9750,16 @@ lien et en place des textes bruts ».
   - **Variante `--carte virtio` rejouée le 2026-11-10** : VERT en 279 s — le cloud-init de la
     commande passe `--net-mbit 1000`, `/v1/forge` rend `1000000000` bit/s, source `declared`,
     et le reste du banc est vert, redémarrage compris.
-  - **Reste `[~]`** : le mode
-    `--compresser` n'a pas été joué sur une VM ; les schémas NVMe et UEFI sont
-    construits, pas relevés ; et l'acceptation par l'hébergeur, ci-dessus.
+  - **Première machine livrée, le 2026-11-18** (EM-B311X-SATA, Ubuntu 24.04) : avec le
+    pool déclaré, aucune installation n'aboutit (l'installateur de l'hébergeur se fige
+    après la synchronisation de `md1`) ; avec le schéma **sans pool déclaré** et le
+    cloud-init **léger**, l'installation aboutit. La console **accepte** le JSON produit
+    et le `user-data` léger de 1 142 octets ; la machine **télécharge** les deux scripts au
+    commit épinglé, empreintes vérifiées, et l'amorce va au bout : cloud-init `done`,
+    préflight 17 sur 17, `/healthz` et `/readyz` verts. L'acceptation par l'hébergeur,
+    qui était le « Reste » de cette unité, est donc **établie** pour les deux sorties.
+  - **Reste `[~]`** : le mode `--compresser` n'a pas été joué sur une VM ; les schémas
+    NVMe et UEFI sont construits, pas relevés ; le point 9 n'est pas encore codé.
 
 ### [~] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
 
@@ -9808,8 +9820,49 @@ en éditant le fichier, serveur par serveur.
     ARGS="--carte virtio"`, VM sans débit annoncé) : l'amorce reçoit `--net-mbit 1000`,
     `/v1/forge` rend `1000000000` bit/s en source `declared` — l'argument, et non plus un
     texte remplacé. VERT en 279 s, redémarrage compris.
+  - **Première machine livrée, le 2026-11-18** (EM-B311X-SATA, schéma sans pool déclaré) :
+    l'amorce va au bout, mais **elle n'a pas créé le pool** : elle a importé (`zpool import
+    -f spark`) un pool laissé sur `sda5`/`sdb5` par une installation ratée du 2026-11-16,
+    créé par l'installateur de l'hébergeur. Sa moitié `sdb5` est en faute (« label missing
+    or invalid ») : l'étiquette ZFS lue sur `sdb5` est celle de `sda5`. Cause vraisemblable,
+    non vérifiée : la synchronisation de `md1` de l'installation par défaut, intercalée entre
+    les deux, a recopié `sda` sur `sdb` sur cette zone. Le miroir n'en est pas un. La création
+    par `creer-pool.sh` sur une machine livrée n'est donc **pas éprouvée** (SPK-170).
   - **Reste `[~]`** : l'arbitrage du responsable sur le contrat de SPK-73
-    (DAT §66.2 point 6).
+    (DAT §66.2 point 6) ; la création du pool par l'amorce sur une machine livrée aux
+    partitions vierges.
+
+### [ ] SPK-169 · Le préflight dit l'état du miroir, pas seulement son pilote
+
+**Constaté le 2026-11-18, sur deux Forges réelles.** `STO-POOL` rend « zfs … — miroir ZFS
+natif », OK, sans lire l'état du pool. Or `spark-experiment` tourne **dégradée** (`sdb5`
+FAULTED, 6 erreurs de lecture et 283 d'écriture ; `sdb3` et `sdb4` sortis de `md0` et `md1`),
+et la nouvelle Forge EM-B311X-SATA aussi (`sdb5` FAULTED dès l'installation). Les deux
+rendent un préflight vert, 17 sur 17. Le produit promet un miroir (DAT §8.5) : un pool
+qui n'en a plus qu'une moitié ne tient pas cette promesse, et l'écran le dit vert.
+
+- Spécification : `docs/DAT.md` §8.5 (la promesse du miroir) — **le verdict attendu reste
+  à écrire** (échec ou avertissement, et sur quelles sources : `zpool status`, `/proc/mdstat`).
+- Dépend de : SPK-28.
+- DoD : test unitaire rouge avant correction sur les sorties `zpool status` relevées le
+  2026-11-18 ; verdict observé sur une Forge réelle ; manuel et DAT à jour.
+
+### [ ] SPK-170 · L'amorce n'adopte pas en silence un pool qu'elle n'a pas créé
+
+**Constaté le 2026-11-18** (SPK-159, première machine livrée). Lancée avec
+`--pool-source` sur un schéma sans pool déclaré, l'amorce a importé un pool `spark` laissé
+par une installation précédente, créé par une autre machine (nom d'hôte
+`linuxkit-44a8421c3c28`), dégradé, et l'a confié à Incus. Le refus de `creer-pool.sh` (un
+support déjà signé) n'a jamais été atteint : l'adoption passe avant. L'installateur de
+l'hébergeur n'efface pas les partitions entre deux installations.
+
+- Spécification : `docs/DAT.md` §66.2 point 6, §66.8 — **la règle reste à arbitrer par le
+  responsable** : refuser un pool importé qui n'est pas sain ; refuser, quand
+  `--pool-source` est donné, un pool que l'installation en cours n'a pas déclaré ; ou les deux.
+- Dépend de : SPK-159.
+- DoD : preuve rouge avant correction (le bloc du pool de l'amorce joué sur un pool
+  importable étranger et dégradé) ; création par `creer-pool.sh` éprouvée sur une machine
+  livrée aux partitions vierges.
 
 ---
 

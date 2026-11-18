@@ -10,10 +10,15 @@ README.md (« Commander une Forge »)
 **Le JSON de partition** est versionné, prêt à coller dans l'éditeur de partitions de la
 console (*Custom configuration*) :
 
-| Offre | Relevée le | JSON de partition à coller |
-|---|---|---|
-| EM-L101X-SATA | 2026-11-10 | [`forge/EM-L101X-SATA.partitionnement.json`](forge/EM-L101X-SATA.partitionnement.json) |
-| EM-B311X-SATA | 2026-11-16 | [`forge/EM-B311X-SATA.partitionnement.json`](forge/EM-B311X-SATA.partitionnement.json) |
+| Offre | Relevée le | Le pool est créé par | JSON de partition à coller |
+|---|---|---|---|
+| EM-L101X-SATA | 2026-11-10 | l'hébergeur (déclaré au schéma) — jamais joué sur cette offre | [`forge/EM-L101X-SATA.partitionnement.json`](forge/EM-L101X-SATA.partitionnement.json) |
+| EM-B311X-SATA | 2026-11-16 | **l'amorce** (`"zfs": null`) — installation aboutie le 2026-11-18 | [`forge/EM-B311X-SATA.partitionnement.json`](forge/EM-B311X-SATA.partitionnement.json) |
+
+**Qui crée le pool se décide par offre** (DAT §66.8, décision 3) : sur EM-B311X-SATA en
+Ubuntu 24.04, l'installateur de l'hébergeur se fige quand le schéma déclare le pool, et
+s'installe quand il ne le déclare pas. La commande porte ce choix pour chaque offre
+versionnée, et refuse une offre qui ne l'a pas.
 
 **Le cloud-init n'est PAS versionné**, et c'est voulu : il dépend de l'amorce
 (`spark-amorce.sh`) et de `creer-pool.sh`, qui évoluent. Une copie versionnée serait en
@@ -36,9 +41,15 @@ Le JSON de partition se reproduit de la même façon (`partitionnement --offre <
 preuve échoue s'il n'est plus ce que la commande produit.
 
 **Ce que contient le JSON de partition** : sur chaque disque, la partition `root` bornée à
-200 Gio, puis une partition **`data`** qui prend tout le reste ; le système reste en RAID 1 ;
-la section `zfs` du schéma **déclare le pool miroir `spark`** (`ashift=12`) sur les deux
-partitions. Tout le reste est celui de l'offre.
+200 Gio, puis une partition **`data`** qui prend tout le reste ; le système reste en RAID 1.
+Pour une offre dont le pool est créé par l'hébergeur, la section `zfs` du schéma **déclare
+le pool miroir `spark`** (`ashift=12`) sur les deux partitions ; pour une offre dont le pool
+est créé par l'amorce, elle reste celle de l'offre. Tout le reste est celui de l'offre.
+
+**Une machine déjà installée garde ses partitions** : l'installateur de l'hébergeur ne les
+efface pas, et un pool laissé par une installation précédente est importé par l'amorce
+(journal du 2026-11-18, SPK-170). Après `zpool status`, un pool `DEGRADED` dès
+l'installation est un reste à reconstruire, pas une Forge saine.
 
 **La référence : `spark-experiment`.** [`reference/`](reference/) porte le schéma par
 défaut de l'offre de la Forge en service et le JSON de partition **avec lequel elle a été
@@ -46,9 +57,9 @@ installée et démarre** (relevés le 2026-11-17). Une preuve exige que la comma
 à ce défaut, reproduise ce JSON octet pour octet. Ces fichiers ne sont pas une offre : la
 commande `offres` ne les lit pas.
 
-**Si l'installateur bloque sur le pool** : le repli est le schéma sans pool déclaré, que
-l'amorce complète en créant le pool :
-`python3 scripts/preparer-forge.py partitionnement --offre <NOM> --sans-zfs`. Le
+**Si l'installateur bloque sur le pool** pour une offre nouvelle : le repli est le schéma
+sans pool déclaré, que l'amorce complète en créant le pool :
+`python3 scripts/preparer-forge.py partitionnement --defaut <FICHIER> --sans-zfs`. Le
 cloud-init est le même.
 
 ## Les schémas originaux

@@ -16298,7 +16298,8 @@ Entrée : l'objet JSON du schéma par défaut — `disks`, `filesystems`, `raids
   `/dev/sdb5` ; `/dev/nvme0n1p5` quand le nom du disque finit par un chiffre.
   Aucun ne figure dans `raids` ni dans `filesystems`, sinon refus : ils restent
   nus, comme l'exige le miroir natif (§8.5). **La section `zfs` du schéma déclare le
-  pool** (§66.8), sauf avec `--sans-zfs` : `devices` = ces deux supports,
+  pool** (§66.8), sauf pour une offre dont le pool est créé par l'amorce (§66.8,
+  décision 3) et avec `--sans-zfs` : `devices` = ces deux supports,
   `filesystemOptions` vide, `name` `spark`, `options` `["ashift=12"]`, `type`
   `mirror` — clé pour clé le pool de `spark-experiment`.
 - **Tout le reste est recopié tel quel**, ordre des clés compris : partitions
@@ -16416,14 +16417,14 @@ commande la machine. Une autre vérifie que les deux offres relevées sont prés
 default*, copier le JSON tel quel dans `<offre>.json`, ajouter une ligne au README du
 dossier, lancer les preuves.
 
-### 66.8 Le schéma pour la Forge déclare le pool ZFS, et il est versionné pour chaque offre connue
+### 66.8 Le schéma pour la Forge déclare le pool ZFS quand l'offre le supporte, et il est versionné pour chaque offre connue
 
 *Décisions du responsable du 2026-11-16, écrites avant le code et livrées avec lui.
 Elles remplacent la « frontière » que disait le §8.6 (« l'hébergeur livre des
 partitions, la Forge crée son pool ») ; le §8.6 et le §66.3 sont corrigés dans le même
 changement.*
 
-**Décision 1 — le schéma déclare le pool.** « Tu dois générer le NOUVEAU schéma pour y
+**Décision 1 — le schéma déclare le pool** (sauf pour une offre où l'amorce le crée : décision 3). « Tu dois générer le NOUVEAU schéma pour y
 installer une Forge » : pour une offre donnée, le schéma que la commande produit est
 **celui de la Forge**, pas une copie du défaut. Il déclare le pool ZFS à l'hébergeur : la
 partition 5 de chaque disque porte le libellé **`data`**, et le schéma porte une section
@@ -16466,8 +16467,10 @@ reste. La section `zfs` porte le pool de `spark-experiment` : `spark`, `mirror`,
 une preuve tient la commande et l'amorce ensemble.
 
 **`--sans-zfs`** : l'ancien comportement du 2026-11-10 (même partition `data`, aucun
-pool déclaré, l'amorce crée le pool). C'est le repli si l'installateur de l'hébergeur
-bloque sur la création du pool ; il est éprouvé sur le banc, pas sur une machine réelle.
+pool déclaré, l'amorce crée le pool). C'est le repli quand l'installateur de l'hébergeur
+bloque sur la création du pool, et la règle de l'offre EM-B311X-SATA (décision 3). Il
+s'installe sur cette offre (2026-11-18) ; la création du pool par l'amorce est éprouvée
+sur le banc, pas encore sur une machine livrée aux partitions vierges.
 
 **Le cloud-init est le même dans les deux modes** : il lance l'amorce avec
 `--pool-source`. Pool déclaré, l'amorce l'adopte ; l'argument ne sert alors que de repli
@@ -16497,12 +16500,37 @@ commit du code.* Le cloud-init produit par nom d'offre ne donne pas `--arc-gib` 
 de chaque offre n'est pas relevée, l'amorce garde son défaut de 16 Gio — à adapter avec
 `--arc-gib` sur une machine qui en a moins.
 
+**Décision 3 — qui crée le pool se décide par offre (responsable, 2026-11-18).** « Pour
+cette configuration matérielle il faut retenir ce setup. » Sur l'offre **EM-B311X-SATA**
+(Dell R730, 2 × 12 To, Ubuntu 24.04), aucune installation avec le pool déclaré n'a
+abouti : l'installateur de l'hébergeur se fige après la synchronisation de `md1`. Le
+schéma **sans pool déclaré**, avec le même cloud-init, s'installe et démarre (2026-11-18),
+et l'amorce prend le pool en charge. Pour cette offre, le JSON de partition versionné est
+donc ce schéma-là.
+
+- La commande porte, **pour chaque offre versionnée**, qui crée le pool : `hebergeur`
+  (le schéma le déclare) ou `amorce` (`"zfs"` reste celui de l'offre, et l'amorce le crée
+  avec `--pool-source`). Une offre versionnée **sans** cette donnée est refusée : son
+  absence ne choisit rien en silence.
+- EM-B311X-SATA : `amorce`, éprouvé le 2026-11-18. EM-L101X-SATA : `hebergeur`. Ce
+  dernier choix n'a jamais été joué sur une machine de cette offre : c'est la règle
+  d'origine, conservée faute de preuve contraire.
+- `partitionnement --offre <NOM>` suit l'offre ; `--sans-zfs` force `amorce`, quelle que
+  soit l'offre, et reste le moyen de traiter une offre nouvelle (`--defaut`).
+- Le cloud-init ne change pas : il passe toujours `--pool-source`.
+
 **Ce qui est établi, et ce qui ne l'est pas.** Le schéma éprouvé (libellé `data`, pool
 `spark` miroir en `ashift=12`) est accepté par la console, appliqué par l'installateur de
-l'hébergeur, et la Forge `spark-experiment` démarre dessus. Le schéma que la commande
-produit est désormais identique pour cette offre (preuve). **N'est pas vérifié** : qu'il
-s'installe sur l'offre EM-B311X-SATA, où toutes les installations de la nuit du 16 au 17
-novembre ont échoué, celles faites avec les réglages par défaut comprises.
+l'hébergeur, et la Forge `spark-experiment` démarre dessus, en Ubuntu 26.04. Le schéma que
+la commande produit est identique pour cette offre (preuve). Sur EM-B311X-SATA en Ubuntu
+24.04, le schéma sans pool déclaré s'installe (2026-11-18) : cloud-init `done`, préflight
+17 sur 17, `/healthz` et `/readyz` verts. **Le pool de cette première installation n'est
+cependant pas un pool créé par l'amorce** : c'est un pool `spark` laissé sur les
+partitions par une installation ratée du 2026-11-16 (`zpool history` : créé à 22:18:50 par
+l'installateur de l'hébergeur), que l'amorce a importé. Sa moitié `sdb5` est en faute, et
+le préflight ne l'a pas vu (journal du 2026-11-18, SPK-169 et SPK-170). La création du
+pool par `creer-pool.sh` sur une machine livrée reste à éprouver sur des partitions
+vierges.
 
 ### 66.9 Le cloud-init léger : il télécharge les scripts à un commit épinglé et vérifie leur empreinte
 
