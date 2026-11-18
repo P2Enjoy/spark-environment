@@ -9979,7 +9979,7 @@ avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS
 - DoD : preuve qu'une Forge neuve accepte la première signature de la console sans geste
   manuel ; refus d'une clé non déclarée toujours prouvé ; runbook à jour.
 
-### [ ] SPK-173 · Une Forge survit à la montée de version majeure d'Ubuntu
+### [ ] SPK-175 · Une Forge survit à la montée de version majeure d'Ubuntu
 
 **Constaté le 2026-11-18 sur `spark-010`** (24.04 → 26.04, journal du jour). Deux gestes
 manuels ont été nécessaires :

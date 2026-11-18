@@ -15587,7 +15587,7 @@ rien ne l'exige.
 - `spark-010` tourne sur la plateforme visée par le produit (README : Ubuntu 26.04.1,
   noyau 7.0, ZFS 2.4.1).
 - Une montée de version majeure d'Ubuntu **casse l'environnement Python de sparkd**, et
-  rejouer l'amorce ne le répare que si on l'a d'abord mis de côté. → SPK-173.
+  rejouer l'amorce ne le répare que si on l'a d'abord mis de côté. → SPK-175.
 - Sur l'offre EM-B311X-SATA, la procédure qui marche est donc : installation en 24.04 sans
   pool déclaré, puis montée en 26.04 avec les étapes 3 et 6 ci-dessus.
 
