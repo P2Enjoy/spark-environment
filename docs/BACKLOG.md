@@ -9176,18 +9176,20 @@ ligne des totaux face à ce que la Forge a au total. Arbitrages du jour : la for
   l'accueil (connexion, clic, capture) ; captures observées (desktop, mobile, absence de
   capacité, un Spark arrêté, un Spark au-delà du seuil) ; manuel M3, DAT, design system,
   seed (un Spark près de sa limite) et changelog à jour.
-- **État au 2026-11-18 (avant la révision du bloc de totaux — le pied de tableau décrit
-  ici est à remplacer, preuves à refaire) : implémenté et vérifié sur la pile factice, pas
-  sur une Forge réelle — reste `[~]`.** Prouvé : 1665 tests unitaires de la console
-  verts, dont `sparks-totaux.test.js` ; le parcours E2E « la liste montre Mémoire et
-  Disque en anneau… » vert, depuis l'accueil, à la souris ; captures observées (desktop,
-  mobile, onglet de projet sans total) ; illustrations `m3-liste` et `m3-projets-liste`
-  du manuel renouvelées. **Non prouvé** : l'état « CPU du total mesuré » en E2E (la pile
-  factice ne garantit pas de fenêtre de mesure CPU stable ; couvert par les tests
-  unitaires seulement) ; l'écran sur une Forge réelle ou sur la VM d'installation fraîche
-  (README §28.7) ; la capture de la capacité non relevée. Le seed n'a pas été modifié :
-  le doublon fait déjà franchir 90 % de leur quota mémoire à plusieurs Sparks seedés (voir
-  le journal du 2026-11-18). Le manuel est dit M8 (« Lire les mesures »), pas M3.
+- **État au 2026-11-18 : implémenté et vérifié sur la pile de développement factice, pas
+  sur une Forge réelle — reste `[~]`.** Prouvé : 1775 tests unitaires de la console verts,
+  dont `sparks-totaux.test.js` ; le parcours E2E « la liste montre Mémoire et Disque en
+  anneau… » vert, depuis l'accueil, à la souris — anneaux et texte dit s'accordent au seuil,
+  bloc « Total de la Forge » : trois anneaux, capacité au centre, alloué et disponible
+  égaux à ceux de `/v1/forge`, aucune liste terme / valeur, bloc absent de l'onglet d'un
+  projet et de retour dans « Tous » ; captures observées (desktop, mobile, onglet de
+  projet) ; illustration `m3-liste` du manuel renouvelée. **Non prouvé** : l'état « CPU
+  mesuré » du bloc en E2E (la pile factice ne garantit pas de fenêtre de mesure CPU
+  stable ; unitaire seulement) ; l'écran sur une Forge réelle ou sur la VM d'installation
+  fraîche (README §28.7) ; la capture de la capacité non relevée. Le seed n'a pas été
+  modifié : le doublon fait déjà franchir 90 % de leur quota mémoire à plusieurs Sparks, et
+  alloue 92 % du CPU partagé (voir le journal du 2026-11-18). Le manuel est M8 (« Lire les
+  mesures »).
 
 ### [ ] SPK-174 · Désigner l'image proposée par défaut à la création
 

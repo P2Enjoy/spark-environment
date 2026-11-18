@@ -65,15 +65,19 @@
 
   DAT §70.3, SPK-DS-45, manuel M12, `docs/PROD_MIGRATIONS.md` OP-43. Aucune
   migration ; le défaut d'une variable existante change.
-- **SPK-173 — la liste des Sparks montre Mémoire et Disque en anneau, et un total face
-  à la Forge.** À gauche des chiffres de chaque cellule Mémoire et Disque, un anneau dit
-  la part de la limite occupée ; il passe au rouge à partir de 90 % (constante
+- **SPK-173 — la liste des Sparks montre Mémoire et Disque en anneau, et un bloc
+  « Total de la Forge ».** À gauche des chiffres de chaque cellule Mémoire et Disque, un
+  anneau dit la part de la limite occupée ; il passe au rouge à partir de 90 % (constante
   `SEUIL_ALERTE_RESSOURCE`, ni variable d'environnement ni réglage), avec les chiffres en
   gras et un texte pour lecteurs d'écran — la couleur ne porte pas seule. Pas de mesure ou
-  pas de limite : pas d'anneau. Dans l'onglet « Tous » seulement, une ligne « Total » somme
-  les mesures face aux capacités **physiques** de la Forge (cœurs, mémoire de la machine,
-  stockage), dit quand la somme est partielle, et nomme la capacité qu'elle n'a pas pu
-  lire. La liste lit désormais `/v1/forge`. DAT §68 ; design system SPK-DS-44 ; manuel M8.
+  pas de limite : pas d'anneau. Dans l'onglet « Tous » seulement, un bloc **au-dessus du
+  tableau** montre, en **graphique** (un anneau par ressource : processeur, mémoire, disque),
+  la capacité de la Forge découpée en **alloué**, **utilisé** (par-dessus) et **disponible**,
+  avec une légende ; alloué et disponible sont lus de `/v1/forge`, comme l'écran Forge,
+  l'utilisé est la somme des mesures. Il dit quand cette somme est partielle, exclut du CPU
+  les Sparks à cœurs dédiés et nomme la capacité qu'il n'a pas pu lire. Au-delà de 90 %
+  alloué, l'arc passe au rouge.
+  La liste lit désormais `/v1/forge`. DAT §68 ; design system SPK-DS-44 ; manuel M8.
   Aucune migration, aucune route, aucune variable d'environnement.
 - **SPK-158 — une commande produit le schéma de partitionnement et le cloud-init
   complets d'une Forge, prêts à coller dans la console de l'hébergeur.**

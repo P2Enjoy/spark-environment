@@ -11,7 +11,7 @@
  *       Disque, la ligne des totaux de l'onglet « Tous ») ·
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-44 · docs/DESIGN_SYSTEM.md §1.5, §6.14,
  *       §14.6 — pour `renderAnneau`, `renderMesure`, `capaciteDeForge`,
- *       `sommerMesures` et `renderTotaux`
+ *       `sommerMesures` et `renderBlocTotal`
  *
  * Rendu en chaînes HTML plutôt qu'avec un framework : la vue est une liste, et
  * une dépendance de rendu se justifiera quand l'interactivité l'exigera
@@ -154,19 +154,22 @@ function renderMesure(valeur, limite, formateur) {
 }
 
 /**
- * Capacités physiques de la Forge, telles que la liste les compare (DAT §68.3).
+ * Les pools de la Forge que la liste compare : capacité, alloué, disponible.
  *
- * Physiques, pas allouables : la mémoire vendue en surengagement ne s'ouvre pas à
- * un usage réel qui la dépasserait. Une lecture absente donne `null` par
- * grandeur, jamais zéro (§14.6).
+ * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.3 (le bloc « Total de la
+ *       Forge »), §27.2 (les trois valeurs d'un pool, LUES et jamais recomposées)
+ *
+ * Alloué et disponible sont ceux de l'écran Forge : un second calcul ferait
+ * diverger les deux écrans. Une lecture absente donne `null` par ressource,
+ * jamais zéro (§14.6).
  */
 export function capaciteDeForge(forge) {
-  if (!forge) return null;
-  return {
-    cpu: forge.cpu?.cores_total ?? null,
-    memoire: forge.memory?.total_bytes ?? null,
-    disque: forge.pools?.storage?.capacity ?? null,
-  };
+  if (!forge?.pools) return null;
+  const pool = (p) => (p && typeof p.capacity === 'number' ? {
+    capacite: p.capacity, alloue: p.allocated ?? null, disponible: p.available ?? null,
+    surengagement: p.overcommit ?? null } : null);
+  return { cpu: pool(forge.pools.cpu), memoire: pool(forge.pools.memory),
+           disque: pool(forge.pools.storage) };
 }
 
 /**
@@ -185,66 +188,134 @@ export function sommerMesures(sparks, usage, lire) {
   return { somme, mesures, sparks: sparks.length };
 }
 
-/** Note d'une somme partielle (§6.13, résultat partiel). */
-function noteMesures({ mesures, sparks }) {
-  return mesures < sparks
-    ? `<span class="total__note">${mesures} Spark${mesures > 1 ? 's' : ''} sur ${sparks} mesuré${mesures > 1 ? 's' : ''}</span>`
-    : '';
+const RESSOURCES_TOTAL = [
+  { cle: 'cpu', nom: 'Processeur', format: (v) => `${formatCpu(v)} CPU` },
+  { cle: 'memoire', nom: 'Mémoire', format: formatBytes },
+  { cle: 'disque', nom: 'Disque', format: formatBytes },
+];
+
+// Anneau du bloc de totaux : 128 px de côté et un trait de 16 px, dimensions du
+// COMPOSANT (hors échelle d'espacement, comme les 288 px d'une colonne de board).
+const RAYON_TOTAL = 56;
+const CIRCONFERENCE_TOTAL = 2 * Math.PI * RAYON_TOTAL;
+
+/** Un arc commençant en haut, de la part donnée (0 à 1) de la circonférence. */
+function arcTotal(classe, part) {
+  const trait = (CIRCONFERENCE_TOTAL * Math.min(Math.max(part, 0), 1)).toFixed(2);
+  return `<circle class="total-anneau__arc ${classe}" cx="64" cy="64" r="${RAYON_TOTAL}"`
+    + ` stroke-dasharray="${trait} ${CIRCONFERENCE_TOTAL.toFixed(2)}" transform="rotate(-90 64 64)"/>`;
 }
 
 /**
- * Pied « Total » de l'onglet « Tous » (DAT §68.3, SPK-DS-44).
+ * L'anneau d'une ressource : la capacité, avec l'alloué en gris (ou rouge au-delà
+ * du seuil) et l'utilisé par-dessus, en bleu. Ce qui reste de la piste est le
+ * disponible. Décoratif : la légende porte les valeurs (§1.5).
  *
  * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.3 · docs/DESIGN_SYSTEM_APP.md
  *       SPK-DS-44
- *
- * Le CPU garde sa forme de colonne, la barre ; Mémoire et Disque, leur anneau.
- * Capacité inconnue : la somme reste, l'absence est NOMMÉE une fois, dans la
- * première cellule (§14.6).
  */
-export function renderTotaux(sparks, usage, forge) {
-  const capacite = capaciteDeForge(forge);
-  const cpu = sommerMesures(sparks, usage, (u) => u.cpu?.used);
-  const memoire = sommerMesures(sparks, usage, (u) => u.memory?.used_bytes);
-  const disque = sommerMesures(sparks, usage, (u) => u.disk?.used_bytes);
+export function renderAnneauTotal({ partAlloue, partUtilise, alerte, centre }) {
+  return '<div class="total-anneau">'
+    + '<svg viewBox="0 0 128 128" width="128" height="128" aria-hidden="true" focusable="false">'
+    + `<circle class="total-anneau__piste" cx="64" cy="64" r="${RAYON_TOTAL}"/>`
+    + (partAlloue > 0 ? arcTotal(alerte ? 'total-anneau__arc--alerte' : 'total-anneau__arc--alloue', partAlloue) : '')
+    + (partUtilise > 0 ? arcTotal('total-anneau__arc--utilise', partUtilise) : '')
+    + '</svg>'
+    + `<div class="total-anneau__centre">${centre}</div>`
+    + '</div>';
+}
 
-  const partCpu = proportionRessource(cpu.somme, capacite?.cpu);
-  // Aucun CPU mesuré : s'il y a des Sparks en marche, le premier relevé n'a pas
-  // encore de fenêtre (DAT §20.1) — la cellule le DIT, comme celles des lignes,
-  // plutôt que de rester muette (§14.6). Sans Spark en marche, il n'y a rien à dire.
+/** Une ligne de légende : pastille de la couleur de la part, nom, valeur. */
+function renderLegende(classe, nom, valeur, { alerte = false, aide = '' } = {}) {
+  return `<li class="total-legende__ligne${alerte ? ' mesure--alerte' : ''}">`
+    + `<span class="total-legende__pastille total-legende__pastille--${classe}" aria-hidden="true"></span>`
+    + `<span class="total-legende__nom">${echapper(nom)}</span>`
+    + `<span class="technique">${valeur}${aide}</span></li>`;
+}
+
+/**
+ * Bloc « Total de la Forge », au-dessus du tableau de l'onglet « Tous »
+ * (DAT §68.3, SPK-DS-44).
+ *
+ * @spec docs/BACKLOG.md#SPK-173 · docs/DAT.md §68.3 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-44 · docs/DESIGN_SYSTEM.md §1.5, §6.13, §14.6
+ *
+ * Un GRAPHIQUE, pas une copie de l'écran Forge : un anneau par ressource, dont la
+ * légende donne, une fois, utilisé, alloué et disponible. Alloué et disponible
+ * sont LUS de `/v1/forge` ; l'utilisé est la somme des mesures. L'alerte porte
+ * sur l'ALLOUÉ (la Forge n'accepte presque plus de Spark), pas sur l'utilisé : le
+ * CPU consomme au-delà de sa réservation sans défaut (SPK-DS-02). Capacité
+ * inconnue : pas d'anneau à découper, l'utilisé en chiffres, l'absence nommée.
+ */
+export function renderBlocTotal(sparks, usage, forge) {
+  const pools = capaciteDeForge(forge);
+  // Les Sparks à cœurs dédiés ne tirent pas sur le pool partagé (§7.7) : leur CPU
+  // n'est pas dans la capacité qu'on compare, il n'est donc pas dans la somme.
+  const partages = sparks.filter((sp) => sp.cpu_mode !== 'dedicated');
+  const dedies = sparks.length - partages.length;
+  const sommes = {
+    cpu: sommerMesures(partages, usage, (u) => u.cpu?.used),
+    memoire: sommerMesures(sparks, usage, (u) => u.memory?.used_bytes),
+    disque: sommerMesures(sparks, usage, (u) => u.disk?.used_bytes),
+  };
   const enMarche = sparks.some((sp) => sp.state === 'running');
-  const celluleCpu = cpu.mesures === 0
-    ? (enMarche ? `<span class="jauge__absent">${MEASURE.pending}</span>` : '')
-    : [
-    '<span class="jauge">',
-    partCpu === null ? '' : [
-      '<span class="jauge__piste" aria-hidden="true">',
-      `<span class="jauge__part ${partCpu >= SEUIL_ALERTE_RESSOURCE ? 'jauge__part--depasse' : 'jauge__part--reserve'}" style="width:${(Math.min(partCpu, 1) * 100).toFixed(1)}%"></span>`,
-      '</span>',
-    ].join(''),
-    `<span class="jauge__texte${partCpu >= SEUIL_ALERTE_RESSOURCE ? ' mesure--alerte' : ''}">${echapper(
-      formatCpu(cpu.somme) + (capacite?.cpu ? ` sur ${capacite.cpu} cœurs` : ' CPU'))}${
-      partCpu >= SEUIL_ALERTE_RESSOURCE ? '<span class="sr-only">, proche de la limite</span>' : ''}</span>`,
-    noteMesures(cpu),
-    '</span>',
-  ].join('');
 
-  const cellule = (somme, limite) => (somme.mesures === 0 ? '' : renderMesure(somme.somme, limite, formatBytes)
-    + noteMesures(somme));
+  const colonnes = RESSOURCES_TOTAL.map(({ cle, nom, format }) => {
+    const pool = pools?.[cle] ?? null;
+    const somme = sommes[cle];
+    const utilise = somme.mesures > 0
+      ? echapper(format(somme.somme))
+      : `<span class="jauge__absent">${(cle === 'cpu' || cle === 'memoire') && enMarche
+        ? MEASURE.pending : 'Aucune mesure'}</span>`;
 
-  const absence = capacite === null || capacite.cpu === null || capacite.memoire === null
-    || capacite.disque === null
-    ? '<span class="total__note">Capacité de la Forge non relevée</span>' : '';
+    const partAlloue = pool ? proportionRessource(pool.alloue, pool.capacite) : null;
+    const partUtilise = pool && somme.mesures > 0
+      ? proportionRessource(somme.somme, pool.capacite) : null;
+    const alerte = partAlloue !== null && partAlloue >= SEUIL_ALERTE_RESSOURCE;
 
-  return '<tfoot><tr class="ligne-total">'
-    + `<th scope="row" class="nom-cellule">Total<span class="total__note">${sparks.length} Spark${
-      sparks.length > 1 ? 's' : ''}</span>${absence}</th>`
-    + '<td></td>'
-    + `<td>${celluleCpu}</td>`
-    + `<td class="aligne-droite">${cellule(memoire, capacite?.memoire)}</td>`
-    + `<td class="aligne-droite">${cellule(disque, capacite?.disque)}</td>`
-    + '<td class="colonne-secondaire"></td><td class="colonne-secondaire"></td>'
-    + '</tr></tfoot>';
+    const surengage = pool?.surengagement && pool.surengagement !== 1 && cle !== 'disque'
+      ? ` <span class="badge badge--accent">surengagé ×${echapper(String(pool.surengagement).replace('.', ','))}</span>` : '';
+
+    const notes = [
+      somme.mesures < somme.sparks
+        ? `${somme.mesures} Spark${somme.mesures > 1 ? 's' : ''} sur ${somme.sparks} mesuré${somme.mesures > 1 ? 's' : ''}` : '',
+      cle === 'cpu' && dedies > 0 ? 'Sparks à cœurs dédiés exclus' : '',
+    ].filter(Boolean);
+    // Les notes se disent en UNE ligne : deux paragraphes empilés laissaient un
+    // grand vide sous la seule colonne qui en porte deux (observé en capture).
+    const notesRendues = notes.length
+      ? `<p class="total__note">${echapper(notes.join(' · '))}</p>` : '';
+
+    // Sans capacité (ou sans part calculable) il n'y a rien à découper : pas
+    // d'anneau, l'utilisé seul en légende.
+    const anneau = partAlloue === null ? '' : renderAnneauTotal({
+      partAlloue, partUtilise: partUtilise ?? 0, alerte,
+      centre: `<strong class="technique">${echapper(format(pool.capacite))}</strong><span>capacité</span>`,
+    });
+    const legende = [
+      renderLegende('utilise', 'Utilisé', utilise),
+      pool ? renderLegende(alerte ? 'alerte' : 'alloue', 'Alloué', echapper(format(pool.alloue)), {
+        alerte, aide: alerte ? '<span class="sr-only">, proche de la limite</span>' : '' }) : '',
+      pool ? renderLegende('disponible', 'Disponible', echapper(format(pool.disponible))) : '',
+    ].join('');
+
+    return `<div class="total-ressource">
+  <h3>${echapper(nom)}${surengage}</h3>
+  ${anneau}
+  <ul class="total-legende">${legende}</ul>
+  ${notesRendues}
+</div>`;
+  }).join('');
+
+  const absence = pools === null || RESSOURCES_TOTAL.some(({ cle }) => !pools[cle])
+    ? '<p class="avertissement" role="status">Capacité de la Forge non relevée : seul l’utilisé est affiché.</p>'
+    : '';
+
+  return `<section class="carte bloc total-forge" aria-labelledby="titre-total-forge">
+  <h2 id="titre-total-forge">Total de la Forge</h2>
+  ${absence}
+  <div class="total-forge__ressources">${colonnes}</div>
+</section>`;
 }
 
 const COLONNES = [
@@ -312,15 +383,16 @@ export function renderSparksView({ status, sparks = [], usage = {}, error = null
     projet ? ' dans ce projet' : ''}</p>
   <a class="bouton bouton--primaire bouton--compact" href="#/creer" style="margin-left:auto">Créer un Spark</a>
 </div>
+${
+  // DAT §68.3 : les totaux de la Forge entière ne se rendent que dans l'onglet
+  // « Tous » ; celui d'un projet n'en montrerait qu'une part.
+  projet ? '' : renderBlocTotal(sparks, usage, forge)}
 <div class="carte">
   <div class="tableau-enveloppe">
     <table>
       <caption class="sr-only">Liste des Sparks du serveur courant, avec leur état et leur consommation.</caption>
       <thead><tr>${entetes}</tr></thead>
-      <tbody>${lignes}</tbody>${
-        // DAT §68.3 : les totaux face à la Forge entière ne se rendent que dans
-        // l'onglet « Tous » ; celui d'un projet n'en montrerait qu'une part.
-        projet ? '' : renderTotaux(sparks, usage, forge)}
+      <tbody>${lignes}</tbody>
     </table>
   </div>
   <p class="tableau-indice">Le tableau défile horizontalement pour révéler les colonnes suivantes.</p>

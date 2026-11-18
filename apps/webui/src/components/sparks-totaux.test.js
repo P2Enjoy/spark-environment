@@ -1,21 +1,22 @@
 /**
  * @verifies docs/BACKLOG.md#SPK-173 · docs/DAT.md §68 (l'anneau de Mémoire et de
- *           Disque, la ligne des totaux de l'onglet « Tous ») ·
+ *           Disque, le bloc « Total de la Forge » de l'onglet « Tous ») ·
  *           docs/DESIGN_SYSTEM_APP.md SPK-DS-44 · docs/DESIGN_SYSTEM.md §1.5
  *           (la couleur ne porte jamais seule), §6.14 (une absence reste vide),
  *           §14.6 (zéro n'est pas inconnu)
  *
  * Ce que ces preuves verrouillent : la part se calcule, se borne au dessin et
  * pas au chiffre, bascule au seuil avec autre chose que la couleur ; une mesure
- * ou une limite absente ne produit PAS un anneau vide ; la ligne des totaux
- * somme ce qui est mesuré, dit ce qu'elle n'a pas pu mesurer, nomme la capacité
- * qu'elle n'a pas, et n'existe que dans l'onglet « Tous ».
+ * ou une limite absente ne produit PAS un anneau vide ; le bloc des totaux lit
+ * capacité, alloué et disponible de `/v1/forge`, somme l'utilisé mesuré, dit ce
+ * qu'il n'a pas pu mesurer, nomme la capacité qu'il n'a pas, et n'existe que dans
+ * l'onglet « Tous ».
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { renderSparksView, renderAnneau, renderTotaux, capaciteDeForge, sommerMesures }
+import { renderSparksView, renderAnneau, renderBlocTotal, capaciteDeForge, sommerMesures }
   from './sparks-view.js';
 import { proportionRessource, SEUIL_ALERTE_RESSOURCE } from './tokens.js';
 
@@ -28,10 +29,11 @@ const spark = (name, state = 'running', extra = {}) => ({
 const mesure = (cpu, mem, disque) => ({
   cpu: { used: cpu, over_limit: false }, memory: { used_bytes: mem }, disk: { used_bytes: disque },
 });
-const FORGE = {
-  cpu: { cores_total: 8 }, memory: { total_bytes: 64 * GIO },
-  pools: { storage: { capacity: 500 * GIO } },
-};
+const pool = (capacity, allocated, overcommit = 1) =>
+  ({ capacity, allocated, available: capacity - allocated, overcommit });
+const FORGE = { pools: {
+  cpu: pool(8, 2.5), memory: pool(64 * GIO, 20 * GIO, 1.5), storage: pool(500 * GIO, 120 * GIO, 1),
+} };
 
 // --- la proportion -----------------------------------------------------------
 
@@ -110,8 +112,8 @@ test('cellule : au-delà du seuil, la couleur est DOUBLÉE d\'un texte et du gra
 });
 
 test('cellule : le pourcentage est TRONQUÉ — 89,6 % ne se dit pas 90 % sans alerte', () => {
-  const html = renderTotaux([spark('a')], { a: mesure(0.1, 0.896 * 8 * GIO, 1 * GIO) },
-    { cpu: { cores_total: 8 }, memory: { total_bytes: 8 * GIO }, pools: { storage: { capacity: 500 * GIO } } });
+  const html = renderSparksView({ status: 'ready', sparks: [spark('a', 'running', { memory_reservation_bytes: 8 * GIO })],
+    usage: { a: mesure(0.1, 0.896 * 8 * GIO, 1 * GIO) }, projet: { name: 'p' } });
   assert.match(html, /89 % de la limite<\/span>/);
   assert.equal(html.includes('mesure--alerte'), false);
 });
@@ -136,64 +138,142 @@ test('cellule : limite absente → les chiffres seuls, pas d\'anneau muet', () =
   assert.match(html, /2,0 Gio/);
 });
 
-// --- la ligne des totaux -------------------------------------------------------
+// --- le bloc « Total de la Forge » ---------------------------------------------
 
-test('totaux : somme des mesures face à la capacité PHYSIQUE de la Forge', () => {
+const bloc = (html) => html.split('<h2 id="titre-total-forge">')[1].split('<div class="carte">')[0];
+const arcs = (html, classe) => [...html.matchAll(
+  new RegExp(`total-anneau__arc ${classe}" [^>]*stroke-dasharray="([\\d.]+) ([\\d.]+)"`, 'g'))]
+  .map((m) => Number(m[1]) / Number(m[2]));
+
+test('bloc : un GRAPHIQUE — trois anneaux, pas une liste terme / valeur recopiée de l\'écran Forge', () => {
+  const b = bloc(vue());
+  assert.equal((b.match(/<svg viewBox="0 0 128 128"/g) ?? []).length, 3);
+  for (const nom of ['Processeur', 'Mémoire', 'Disque']) assert.match(b, new RegExp(`<h3>${nom}`));
+  // Le texte n'est que la LÉGENDE : aucune liste de définitions Utilisé / Alloué / … .
+  assert.equal(b.includes('<dl'), false);
+  assert.equal(b.includes('<dt>'), false);
+  assert.equal((b.match(/<ul class="total-legende">/g) ?? []).length, 3);
+});
+
+test('bloc : la capacité au centre de chaque anneau, nommée', () => {
+  const b = bloc(vue());
+  assert.match(b, /total-anneau__centre"><strong class="technique">64 Gio<\/strong><span>capacité/);
+  assert.match(b, /<strong class="technique">500 Gio<\/strong><span>capacité/);
+  assert.match(b, /<strong class="technique">8,00 CPU<\/strong><span>capacité/);
+});
+
+test('bloc : la légende donne utilisé, alloué et disponible — alloué et disponible LUS de /v1/forge', () => {
+  const b = bloc(vue());
+  for (const nom of ['Utilisé', 'Alloué', 'Disponible']) {
+    assert.equal((b.match(new RegExp(`total-legende__nom">${nom}<`, 'g')) ?? []).length, 3, nom);
+  }
+  assert.match(b, /Alloué<\/span><span class="technique">20 Gio/);      // mémoire
+  assert.match(b, /Disponible<\/span><span class="technique">44 Gio/);   // 64 − 20
+  assert.match(b, /Alloué<\/span><span class="technique">2,50 CPU/);     // CPU
+  assert.match(b, /Utilisé<\/span><span class="technique">4,0 Gio/);     // 3 + 1
+  assert.match(b, /Utilisé<\/span><span class="technique">12 Gio/);      // 9,5 + 2
+  assert.match(b, /Utilisé<\/span><span class="technique">0,30 CPU/);    // 0,2 + 0,1
+});
+
+test('bloc : les arcs sont des parts de la capacité — l\'alloué, et l\'utilisé par-dessus', () => {
+  const b = bloc(vue());
+  // Mémoire : alloué 20/64 = 31,25 %, utilisé 4/64 = 6,25 %.
+  const alloues = arcs(b, 'total-anneau__arc--alloue');
+  const utilises = arcs(b, 'total-anneau__arc--utilise');
+  assert.equal(alloues.length, 3);
+  assert.equal(utilises.length, 3);
+  assert.ok(alloues.some((p) => Math.abs(p - 20 / 64) < 0.002), 'part allouée de la mémoire');
+  assert.ok(utilises.some((p) => Math.abs(p - 4 / 64) < 0.002), 'part utilisée de la mémoire');
+});
+
+test('bloc : alloué + disponible = capacité (les trois parts se réconcilient)', () => {
+  const c = capaciteDeForge(FORGE);
+  for (const cle of ['cpu', 'memoire', 'disque']) {
+    assert.equal(c[cle].alloue + c[cle].disponible, c[cle].capacite, cle);
+  }
+});
+
+test('bloc : au-delà de 90 % ALLOUÉ, arc rouge + gras + texte (§1.5) ; l\'utilisé n\'alerte pas', () => {
+  const plein = { pools: { ...FORGE.pools, storage: pool(500 * GIO, 460 * GIO, 1) } };
+  const b = bloc(vue({ forge: plein }));
+  assert.match(b, /total-anneau__arc total-anneau__arc--alerte"/);
+  assert.match(b, /total-legende__pastille--alerte/);
+  assert.match(b, /mesure--alerte"><span class="total-legende__pastille[^>]*><\/span><span class="total-legende__nom">Alloué<\/span><span class="technique">460 Gio<span class="sr-only">, proche de la limite/);
+  assert.equal(bloc(vue()).includes('--alerte'), false);
+  const burst = renderBlocTotal([spark('a')], { a: mesure(7.9, 60 * GIO, 1 * GIO) }, FORGE);
+  assert.equal(burst.includes('--alerte'), false);
+});
+
+test('bloc : l\'utilisé qui dépasse l\'alloué (burst CPU) se dessine borné, et se lit en entier', () => {
+  const html = renderBlocTotal([spark('a')], { a: mesure(9, 1 * GIO, 1 * GIO) }, FORGE);
+  assert.ok(arcs(html, 'total-anneau__arc--utilise').every((p) => p <= 1));
+  assert.match(html, /Utilisé<\/span><span class="technique">9,00 CPU/);
+});
+
+test('bloc : CPU et mémoire portent « surengagé ×N », jamais le disque', () => {
+  const b = bloc(vue());
+  assert.match(b, /Mémoire <span class="badge badge--accent">surengagé ×1,5/);
+  assert.equal((b.match(/surengagé/g) ?? []).length, 1);
+});
+
+test('bloc : l\'utilisé du CPU exclut les Sparks à cœurs dédiés, et le dit', () => {
+  const html = renderBlocTotal(
+    [spark('a'), spark('d', 'running', { cpu_mode: 'dedicated', cpu_cores: 2 })],
+    { a: mesure(0.2, 1 * GIO, 1 * GIO), d: mesure(1.8, 1 * GIO, 1 * GIO) }, FORGE);
+  assert.match(html, /Utilisé<\/span><span class="technique">0,20 CPU/);
+  assert.match(html, /Sparks à cœurs dédiés exclus/);
+});
+
+test('bloc : les notes d\'une ressource tiennent en UNE ligne', () => {
+  // `a` est partagé et sans CPU mesuré, `d` est dédié : deux notes sur le CPU.
+  const html = renderBlocTotal(
+    [spark('a'), spark('d', 'running', { cpu_mode: 'dedicated', cpu_cores: 2 })],
+    { a: { memory: { used_bytes: 1 * GIO }, disk: { used_bytes: 1 * GIO } } }, FORGE);
+  assert.match(html, /<p class="total__note">0 Spark sur 1 mesuré · Sparks à cœurs dédiés exclus<\/p>/);
+});
+
+test('bloc : seulement dans l\'onglet « Tous » — jamais dans celui d\'un projet', () => {
+  assert.match(vue(), /total-forge/);
+  assert.equal(vue({ projet: { name: 'side-projects' } }).includes('total-forge'), false);
+});
+
+test('bloc : il est SÉPARÉ du tableau — avant lui, et aucun pied de tableau', () => {
   const html = vue();
-  assert.match(html, /<tfoot>/);
-  assert.match(html, /scope="row"[^>]*>Total/);
-  assert.match(html, /4,0 Gio \/ 64 Gio/);        // mémoire : 3 + 1 sur 64
-  assert.match(html, /12 Gio \/ 500 Gio/);          // disque : 9,5 + 2 = 11,5 (arrondi à 12) sur 500
-  assert.match(html, /0,30 sur 8 cœurs/);           // CPU : 0,2 + 0,1 sur 8
+  assert.ok(html.indexOf('total-forge') < html.indexOf('<table>'));
+  assert.equal(html.includes('<tfoot'), false);
 });
 
-test('totaux : le CPU garde sa forme de colonne, la barre', () => {
-  const pied = vue().split('<tfoot>')[1];
-  assert.match(pied, /class="jauge"/);
-});
-
-test('totaux : seulement dans l\'onglet « Tous » — jamais dans celui d\'un projet', () => {
-  assert.match(vue(), /<tfoot>/);
-  assert.equal(vue({ projet: { name: 'side-projects' } }).includes('<tfoot>'), false);
-});
-
-test('totaux : une somme partielle le DIT (un Spark arrêté n\'a pas de mémoire mesurée)', () => {
-  const html = renderSparksView({
-    status: 'ready', sparks: [spark('a'), spark('b', 'stopped')],
-    usage: { a: mesure(0.2, 3 * GIO, 1 * GIO), b: { memory: { used_bytes: null }, disk: { used_bytes: 2 * GIO } } },
-    forge: FORGE,
-  });
+test('bloc : une somme partielle le DIT (un Spark arrêté n\'a pas de mémoire mesurée)', () => {
+  const html = renderBlocTotal([spark('a'), spark('b', 'stopped')], {
+    a: mesure(0.2, 3 * GIO, 1 * GIO), b: { memory: { used_bytes: null }, disk: { used_bytes: 2 * GIO } } }, FORGE);
   assert.match(html, /1 Spark sur 2 mesuré/);
 });
 
-test('totaux : capacité non relevée → la somme reste, l\'absence est NOMMÉE', () => {
-  const html = vue({ forge: null });
+test('bloc : capacité non relevée → l\'utilisé reste, l\'absence est NOMMÉE', () => {
+  const html = bloc(vue({ forge: null }));
   assert.match(html, /Capacité de la Forge non relevée/);
-  assert.match(html, /4,0 Gio/);
-  assert.equal(html.split('<tfoot>')[1].includes('class="anneau"'), false);
+  assert.match(html, /Utilisé<\/span><span class="technique">4,0 Gio/);
+  for (const terme of ['Alloué', 'Disponible']) {
+    assert.equal(html.includes(`total-legende__nom">${terme}<`), false, `pas de « ${terme} » inventé`);
+  }
+  // Pas de capacité : rien à découper, donc pas d'anneau.
+  assert.equal(html.includes('<svg'), false);
 });
 
-test('totaux : aucune mesure du tout → des cellules vides, pas des zéros (§14.6)', () => {
-  const html = renderTotaux([spark('a')], {}, FORGE);
-  assert.equal(/0,0 CPU|0 o/.test(html), false);
-  // Le premier relevé n'a pas de fenêtre : la cellule CPU le dit, comme les lignes.
+test('bloc : aucune mesure du tout → « Mesure en cours » ou « Aucune mesure », jamais zéro (§14.6)', () => {
+  const html = renderBlocTotal([spark('a')], {}, FORGE);
   assert.match(html, /Mesure en cours/);
+  assert.equal(/Utilisé<\/span><span class="technique">0/.test(html), false);
+  const arretes = renderBlocTotal([spark('a', 'stopped')], {}, FORGE);
+  assert.equal(arretes.includes('Mesure en cours'), false);
+  assert.match(arretes, /Aucune mesure/);
 });
 
-test('totaux : aucun Spark en marche, aucune mesure → la cellule CPU reste vide', () => {
-  const html = renderTotaux([spark('a', 'stopped')], {}, FORGE);
-  assert.equal(html.includes('Mesure en cours'), false);
-});
-
-test('totaux : le total mémoire au-delà de 90 % de la machine passe en alerte', () => {
-  const html = renderTotaux([spark('a')], { a: mesure(0.1, 60 * GIO, 1 * GIO) }, FORGE);
-  assert.match(html, /mesure--alerte/);
-  assert.match(html, /proche de la limite/);
-});
-
-test('capacité : lue des champs de /v1/forge, null par grandeur manquante', () => {
-  assert.deepEqual(capaciteDeForge(FORGE), { cpu: 8, memoire: 64 * GIO, disque: 500 * GIO });
-  assert.deepEqual(capaciteDeForge({}), { cpu: null, memoire: null, disque: null });
+test('capacité : lue des pools de /v1/forge, null par ressource manquante', () => {
+  assert.deepEqual(capaciteDeForge(FORGE).memoire,
+    { capacite: 64 * GIO, alloue: 20 * GIO, disponible: 44 * GIO, surengagement: 1.5 });
+  assert.deepEqual(capaciteDeForge({ pools: { cpu: pool(8, 1) } }).disque, null);
+  assert.equal(capaciteDeForge({}), null);
   assert.equal(capaciteDeForge(null), null);
 });
 

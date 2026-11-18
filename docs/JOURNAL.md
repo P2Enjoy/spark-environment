@@ -15752,3 +15752,17 @@ doublon d'épreuve, parcours E2E (8 sur 8) et captures observées. Détail au ba
 
 **Reste à mesurer, avec le jeton du responsable** : qu'une même clé est refusée sur un
 second dépôt. Le doublon l'encode ; il ne le démontre pas.
+
+**SPK-173 : livraison du bloc graphique, le 2026-11-18.** Le parcours E2E est vert, 1775 tests
+unitaires aussi. Observé en capture : le graphique tient ses promesses (capacité au centre,
+arc gris alloué, arc bleu utilisé par-dessus, reste = disponible) ; l'anneau CPU est rouge
+sur le seed parce que 2,75 CPU sont alloués sur 3,00 (92 %), ce qui exerce l'alerte sur de
+vraies données. Défaut trouvé à la capture : les deux notes du CPU s'empilaient en deux
+paragraphes et laissaient un grand vide ; elles tiennent maintenant en une ligne.
+
+**Erreur de ma part, consignée.** Avant un lancement j'ai relevé six processus d'épreuve actifs
+sans que ma commande s'arrête dessus. L'examen suivant n'a montré que des tests unitaires
+`node --test` d'un autre agent du dépôt, sans navigateur ni pile ; je ne peux pas affirmer
+que les six du premier relevé étaient les mêmes. Le lancement est désormais conditionné au
+relevé.
+

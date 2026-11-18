@@ -17333,23 +17333,24 @@ découpe en trois parts qui se **réconcilient** :
 
 | Part | Ce qu'elle est | Couleur | Source |
 |---|---|---|---|
-| **Utilisé** | ce que les Sparks consomment réellement, sommé | `--color-brand` | les relevés d'usage (§20) |
-| **Alloué, non consommé** | réservé par les Sparks, au-delà de ce qu'ils consomment | `--color-text-3` | `pools.<r>.allocated` − utilisé |
-| **Disponible** | ce qui reste à engager | `--color-border` | `pools.<r>.available` |
+| **Alloué** | ce que les Sparks ont **réservé** — le registre, pas la mesure | `--color-text-3` | `pools.<r>.allocated` |
+| **Utilisé** | ce que les Sparks **consomment** réellement, sommé ; dessiné **par-dessus** l'alloué | `--color-brand` | les relevés d'usage (§20) |
+| **Disponible** | ce qui reste à engager : le reste de la piste | `--color-border` | `pools.<r>.available` |
 
 Alloué et disponible sont **lus** de `/v1/forge` (les chiffres de l'écran Forge, §27.2),
-jamais recomposés. Utilisé + alloué non consommé = alloué ; alloué + disponible = capacité.
-Si l'utilisé dépasse l'alloué (le CPU consomme au-delà de sa réservation, §20.3 bis), la part
-« alloué non consommé » est nulle et l'utilisé est borné à la capacité : le chiffre dit la
-vérité, le dessin se borne.
+jamais recomposés ; alloué + disponible = capacité. L'utilisé est d'une autre nature — une
+mesure, pas une réservation — et se superpose à l'alloué au lieu de s'y ajouter. Si l'utilisé
+dépasse l'alloué (le CPU consomme au-delà de sa réservation, §20.3 bis), l'arc d'utilisé
+dépasse celui d'alloué, borné à la capacité : le chiffre de la légende dit la vérité, le
+dessin se borne.
 
 - **Au centre de l'anneau** : la capacité, en grand, nommée (« sur 64 Gio »).
 - **Légende sous l'anneau** : les trois parts, chacune avec sa pastille de couleur, son nom
   et sa valeur. La légende n'est pas décorative : sans elle la couleur seule porterait
   l'information (design system §1.5). Les valeurs y sont, une fois ; il n'y a pas de seconde
   liste.
-- **Alerte** : au-delà de **90 % de la capacité allouée**, la part « alloué non consommé »
-  passe en `--color-danger`, le centre et la ligne « Alloué » de la légende en gras, avec un
+- **Alerte** : au-delà de **90 % de la capacité allouée**, l'arc d'alloué
+  passe en `--color-danger` (l'arc **et** sa pastille de légende), la ligne « Alloué » de la légende en gras, avec un
   texte pour lecteurs d'écran (« proche de la limite ») : la Forge n'accepte presque plus de
   Spark. Le seuil est `SEUIL_ALERTE_RESSOURCE` (§68.2). L'utilisé n'alerte pas.
 - **Surengagement** : CPU et mémoire portent la pastille « surengagé ×N » de l'écran Forge
@@ -17359,7 +17360,7 @@ vérité, le dessin se borne.
   (§7.7). Le bloc le dit.
 - **Somme partielle** : l'utilisé ne porte que sur les Sparks mesurés et le dit
   (« 7 Sparks sur 9 mesurés », §6.13). Un Spark arrêté n'ajoute rien au CPU ni à la mémoire,
-  et ajoute son disque (§20.4). Premier relevé sans fenêtre : la part « utilisé » est absente
+  et ajoute son disque (§20.4). Premier relevé sans fenêtre : l'arc d'utilisé est absent
   de l'anneau et la légende dit « Mesure en cours » (§14.6), jamais zéro.
 - **Capacité non relevée** (`/v1/forge` en échec) : pas d'anneau — il n'y a pas de capacité à
   découper. Le bloc garde l'utilisé en chiffres, **nomme** l'absence (« Capacité de la Forge
@@ -17369,8 +17370,7 @@ vérité, le dessin se borne.
 ### 68.4 Preuves attendues
 
 Unitaires : proportion, borne à 100 %, seuil, absence d'usage / de limite (anneaux des
-lignes) ; bloc : trois anneaux, parts qui se réconcilient (utilisé + alloué non consommé +
-disponible = capacité), valeurs de légende lues de `/v1/forge`, utilisé > alloué, alerte à
+lignes) ; bloc : trois anneaux, parts qui se réconcilient (alloué + disponible = capacité, l'utilisé superposé), valeurs de légende lues de `/v1/forge`, utilisé > alloué, alerte à
 90 % alloué, somme d'utilisé partielle, CPU dédié exclu, surengagement, capacité absente
 (pas d'anneau), absence du bloc hors onglet « Tous », aucune liste terme / valeur recopiée
 de l'écran Forge. E2E depuis l'accueil à la souris : accord entre alerte et pourcentage dit,

@@ -21,8 +21,9 @@
            docs/BACKLOG.md#SPK-132 (recréer un conteneur de pile Compose,
  *           §37.7.5 ; l'onglet Environnement nomme ce geste, §43.7) ·
  *           docs/BACKLOG.md#SPK-173 (la liste montre Mémoire et Disque en
- *           anneau, et un total face à la Forge dans l'onglet « Tous »
- *           seulement, docs/DAT.md §68 ; SPK-DS-44) ·
+ *           anneau, et un bloc « Total de la Forge » (utilisé, alloué,
+ *           disponible, capacité) dans l'onglet « Tous » seulement,
+ *           docs/DAT.md §68 ; SPK-DS-44) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -235,7 +236,7 @@ test('la console affiche les Sparks seedés, avec leurs états réels', async ()
   });
 });
 
-test('la liste montre Mémoire et Disque en anneau, et le total face à la Forge dans « Tous » seulement', async () => {
+test('la liste montre Mémoire et Disque en anneau, et le total de la Forge dans « Tous » seulement', async () => {
   // SPK-173 · docs/DAT.md §68 · docs/DESIGN_SYSTEM_APP.md SPK-DS-44.
   // Le parcours d'un exploitant : il ouvre la console, lit la liste, passe dans
   // l'onglet d'un projet, revient à « Tous ». Rien n'est atteint par une URL.
@@ -267,21 +268,43 @@ test('la liste montre Mémoire et Disque en anneau, et le total face à la Forge
       for (const m of l.mesures) if (m.chiffres === null) assert.equal(m.anneau, false);
     }
 
-    // --- la ligne des totaux, face à ce que la Forge porte -------------------
-    const pied = await page.textContent('tfoot');
-    assert.match(pied, /Total/);
+    // --- le bloc « Total de la Forge » : séparé, et lu de /v1/forge ----------
+    const bloc = await page.textContent('section[aria-labelledby="titre-total-forge"]');
+    assert.match(bloc, /Total de la Forge/);
+    assert.equal(await page.locator('tfoot').count(), 0, 'le total n’est plus un pied de tableau');
+    // Il précède le tableau : plus visible que la dernière ligne.
+    const avant = await page.evaluate(() => {
+      const b = document.querySelector('section[aria-labelledby="titre-total-forge"]');
+      const t = document.querySelector('table');
+      return Boolean(b.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    assert.ok(avant, 'le bloc se lit AVANT le tableau');
+    // Un GRAPHIQUE, pas une copie de l'écran Forge : trois anneaux, une légende, et
+    // aucune liste de définitions recopiée.
+    assert.equal(await page.locator('.total-forge svg').count(), 3, 'un anneau par ressource');
+    assert.equal(await page.locator('.total-forge dl').count(), 0, 'pas de liste terme / valeur');
     const { corps: forge } = await pile.lireSparkd('/v1/forge');
-    assert.ok(pied.includes(formatBytes(forge.memory.total_bytes)),
-      `le total mémoire se lit face à la mémoire de la machine (${formatBytes(forge.memory.total_bytes)})`);
-    assert.ok(pied.includes(formatBytes(forge.pools.storage.capacity)),
-      `le total disque se lit face à la capacité de stockage (${formatBytes(forge.pools.storage.capacity)})`);
-    // Le CPU se mesure sur une FENÊTRE (DAT §20.1) : au premier relevé la cellule
-    // le dit, comme celles des lignes (§14.6), au lieu de rester muette. Avec un
-    // relevé établi, elle se lit face aux cœurs physiques — preuve unitaire, la
-    // pile factice ne garantit pas de fenêtre stable.
-    assert.match(pied, /Mesure en cours|cœurs/);
-    assert.equal(await page.locator('tfoot svg.anneau').count() > 0, true);
-    // La ligne n'est pas une ligne de Spark : le compte du registre ne bouge.
+    for (const [ressource, nom] of [['memory', 'Mémoire'], ['storage', 'Disque']]) {
+      const colonne = page.locator('.total-ressource', { hasText: nom });
+      const pool = forge.pools[ressource];
+      assert.equal((await colonne.locator('.total-anneau__centre strong').textContent()).trim(),
+        formatBytes(pool.capacity), `${nom} : la capacité au centre est celle de la Forge`);
+      const legende = await colonne.locator('.total-legende').textContent();
+      assert.ok(legende.includes(formatBytes(pool.allocated)), `${nom} : alloué ${formatBytes(pool.allocated)}`);
+      assert.ok(legende.includes(formatBytes(pool.available)), `${nom} : disponible ${formatBytes(pool.available)}`);
+    }
+    // Les parts se réconcilient : alloué + disponible = capacité.
+    for (const r of ['cpu', 'memory', 'storage']) {
+      assert.equal(forge.pools[r].allocated + forge.pools[r].available, forge.pools[r].capacity, r);
+    }
+    for (const terme of ['Utilisé', 'Alloué', 'Disponible']) {
+      assert.equal(await page.locator('.total-legende__nom', { hasText: terme }).count(), 3, terme);
+    }
+    // Le CPU se mesure sur une FENÊTRE (DAT §20.1) : au premier relevé, l'utilisé le
+    // dit au lieu d'afficher zéro (§14.6).
+    const cpu = await page.locator('.total-ressource', { hasText: 'Processeur' }).textContent();
+    assert.match(cpu, /Mesure en cours|CPU/);
+    // La ligne d'un Spark n'est pas celle d'un total : le compte du registre ne bouge.
     assert.equal(await page.locator('tbody tr').count(), lignes.length);
 
     await capturer('spk173-liste-anneaux-totaux');
@@ -293,14 +316,14 @@ test('la liste montre Mémoire et Disque en anneau, et le total face à la Forge
       'nav[aria-label="Sections des Sparks"] a[aria-current="page"]:has-text("Client Martin")',
       { timeout: 10000 });
     await page.waitForSelector('tbody a', { timeout: 10000 });
-    assert.equal(await page.locator('tfoot').count(), 0,
-      'une somme partielle face à la Forge entière se lirait comme une part de la Forge');
+    assert.equal(await page.locator('section[aria-labelledby="titre-total-forge"]').count(), 0,
+      'des totaux de la Forge entière se liraient comme la part du projet');
     assert.ok(await page.locator('svg.anneau').count() > 0, 'les anneaux restent dans un projet');
     await capturer('spk173-onglet-projet-sans-total', { hauteur: 700 });
 
     // --- retour à « Tous » : la ligne revient -------------------------------
     await page.click('nav[aria-label="Sections des Sparks"] a:has-text("Tous")');
-    await page.waitForSelector('tfoot', { timeout: 10000 });
+    await page.waitForSelector('section[aria-labelledby="titre-total-forge"]', { timeout: 10000 });
   });
 });
 

@@ -244,13 +244,12 @@ socle.
   bloc séparé, puis d'une liste de valeurs à un **graphique**)* : une carte **au-dessus** du
   tableau, seulement dans l'onglet « Tous », sous un `h2`. **Le graphique est l'objet, pas une
   copie de l'écran Forge** : un **anneau** par ressource (Processeur, Mémoire, Disque), trois
-  colonnes, empilées sous 1024 px. L'anneau est la capacité, découpée en **utilisé**
-  (`--color-brand`), **alloué non consommé** (`--color-text-3`) et **disponible**
+  colonnes, empilées sous 1024 px. L'anneau est la capacité : l'**alloué** en arc `--color-text-3`, l'**utilisé** en arc
+  `--color-brand` **par-dessus**, le **disponible** étant le reste de la piste
   (`--color-border`) ; la capacité est écrite au centre, nommée. La **légende** sous
   l'anneau donne, une fois, pastille + nom + valeur de chaque part : sans elle la couleur
-  porterait seule l'information (§1.5). Alloué au-delà de 90 % de la capacité : la part
-  « alloué non consommé » en `--color-danger`, le centre et la ligne « Alloué » en gras,
-  texte `sr-only`. Dimension : 128 px de côté, trait de 16 px — dimensions du composant, hors
+  porterait seule l'information (§1.5). Alloué au-delà de 90 % de la capacité : l'arc
+  et la pastille d'alloué en `--color-danger`, la ligne « Alloué » en gras, texte `sr-only`. Dimension : 128 px de côté, trait de 16 px — dimensions du composant, hors
   échelle d'espacement (même principe que les 288 px d'une colonne de board, design system
   §6.2). Pastille « surengagé ×N » comme l'écran Forge. Capacité absente : pas d'anneau, l'utilisé
   en chiffres et l'absence nommée. Pas de liste terme / valeur en plus de la légende.
