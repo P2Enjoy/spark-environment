@@ -10647,3 +10647,18 @@ quelle, y compris celle d'un Spark que la nouvelle Forge n'a pas.
     l'écran *Serveurs*. Depuis l'onglet *Routes* d'un Spark, changer de serveur mène à
     `#/sparks` ; depuis *Forge → Mises à jour*, la section est gardée.
   - **Capture observée** : `spk180-apres-changement`.
+
+### [ ] SPK-181 · Appliquer les mises à jour du système depuis l'onglet Mises à jour
+
+**Demandé par le responsable le 2026-11-18** : « lister les mises à jour sans pouvoir les
+exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
+
+- Spécification : `docs/DAT.md` §73 — cases par paquet, décochées ; *Tout sélectionner*
+  et *Sécurité seulement* ; confirmation dans le flux qui nomme les paquets et dit que
+  la Forge n'est jamais redémarrée par ce geste ; `POST /v1/forge/systeme/appliquer`
+  (`422` hors liste, `409` occupé ou `dpkg` verrouillé, `202` en arrière-plan,
+  `apt-get install --only-upgrade`, audit `system.upgrade`) ; `GET` pour l'état ; relevé
+  relu à la fin · §70.5 (révisé) · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-46 (à compléter) ·
+  `docs/manuel/M8-exploiter.md`.
+- Dépend de : SPK-171.
+- DoD : §73.4.

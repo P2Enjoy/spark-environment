@@ -17591,9 +17591,11 @@ ne lance jamais `zpool upgrade` (§70.6).
 ### 70.5 Un onglet de la Forge suit les mises à jour du système (SPK-171)
 
 **Demandé par le responsable le 2026-11-18.** C'est un onglet **Mises à jour** des
-sections de la Forge (`#/forge/mises-a-jour`), en **lecture seule**. Appliquer une mise à
-jour depuis la console est une autre décision : elle n'est pas prise ici, et l'onglet
-donne la commande à lancer en SSH.
+sections de la Forge (`#/forge/mises-a-jour`). Le **relevé** décrit ici est en lecture
+seule. **Révisé le 2026-11-18** : l'onglet n'était que lecture seule, et le responsable l'a
+jugé inutile sous cette forme (« lister les mises à jour sans pouvoir les exécuter ou
+sélectionner, ce tab ne sert pas à grand-chose »). Appliquer les paquets choisis depuis
+l'onglet est spécifié au §73 (SPK-181).
 
 **Ce qui est relevé**, par `GET /v1/forge/systeme`, sans rien écrire et sans lancer
 `apt update` :
@@ -17919,4 +17921,78 @@ Unitaires : schéma selon le TLS, joker non lié, domaine invalide non lié, éc
 Routes ; le lien porte le bon `href`, `target="_blank"` et `rel` ; un clic ouvre un **nouvel
 onglet** et la console reste sur sa page ; un joker et une route sans TLS (seedés ou créés par
 le parcours) se rendent comme décrit. Captures desktop et mobile.
+
+## 73. Appliquer les mises à jour du système depuis l'onglet : contrat (SPK-181)
+
+**Demandé par le responsable le 2026-11-18.** Il remplace la décision « lecture seule »
+du §70.5.
+
+### 73.1 Ce que l'exploitant fait
+
+Dans la table des paquets de l'onglet *Mises à jour*, chaque ligne porte une case,
+**décochée** par défaut. Deux raccourcis cochent les cases à sa place : *Tout
+sélectionner* et *Sécurité seulement*. Le bouton **Appliquer les mises à jour
+sélectionnées (N)** n'est rendu que s'il y a au moins une case cochée. Il ouvre une
+confirmation dans le flux (`DESIGN_SYSTEM.md` §6.22, §6.23 : le geste est sensible,
+difficilement réversible, et il touche des services). Cette confirmation :
+
+- nomme chaque paquet, avec sa version installée et sa version proposée ;
+- dit que des services peuvent redémarrer pendant l'opération (Incus, Caddy, `sshd`) :
+  les Sparks continuent de tourner ;
+- dit que **la Forge n'est jamais redémarrée par ce geste**. Si un redémarrage devient
+  requis, l'onglet l'affiche ensuite, et le geste de redémarrage de la Forge (§41)
+  reste séparé.
+
+L'engagement est le bouton *Appliquer*. Une frappe n'est pas exigée : le geste ne
+détruit pas de données (§6.23, frapper le nom).
+
+### 73.2 Ce que la Forge fait
+
+`POST /v1/forge/systeme/appliquer` avec `{"paquets": ["nom", …]}` :
+
+- **Refus `422`** pour un nom qui ne figure pas dans la liste des paquets à mettre à
+  jour relevée à l'instant. On ne met à jour que ce qui l'attend : pas d'installation
+  d'un paquet nouveau, ni d'option glissée. Une liste vide est refusée, et plus de
+  500 noms aussi.
+- **Refus `409`** si une application tourne déjà, ou si `dpkg` est verrouillé (par
+  exemple `unattended-upgrades` en cours). Le refus nomme le verrou.
+- **Sinon `202`**. L'application tourne **en arrière-plan** :
+  `apt-get install -y --only-upgrade -o Dpkg::Options::=--force-confold <paquets>`,
+  avec `DEBIAN_FRONTEND=noninteractive`. Une configuration modifiée localement est
+  gardée.
+- **Une ligne d'audit `system.upgrade`** est écrite. Elle porte la signature du geste
+  (§36.10) et la liste des paquets, puis son issue : `ok`, ou `error` avec le motif.
+
+`GET /v1/forge/systeme/appliquer` rend l'état de la dernière application :
+
+- `etat` : `aucune`, `en_cours`, `terminee` ou `echec` ;
+- les paquets demandés, `debut` et `fin` ;
+- le code de sortie ;
+- les **40 dernières lignes** de la sortie d'`apt-get`, bornées à 8 Kio.
+
+Le relevé (§70.5) est relu à la fin.
+
+**Pilote factice.** L'application est simulée : les paquets appliqués sortent du
+relevé de démonstration et l'état passe à `terminee`. La réponse porte
+`source: "fake"`, que l'onglet affiche.
+
+### 73.3 Ce que l'onglet montre pendant et après
+
+Pendant l'application, les cases et le bouton sont désactivés, une phrase *en cours*
+est affichée en `role="status"`, et l'onglet relit l'état toutes les 3 s. À la fin,
+il affiche l'issue : *terminée*, en vert, avec le nombre de paquets ; ou *échec*, en
+rouge, avec le code et les dernières lignes de la sortie, en texte replié
+(SPK-DS-18). Il relit ensuite le relevé. Un redémarrage requis apparaît à sa place
+habituelle, avec son renvoi.
+
+### 73.4 Vérification
+
+- **Unitaire** : validation des noms contre la liste, refus `422`, `409` et vide,
+  commande exacte, état du travail.
+- **API** sous pilote factice, avec la ligne d'audit.
+- **Composant** : cases décochées, raccourcis, bouton absent sans sélection,
+  confirmation qui nomme les paquets, états en cours, terminée et échec.
+- **E2E** depuis l'accueil, au clavier et à la souris.
+- **Machine réelle** : une application sur `spark-010`, carte blanche du responsable,
+  suivie d'une relecture du relevé.
 
