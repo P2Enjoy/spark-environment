@@ -9973,7 +9973,7 @@ l'hébergeur n'efface pas les partitions entre deux installations.
     refus, code 0 ; la recette rend 19 contrôles.
 
 
-### [~] SPK-171 · Un onglet de la Forge suit les mises à jour du système (apt)
+### [x] SPK-171 · Un onglet de la Forge suit les mises à jour du système (apt)
 
 **Demandé par le responsable le 2026-11-18**, à l'installation de la Forge `spark-010` :
 « la forge devrait avoir un onglet pour surveiller les mises à jour apt ». Ce matin-là, la
@@ -10001,7 +10001,14 @@ rien dans la console ne le montrait.
   - **Documentation** : manuel M8, SPK-DS-46, OP-43.
   - **Écart au contrat écrit** : le nombre de paquets sur l'onglet est retiré (DAT
     §70.5, raison écrite).
-  - **Reste** : l'onglet lu sur `spark-010`, contre la vraie machine.
+- **Lu sur `spark-010` le 2026-11-18** (`e2e/forge-reelle/spk171-176-systeme.mjs`,
+  build c58ec92 posée par le runbook §A.2, console à part sur le port 5191).
+  - **Parcours** : depuis l'accueil, *Forge* puis *Mises à jour*.
+  - **Relevé réel, sans badge de démonstration** : Ubuntu 26.04.1 LTS, noyau
+    `7.0.0-43-generic`, « à jour », liste relue à 09:55, aucun redémarrage requis,
+    aucune version disponible, `spark` avec 7 fonctionnalités à activer.
+  - **Vérification visuelle** : captures `spk171-reel-mises-a-jour` et `-mobile`,
+    observées.
 
 ### [x] SPK-172 · Les signataires autorisés d'une Forge se posent sans geste manuel
 
@@ -10084,7 +10091,7 @@ fait échouer `grub-efi-amd64-signed` sur une machine BIOS. Déplacé à la main
   - **La procédure du runbook (§A.5)** est celle jouée à la main le matin même pour la
     vraie montée.
 
-### [~] SPK-176 · L'installation de la Forge propose la mise à niveau du pool ZFS, sans l'imposer
+### [x] SPK-176 · L'installation de la Forge propose la mise à niveau du pool ZFS, sans l'imposer
 
 **Demandé par le responsable le 2026-11-18** : « dans l'amorce UI de la forge pense à
 proposer le zfs upgrade comme optionnel quand disponible ». Sur `spark-010`, montée en
@@ -10113,8 +10120,33 @@ upgrade` est irréversible, et n'a pas été lancé.
     qu'on crée. `mettre_a_niveau_zfs` relit, lance, puis vérifie ; un pool déjà à
     niveau n'est pas touché, et un pool encore listé après le geste est un échec.
   - **Documentation** : manuel M2, SPK-DS-47, OP-43.
-  - **Reste** : l'écran joué sur `spark-010` depuis l'accueil (case présente et
-    décochée, plan composé avec et sans elle, **sans l'exécuter**).
+- **Joué sur `spark-010` le 2026-11-18**, par le même script, depuis le renvoi de
+  l'onglet *Mises à jour* et *Diagnostiquer la Forge*.
+  - **La case** est proposée et décochée. Son aide dit « Irréversible » et les 7
+    fonctionnalités, sans `dynamic_gang_header(*)`.
+  - **Sans la case**, le plan conserve le pool sans rien mettre à niveau.
+  - **Cochée au clavier**, le plan dit « puis activer les fonctionnalités ZFS
+    disponibles — irréversible », et la phase de stockage est à faire.
+  - **Le plan n'est PAS exécuté** : la mise à niveau est une décision du
+    responsable (OP-43).
+  - **Vérification visuelle** : captures `spk176-installation-zfs`, `-coche` et
+    `-mobile`, observées.
+  - **Erreur passagère** : un 502 passager au premier passage (premier appel d'une
+    console tout juste démarrée), absent au second, avec la relève des réponses 5xx.
+
+### [ ] SPK-177 · Le diagnostic de l'installation lit l'unité de Caddy que le produit emploie
+
+**Constaté le 2026-11-18** sur `spark-010`, pendant la preuve de SPK-176. La conformité
+de l'installation affiche « Caddy actif : inactive — à faire » sur une Forge saine, et
+la phase *Dépendances* reste « à faire ». Le script fermé du diagnostic lit
+`systemctl is-active caddy.service` (`apps/webui/host/forge-diagnostic.js`), or Caddy
+est porté par `caddy-api.service` et `caddy.service` est **masqué** depuis SPK-129
+(DAT §51.5). Le préflight, lui, dit juste (`ING-UNITE`).
+
+- Spécification : **à écrire** — DAT §50.2 bis (ce que le relevé lit) aligné sur §51.5.
+- Dépend de : SPK-129.
+- DoD : relevé réel de `spark-010` en jeu d'essai, rouge avant correction ; écran
+  d'installation « conforme » sur une Forge saine.
 ---
 
 ## Lot 9 — La sauvegarde externe des instantanés
