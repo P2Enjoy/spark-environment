@@ -15676,11 +15676,18 @@ Ces sorties deviennent les jeux d'essai des contrôles.
 **Fermées ensuite, le même jour.**
 
 - SPK-177 : la conformité lit `caddy-api.service`, vérifié sur `spark-010`.
-- SPK-158 : le mode `--compresser` est prouvé par le vrai cloud-init d'Ubuntu 26.04
-  dans un conteneur (scripts identiques octet pour octet au mode en clair). La VM
-  entière n'a pas été rejouée : 3 Gio libres pour 6 demandés. Le relevé des schémas
-  NVMe et UEFI chez l'hébergeur, hors DoD, se fera à la première machine de ces
-  offres.
+- SPK-158 : le mode `--compresser` est prouvé de deux façons.
+  - Par le vrai cloud-init d'Ubuntu 26.04 dans un conteneur : scripts identiques octet
+    pour octet au mode en clair.
+  - Sur la VM du banc, de bout en bout (`make forge-vm ARGS="--compresser"`, VERT en
+    220 s, 19 sur 19 après redémarrage). Un premier lancement avait été tué (137) par
+    le délai de 10 minutes de l'outil, sans orphelin ; le banc a été relancé seul.
+
+  Le relevé des schémas NVMe et UEFI chez l'hébergeur, hors DoD, se fera à la première
+  machine de ces offres.
+- OP-43 sur la Forge de test (`spark-experiment`), qui porte des Sparks en service :
+  **non jouée**. Toute modification de la production attend une instruction explicite
+  du responsable (CLAUDE.md §9).
 
 ## 2026-11-18 · Un jeton GitHub pour poser la clé du Spark : un Spark, un dépôt (SPK-178)
 
