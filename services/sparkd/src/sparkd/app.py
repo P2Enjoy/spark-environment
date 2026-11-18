@@ -881,8 +881,80 @@ def create_app(config: Config) -> FastAPI:
         `source: "fake"` et que l'écran affiche comme tel.
         """
         if config.driver == "fake":
-            return systeme_service.releve_factice()
+            return {**app.state.systeme_factice,
+                    "releve_a": systeme_service.releve_factice()["releve_a"]}
         return systeme_service.releve(systeme_service.lecteur_local())
+
+    # SPK-181 · docs/DAT.md §73 : appliquer les mises à jour choisies. Sous pilote
+    # factice, le relevé de démonstration est une copie PROPRE à cette instance,
+    # et l'application en retire les paquets appliqués.
+    app.state.systeme_factice = systeme_service.releve_factice()
+
+    def _apt_factice(commande: list[str]) -> tuple[int, str]:
+        appliques = set(commande[6:])
+        maj = app.state.systeme_factice["mises_a_jour"]
+        restants = [p for p in maj["paquets"] if p["nom"] not in appliques]
+        app.state.systeme_factice["mises_a_jour"] = {
+            **maj, "paquets": restants, "paquets_rendus": len(restants),
+            "total": len(restants), "securite": sum(1 for p in restants if p["securite"])}
+        return 0, "pilote factice : " + " ".join(sorted(appliques)) + " mis à jour."
+
+    def _issue_application(etat: dict) -> None:
+        """L'issue s'inscrit au journal, hors requête : l'acteur est sparkd (§73.2)."""
+        connection = connect(config.database)
+        try:
+            with connection:
+                audit_service.record(
+                    connection, None, "system.upgrade",
+                    "ok" if etat["etat"] == "terminee" else "error",
+                    (f"Mises à jour appliquées : {', '.join(etat['paquets'])}."
+                     if etat["etat"] == "terminee" else
+                     f"Mises à jour en échec (code {etat['code']}) : "
+                     f"{(etat['sortie'] or '').splitlines()[-1:] or ['sans sortie']}"),
+                    target_type="forge", payload={"paquets": etat["paquets"], "code": etat["code"]})
+        finally:
+            connection.close()
+
+    app.state.application = systeme_service.Application(
+        executer=_apt_factice if config.driver == "fake" else systeme_service._executer_apt,
+        verrouille=(lambda: False) if config.driver == "fake" else systeme_service.dpkg_verrouille,
+        fin=_issue_application)
+
+    @app.get("/v1/forge/systeme/appliquer", tags=["forge"])
+    def forge_systeme_application() -> dict:
+        """L'état de la dernière application (§73.2), avec la source du relevé."""
+        return {**app.state.application.etat(),
+                "source": "fake" if config.driver == "fake" else "hote"}
+
+    @app.post("/v1/forge/systeme/appliquer", tags=["forge"], status_code=202)
+    def forge_systeme_appliquer(corps: dict = Body(...)) -> dict:
+        """Applique les mises à jour choisies, en arrière-plan.
+
+        @spec docs/BACKLOG.md#SPK-181 · docs/DAT.md §73.2
+
+        Seuls des paquets EN ATTENTE se mettent à jour : un nom hors de la liste
+        relevée à l'instant est refusé (422). Une seule application à la fois, et
+        jamais sur un `dpkg` verrouillé (409). La Forge n'est jamais redémarrée.
+        """
+        en_attente = ({p["nom"] for p in app.state.systeme_factice["mises_a_jour"]["paquets"]}
+                      if config.driver == "fake"
+                      else systeme_service.en_attente_reel(systeme_service.lecteur_local()))
+        try:
+            paquets = systeme_service.valider((corps or {}).get("paquets"), en_attente)
+
+            def inscrire_la_demande() -> None:
+                with registry() as connection:
+                    audit_service.record(
+                        connection, None, "system.upgrade", "ok",
+                        f"Mises à jour demandées : {', '.join(paquets)}.",
+                        target_type="forge", payload={"paquets": paquets})
+
+            etat = app.state.application.lancer(paquets, avant=inscrire_la_demande)
+        except systeme_service.RefusApplication as refus:
+            raise HTTPException(status_code=refus.code, detail={
+                "error": "refused" if refus.code == 422 else "busy",
+                "message": str(refus)}) from refus
+        return {**etat, "source": "fake" if config.driver == "fake" else "hote"}
 
     @app.post("/v1/forge/isolation", tags=["forge"])
     def forge_isolate() -> dict:

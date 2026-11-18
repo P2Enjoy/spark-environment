@@ -124,6 +124,27 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-45 · Appliquer les mises à jour du système depuis la console : `sparkd` et la console (SPK-181)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable.
+Objectif      : POST et GET /v1/forge/systeme/appliquer (sparkd), et l'onglet
+                Forge → Mises à jour qui choisit et applique les paquets en
+                attente (console) — DAT §73. Aucune migration, aucune variable.
+Dépend de     : OP-43 (l'onglet et sa route de lecture).
+Ordre         : 1. mettre à jour sparkd (bloc « Code déployé » de la console) ;
+                2. relancer la console (son propre geste).
+Vérification  : Forge → Mises à jour : une case par paquet, décochée ; un
+                paquet appliqué sort de la liste ; le journal porte deux lignes
+                system.upgrade, la demande signée puis l'issue.
+Retour arrière: réinstaller la build précédente : l'onglet redevient en lecture
+                seule. Un paquet déjà mis à jour le reste (apt ne revient pas
+                en arrière tout seul).
+Risques       : un paquet mis à jour peut redémarrer son service (Incus, Caddy,
+                sshd) ; les Sparks continuent de tourner. La Forge n'est jamais
+                redémarrée par ce geste.
+```
+
 ### OP-44 · La console pose la clé d'un Spark chez GitHub : `sparkd` et la console (SPK-178)
 
 ```

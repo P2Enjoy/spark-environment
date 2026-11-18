@@ -453,6 +453,7 @@ function brancher() {
   // SPK-171 · §70.5 : relire ne change rien sur la Forge — pas de confirmation.
   racine.querySelector('[data-action="relire-systeme"]')
     ?.addEventListener('click', () => chargerSysteme({ focus: true }));
+  if (etat.route === 'misesajour') brancherMisesAJour();
   brancherGraphiques();
   // §27.8 : le relevé ne détruit rien et n'a aucun paramètre — pas de confirmation.
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
@@ -5226,15 +5227,111 @@ async function chargerPropositionsForge({ depuisBouton = false } = {}) {
  */
 async function chargerSysteme({ focus = false } = {}) {
   etat.route = 'misesajour';
+  clearTimeout(minuterieMaj);
   etat.systeme = { ...SYSTEME_VIDE, status: 'loading' };
   peindre();
   try {
-    etat.systeme = { ...SYSTEME_VIDE, status: 'pret', donnees: await api('/v1/forge/systeme') };
+    // SPK-181 · §73.3 : la dernière application se relit avec le relevé — une
+    // application en cours se voit, même en revenant sur l'onglet.
+    const [donnees, application] = await Promise.all([
+      api('/v1/forge/systeme'), api('/v1/forge/systeme/appliquer').catch(() => null)]);
+    etat.systeme = { ...SYSTEME_VIDE, status: 'pret', donnees, application };
+    if (application?.etat === 'en_cours') suivreApplication();
   } catch (erreur) {
     etat.systeme = { ...SYSTEME_VIDE, status: 'erreur', error: erreur.message };
   }
   peindre();
   if (focus) racine.querySelector('[data-action="relire-systeme"]')?.focus();
+}
+
+/**
+ * Appliquer les mises à jour choisies (SPK-181).
+ *
+ * @spec docs/BACKLOG.md#SPK-181 · docs/DAT.md §73.1-§73.3 · docs/DESIGN_SYSTEM.md
+ *       §6.22, §6.23 (confirmation dans le flux), §14.3 (le focus suit le geste)
+ */
+let minuterieMaj = null;
+
+function suivreApplication() {
+  clearTimeout(minuterieMaj);
+  minuterieMaj = setTimeout(async () => {
+    if (etat.route !== 'misesajour') return;
+    const application = await api('/v1/forge/systeme/appliquer').catch(() => null);
+    if (!application) return suivreApplication();
+    if (application.etat === 'en_cours') {
+      etat.systeme.application = application;
+      peindre();
+      return suivreApplication();
+    }
+    // Terminée : le relevé est relu, et l'issue reste affichée au-dessus.
+    const donnees = await api('/v1/forge/systeme').catch(() => etat.systeme.donnees);
+    etat.systeme = { ...etat.systeme, donnees, application };
+    peindre();
+  }, 3000);
+}
+
+async function appliquerMisesAJour() {
+  const ui = etat.systeme;
+  ui.envoi = true;
+  ui.refus = null;
+  peindre();
+  try {
+    const reponse = await relais(
+      `/api/v1/forge/systeme/appliquer?server=${encodeURIComponent(etat.server)}`,
+      { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ paquets: ui.selection }) });
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.detail?.message ?? corps?.message ?? `HTTP ${reponse.status}`);
+    Object.assign(ui, { selection: [], confirmer: false });
+    if (corps.etat === 'en_cours') {
+      ui.application = corps;
+      suivreApplication();
+    } else {
+      // Déjà finie (une application courte) : le relevé se relit AVANT d'afficher
+      // l'issue, pour que la liste ne montre pas un paquet qu'on dit appliqué.
+      const donnees = await api('/v1/forge/systeme').catch(() => ui.donnees);
+      Object.assign(ui, { application: corps, donnees });
+    }
+  } catch (erreur) {
+    ui.refus = erreur.message;
+  }
+  ui.envoi = false;
+  peindre();
+  racine.querySelector(ui.refus ? '[data-action="maj-confirmer"]' : '#titre-paquets')?.focus?.();
+}
+
+function brancherMisesAJour() {
+  const ui = etat.systeme;
+  const paquets = ui?.donnees?.mises_a_jour?.paquets ?? [];
+  const choisir = (noms, cible) => {
+    ui.selection = noms;
+    ui.confirmer = false;
+    peindre();
+    racine.querySelector(cible)?.focus();
+  };
+  for (const caseP of racine.querySelectorAll('[data-paquet]')) {
+    caseP.addEventListener('change', () => {
+      const nom = caseP.dataset.paquet;
+      const reste = (ui.selection ?? []).filter((n) => n !== nom);
+      choisir(caseP.checked ? [...reste, nom] : reste, `[data-paquet="${CSS.escape(nom)}"]`);
+    });
+  }
+  racine.querySelector('[data-action="maj-tout"]')?.addEventListener('click',
+    () => choisir(paquets.map((p) => p.nom), '[data-action="maj-tout"]'));
+  racine.querySelector('[data-action="maj-securite"]')?.addEventListener('click',
+    () => choisir(paquets.filter((p) => p.securite).map((p) => p.nom), '[data-action="maj-securite"]'));
+  racine.querySelector('[data-action="maj-demander"]')?.addEventListener('click', () => {
+    ui.confirmer = true;
+    peindre();
+    racine.querySelector('[data-action="maj-confirmer"]')?.focus();
+  });
+  racine.querySelector('[data-action="maj-annuler"]')?.addEventListener('click', () => {
+    ui.confirmer = false;
+    ui.refus = null;
+    peindre();
+    racine.querySelector('[data-action="maj-demander"]')?.focus();
+  });
+  racine.querySelector('[data-action="maj-confirmer"]')?.addEventListener('click', appliquerMisesAJour);
 }
 
 async function chargerAlertes() {
@@ -5824,6 +5921,7 @@ function brancherGraphiques() {
 
 function router() {
   arreterSupervision();
+  clearTimeout(minuterieMaj);
   const chapitre = location.hash.match(/^#\/manuel(?:\/([A-Za-z0-9-]+))?/);
   if (chapitre) return chargerManuel(chapitre[1] ?? null);
   if (location.hash === '#/serveurs') return chargerServeurs();

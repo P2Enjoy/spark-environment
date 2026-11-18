@@ -67,7 +67,8 @@ test('des mises à jour en attente : résumé, sécurité en badge, partiel dit,
   assert.match(html, /3 mises à jour en attente, dont 1 de sécurité/);
   assert.match(html, /badge--danger/);
   assert.match(html, /Les 2 premiers paquets sur 3/);
-  assert.match(html, /sudo apt upgrade/);
+  // SPK-181 · §73 : l'onglet applique lui-même ; il ne renvoie plus à une commande SSH.
+  assert.match(html, /Choisissez les paquets, puis appliquez-les/);
   assert.match(html, /<td class="technique">openssl<\/td>/);
   assert.ok(html.indexOf('openssl') < html.indexOf('>incus<'), 'la sécurité en tête');
   assert.match(html, /redémarrage requis/);
@@ -89,4 +90,71 @@ test('une source absente est nommée, jamais rendue « undefined »', () => {
   assert.match(html, /part de sécurité non relevée/);
   assert.match(html, /seul le nombre est connu/);
   assert.doesNotMatch(html, /undefined|null/);
+});
+
+// --- SPK-181 · §73 : appliquer les mises à jour choisies ----------------------
+// @verifies docs/BACKLOG.md#SPK-181 · docs/DAT.md §73.1, §73.3 ·
+//           docs/DESIGN_SYSTEM.md §6.10, §6.22, §6.23 · docs/DESIGN_SYSTEM_APP.md SPK-DS-46
+
+import { renderEtatApplication } from './forge-systeme.js';
+
+const avec = (ui) => renderMisesAJour({ ...SYSTEME_VIDE, status: 'pret', donnees: EN_ATTENTE, ...ui });
+
+test('chaque paquet a sa case, DÉCOCHÉE, et le bouton n’existe pas sans sélection', () => {
+  const html = avec({});
+  assert.match(html, /data-paquet="openssl"/);
+  assert.match(html, /data-paquet="incus"/);
+  assert.doesNotMatch(html, /data-paquet="[^"]+" checked/);
+  assert.match(html, /Sélectionner openssl/, 'un nom accessible par case');
+  assert.match(html, /data-action="maj-tout"/);
+  assert.match(html, /data-action="maj-securite"/);
+  assert.doesNotMatch(html, /data-action="maj-demander"/);
+});
+
+test('une sélection fait apparaître le bouton avec son nombre', () => {
+  const html = avec({ selection: ['openssl', 'incus'] });
+  assert.match(html, /Appliquer les mises à jour sélectionnées \(2\)/);
+  assert.match(html, /data-paquet="openssl" checked/);
+});
+
+test('la confirmation nomme chaque paquet, ses versions, et dit qu’on ne redémarre pas', () => {
+  const html = avec({ selection: ['openssl'], confirmer: true });
+  assert.match(html, /Appliquer 1 mise à jour \?/);
+  assert.match(html, /openssl<\/span> : 3\.5\.2-1 → 3\.5\.2-1\.1/);
+  assert.match(html, /jamais<\/strong> redémarrée/);
+  assert.match(html, /data-action="maj-confirmer"/);
+  assert.doesNotMatch(html, /data-action="maj-demander"/, 'pas deux engagements à la fois');
+});
+
+test('un refus du serveur s’affiche dans la confirmation', () => {
+  assert.match(avec({ selection: ['openssl'], confirmer: true, refus: 'dpkg <occupé>' }),
+               /role="alert">dpkg &lt;occupé&gt;/);
+});
+
+test('pendant l’application, cases et raccourcis sont désactivés et l’état est annoncé', () => {
+  const html = avec({ application: { etat: 'en_cours', paquets: ['openssl'], debut: '2026-11-18T13:00:00+00:00' } });
+  assert.match(html, /aria-busy="true">Application en cours/);
+  assert.match(html, /data-paquet="openssl" disabled/);
+  assert.match(html, /data-action="maj-tout" disabled/);
+});
+
+test('l’issue se dit : terminée en vert, échec en rouge avec la sortie repliée', () => {
+  const ok = renderEtatApplication({ etat: 'terminee', paquets: ['openssl'], fin: '2026-11-18T13:01:00+00:00',
+                                     sortie: 'Setting up openssl' });
+  assert.match(ok, /class="succes"/);
+  assert.match(ok, /Mises à jour appliquées/);
+  assert.match(ok, /\(1 dernière ligne\)/, 'le singulier');
+  const ko = renderEtatApplication({ etat: 'echec', code: 100, paquets: ['incus'], fin: '2026-11-18T13:01:00+00:00',
+                                     sortie: 'E: <dpkg>\nligne 2' });
+  assert.match(ko, /role="alert"/);
+  assert.match(ko, /code\s+100/);
+  assert.match(ko, /<details><summary>Sortie d’apt-get \(2 dernières lignes\)/);
+  assert.match(ko, /E: &lt;dpkg&gt;/);
+  assert.equal(renderEtatApplication({ etat: 'aucune' }), '');
+});
+
+test('aucune mise à jour de sécurité se dit en toutes lettres, pas « dont 0 »', () => {
+  const html = pret({ ...EN_ATTENTE, mises_a_jour: { ...EN_ATTENTE.mises_a_jour, securite: 0 } });
+  assert.match(html, /aucune de sécurité/);
+  assert.doesNotMatch(html, /dont 0/);
 });

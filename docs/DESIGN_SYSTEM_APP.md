@@ -1048,7 +1048,7 @@ La correspondance entre jeton et libellé vit dans `tokens.js`
 (`SIGNATAIRES_ETATS`), à côté de celle du tunnel (§12.5). Le manuel M12 donne le
 sens de chaque état ; l'écran ne porte que son nom (§1.5 bis).
 
-### SPK-DS-46 · L'onglet « Mises à jour » : un relevé daté, des valeurs nommées, aucun geste
+### SPK-DS-46 · L'onglet « Mises à jour » : un relevé daté, des valeurs nommées, des paquets qu'on choisit
 
 **Date** : 2026-11-18 · SPK-171 · `DAT.md` §70.5, §70.6 · `DESIGN_SYSTEM.md` §1.5 bis,
 §5.4, §6.4, §6.8, §6.13, §6.14, §14.5, §14.6
@@ -1076,6 +1076,30 @@ L'onglet *Mises à jour* suit *Supervision* dans les sections de la Forge. Il es
   (SPK-DS-47).
 
 Preuves observées le 2026-11-18 : `e2e/captures/spk171-mises-a-jour`, `-mobile`.
+
+**Révisé le 2026-11-18 (SPK-181, `DAT.md` §73).** L'onglet n'est plus en lecture seule.
+Le responsable l'a jugé inutile sans geste. Ce qui change :
+
+- **Une case par paquet**, en première colonne : composant `.case`, décochée, avec
+  le nom accessible « Sélectionner <paquet> » (§6.10).
+- **Les raccourcis** *Tout sélectionner* et *Sécurité seulement* (ce dernier rendu
+  seulement s'il existe un paquet de sécurité) sont des boutons compacts, au-dessus
+  de la table.
+- **Le bouton primaire** « Appliquer les mises à jour sélectionnées (N) » n'est rendu
+  qu'avec une sélection (§14.4).
+- **La confirmation** est dans le flux, en `confirmation--sensible` (accent, pas
+  rouge : le geste ne détruit rien, §6.23). Elle nomme chaque paquet et ses deux
+  versions, et dit en gras que la Forge n'est **jamais** redémarrée. Le focus y entre
+  sur *Appliquer*, et *Annuler* le rend au bouton qui l'a ouverte (§14.3).
+- **Pendant l'application**, l'état est annoncé (`role="status"`, `aria-busy`) et les
+  cases et raccourcis sont désactivés.
+- **L'issue** est en vert (*Mises à jour appliquées*) ou en rouge (*Application en
+  échec*, avec son code). La sortie d'`apt-get` est repliée dans un `details`
+  (SPK-DS-18). Le focus va au titre *Paquets*, et le relevé est relu avant que l'issue
+  s'affiche.
+
+Preuves observées : `e2e/captures/spk181-confirmation`, `-mobile`, `spk181-appliquee`.
+
 
 ### SPK-DS-47 · La mise à niveau ZFS : une case décochée, irréversible et dite
 

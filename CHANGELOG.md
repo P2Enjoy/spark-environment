@@ -2,6 +2,22 @@
 
 ## [Non publié]
 
+### Ajouté
+- **SPK-181 — les mises à jour du système s'appliquent depuis l'onglet Forge → Mises à
+  jour.**
+  - **Le choix** : une case par paquet, décochée. *Tout sélectionner* et *Sécurité
+    seulement* cochent à votre place.
+  - **La confirmation** nomme chaque paquet et ses versions, et dit que la Forge n'est
+    jamais redémarrée.
+  - **L'exécution** passe par une nouvelle route, `POST /v1/forge/systeme/appliquer`.
+    Elle lance `apt-get install --only-upgrade` en arrière-plan, et seulement sur des
+    paquets en attente. Une seule application tourne à la fois, jamais sur un `dpkg`
+    verrouillé.
+  - **La trace** : deux lignes au journal, la demande signée puis l'issue. L'onglet
+    suit l'application et relit la liste à la fin.
+
+  DAT §73, SPK-DS-46, manuel M8, OP-45. Aucune migration, aucune variable.
+
 ### Corrigé
 - **SPK-180 — changer de serveur depuis un Spark mène à la liste des Sparks.** La
   console gardait l'adresse de la fenêtre d'un Spark de l'ancienne Forge

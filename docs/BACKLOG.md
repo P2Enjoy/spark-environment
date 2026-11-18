@@ -10648,7 +10648,7 @@ quelle, y compris celle d'un Spark que la nouvelle Forge n'a pas.
     `#/sparks` ; depuis *Forge → Mises à jour*, la section est gardée.
   - **Capture observée** : `spk180-apres-changement`.
 
-### [ ] SPK-181 · Appliquer les mises à jour du système depuis l'onglet Mises à jour
+### [~] SPK-181 · Appliquer les mises à jour du système depuis l'onglet Mises à jour
 
 **Demandé par le responsable le 2026-11-18** : « lister les mises à jour sans pouvoir les
 exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
@@ -10662,3 +10662,19 @@ exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
   `docs/manuel/M8-exploiter.md`.
 - Dépend de : SPK-171.
 - DoD : §73.4.
+- **Codé le 2026-11-18.**
+  - **Unitaire** : validation (refus hors liste, nom invalide, vide, plus de 500), la
+    commande exacte, les issues terminée et échec bornées, `409` occupé ou `dpkg`
+    verrouillé, sans inscription d'un geste refusé.
+  - **API** sous pilote factice : le paquet sort du relevé, et le journal porte la
+    demande puis l'issue ; un refus `422` n'inscrit rien.
+  - **Composant** : 7 preuves.
+  - **E2E** `e2e/mises-a-jour.test.mjs`, vert. Une case cochée au clavier, la
+    confirmation (focus sur *Appliquer*), *Entrée* : le paquet sort de la liste, et la
+    demande est **signée** au journal.
+  - **Captures observées** : `spk181-confirmation`, `-mobile`, `spk181-appliquee`.
+  - **Suites** : sparkd 1 992, webui 1 799.
+  - **Défaut trouvé par l'E2E, corrigé** : une application déjà finie à la réponse
+    laissait la liste périmée 3 s.
+  - **Reste** : une application réelle sur `spark-010`, carte blanche du
+    responsable.
