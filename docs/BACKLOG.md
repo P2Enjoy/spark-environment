@@ -10198,6 +10198,13 @@ upgrade` est irréversible, et n'a pas été lancé.
     `-mobile`, observées.
   - **Erreur passagère** : un 502 passager au premier passage (premier appel d'une
     console tout juste démarrée), absent au second, avec la relève des réponses 5xx.
+- **Défaut réel, corrigé le 2026-11-18.** Le responsable a coché la case sur la Forge
+  de test. `zpool upgrade spark` a réussi (11 fonctionnalités activées sur 12,
+  `zpool history` à 12:33:25), mais l'installation s'est arrêtée à la phase
+  *Stockage* : la vérification comptait `dynamic_gang_header(*)`, que `zpool upgrade`
+  n'active jamais. L'exécuteur lit maintenant la liste sans les `(*)`, comme le
+  diagnostic. Deux tests sur la sortie réelle d'après la mise à niveau, rouges avant
+  correction ; DAT §70.6 révisé.
 
 ### [x] SPK-177 · Le diagnostic de l'installation lit l'unité de Caddy que le produit emploie
 

@@ -188,3 +188,53 @@ def test_un_pool_encore_liste_apres_la_mise_a_niveau_est_un_ECHEC(monkeypatch):
     monkeypatch.setattr(forge_install, "_run", machine)
     with pytest.raises(ForgeInstallationError, match="encore des fonctionnalités"):
         forge_install.mettre_a_niveau_zfs("spark")
+
+
+#: Sortie RÉELLE de `zpool upgrade` sur `spark-experiment`, le 2026-11-18 à 12:33,
+#: APRÈS `zpool upgrade spark` : 11 fonctionnalités activées, seule reste une
+#: fonctionnalité (*) que `zpool upgrade` n'active jamais.
+ZPOOL_UPGRADE_APRES_REEL = """\
+This system supports ZFS pool feature flags.
+
+All pools are formatted using feature flags.
+
+
+Some supported features are not enabled on the following pools. Once a
+feature is enabled the pool may become incompatible with software
+that does not support the feature. See zpool-features(7) for details.
+
+Note that the pool 'compatibility' feature can be used to inhibit
+feature upgrades.
+
+Features marked with (*) are not applied automatically on upgrade, and
+must be applied explicitly with zpool-set(7).
+
+POOL  FEATURE
+---------------
+spark
+      dynamic_gang_header(*)
+"""
+
+
+def test_un_pool_qui_ne_liste_plus_que_des_fonctionnalites_ETOILEES_est_a_niveau(monkeypatch):
+    """Le faux échec de la Forge de test (DAT §70.6, révisé) : la mise à niveau
+    avait réussi, et l'exécuteur l'a déclarée en échec à cause d'un (*)."""
+    sorties = iter([ZPOOL_UPGRADE_A_FAIRE, ZPOOL_UPGRADE_APRES_REEL])
+    machine = Machine({"incus storage get spark zfs.pool_name": (0, "spark\n")})
+
+    def run(command, **kw):
+        if command == ["zpool", "upgrade"]:
+            return subprocess.CompletedProcess(command, 0, next(sorties), "")
+        return machine(command, **kw)
+
+    monkeypatch.setattr(forge_install, "_run", run)
+    assert forge_install.mettre_a_niveau_zfs("spark") == {"zfsUpgrade": "fait", "zpool": "spark"}
+
+
+def test_un_pool_qui_ne_liste_que_des_ETOILEES_n_est_pas_relance(monkeypatch):
+    """La reprise de l'installation après ce faux échec ne relance rien."""
+    machine = Machine({"incus storage get spark zfs.pool_name": (0, "spark\n"),
+                       "zpool upgrade": (0, ZPOOL_UPGRADE_APRES_REEL)})
+    monkeypatch.setattr(forge_install, "_run", machine)
+    assert forge_install.mettre_a_niveau_zfs("spark")["zfsUpgrade"] == "deja"
+    assert "zpool upgrade spark" not in machine.appels

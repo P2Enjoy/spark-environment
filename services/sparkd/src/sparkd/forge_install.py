@@ -331,12 +331,19 @@ def _zpool_du_pool(pool: str) -> str:
 
 
 def _a_mettre_a_niveau(zpool: str) -> bool:
-    """`zpool upgrade` SANS argument liste les pools à mettre à niveau."""
+    """Le zpool a-t-il une fonctionnalité que `zpool upgrade` ACTIVE ?
+
+    `zpool upgrade` SANS argument liste les pools et leurs fonctionnalités. Celles
+    marquées `(*)` ne s'activent jamais par `zpool upgrade` : elles restent listées
+    après lui, et ne comptent donc ni avant ni après (DAT §70.6 révisé — les
+    compter a fait déclarer en échec une mise à niveau réussie).
+    """
+    from .systeme import pools_a_niveau
+
     resultat = _run(["zpool", "upgrade"], check=False)
-    if resultat.returncode or "POOL  FEATURE" not in resultat.stdout:
+    if resultat.returncode:
         return False
-    liste = resultat.stdout.split("POOL  FEATURE", 1)[1].splitlines()
-    return any(ligne.strip() == zpool and not ligne[:1].isspace() for ligne in liste)
+    return any(pool["pool"] == zpool for pool in pools_a_niveau(resultat.stdout))
 
 
 def mettre_a_niveau_zfs(pool: str) -> dict[str, object]:

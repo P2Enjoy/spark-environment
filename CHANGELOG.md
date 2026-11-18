@@ -2,7 +2,13 @@
 
 ## [Non publié]
 
-_Rien à publier pour le moment._
+### Corrigé
+- **SPK-176 — une mise à niveau ZFS réussie n'est plus déclarée en échec.** Sur la Forge
+  de test, `zpool upgrade` a activé 11 fonctionnalités sur 12. L'installation s'est
+  pourtant arrêtée en « le zpool a encore des fonctionnalités à activer » : la
+  vérification comptait `dynamic_gang_header(*)`, que `zpool upgrade` n'active jamais.
+  L'exécuteur lit désormais la liste comme le diagnostic et l'onglet *Mises à jour*,
+  sans les `(*)`. DAT §70.6.
 
 ## [Publié]
 
