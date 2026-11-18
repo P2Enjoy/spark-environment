@@ -16056,3 +16056,18 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   (« Connection refused »), **le courriel part malgré tout**. Webhook désactivé depuis l'écran, récepteur et fichiers retirés.
 - **SPK-62 passe à `[x]`.** La Forge est revenue à son seul Spark d'origine ; le canal courriel reste actif, comme demandé.
 
+**SPK-184 : les deux dernières preuves réelles, le 2026-11-18 (fin).**
+
+- **Une erreur de lecture de ma part, relevée par le Stop hook** : « 183 → 186 » contient SPK-184, et j'avais écrit à deux
+  reprises que 182 et 184 « ne figuraient pas dans la condition ». 184 devait être `[x]`.
+- **Sonde HTTPS contre le vrai Caddy** : sur `magiline.mcp.dev.lelabs.tech` (route TLS d'un Spark existant, lecture d'une ligne de
+  statut), « Tester » rend `HTTP 302` en 70 ms, certificat vérifié ; la sonde posée relève sainement trois fois ; **retirée ensuite**.
+- **Script rootless contre un vrai Docker : un défaut** — `docker ps` sortait en code 1. Cause : `docker_mode` n'est pas une
+  colonne de `spark` mais de `spark_bootstrap_observation` ; `commande_script` lisait `spark.get("docker_mode")`, toujours absent,
+  donc un Spark rootless jouait ses scripts sous `root`. Les tests unitaires passaient un dictionnaire où la clé était écrite à
+  la main : le piège d'un doublon trop complaisant. Reproduit à la main dans la cellule (la commande enveloppée par le compte
+  rootless réussit), corrigé, deux tests rouges avant, redéployé (`c995f32`), rejoué : « Tester » 174 ms, relevé planifié
+  En panne → Saine à 21:25:27.
+- **Hors de la plage demandée** : SPK-182 (rattrapage après un arrêt réel de `sparkd`) reste `[~]`.
+- **État de spark-010** : `magiline-mcp` seul, sans sonde ni trace d'essai ; canal courriel actif vers `martino@p2enjoy.studio`.
+

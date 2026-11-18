@@ -180,10 +180,10 @@ Vérification  : GET /v1/sparks/<nom>/health rend {"checks": [], "limit": 20} ;
                 Spark est refusé en 422 ; sur un canal configuré, une panne
                 (seuil atteint) envoie UN message health.down, puis UN message
                 health.up au rétablissement.
-À MESURER     : le script sous le compte rootless contre un vrai Docker
-                (`runuser -u spark-docker … docker ps`) ; la sonde HTTPS contre
-                le vrai Caddy et un vrai certificat. Rien n'a été mesuré ici que
-                contre les doublons.
+MESURÉ        : le script sous le compte rootless contre un vrai Docker
+                (`runuser -u spark-docker … docker ps`) et la sonde HTTPS contre
+                le vrai Caddy, le 2026-11-18 sur spark-010 — ce qui a révélé un
+                défaut du mode Docker (lu au mauvais endroit), corrigé.
 Retour arrière: réinstaller la build précédente ; la migration 024 se défait
                 (sparkd rollback) : les sondes et leur historique disparaissent,
                 JAMAIS un Spark ni un instantané.
@@ -219,10 +219,9 @@ Vérification  : GET /v1/sparks/<nom>/sla rend {"configured": false, ...} ;
                 les instantanés existants portent origin "manual" ; une
                 politique posée par l'API prend sa première prise à l'heure
                 dite (journal : snapshot.create, acteur « sla », classe runtime).
-À MESURER     : que le vrai Incus accepte le nom SLA_… (majuscule et
-                souligné) pour un instantané — jamais mesuré (DAT §74.4). Si
-                la prise échoue pour ce motif, le journal porte l'erreur
-                d'Incus ; repli prévu : un nom en minuscules, sans migration.
+MESURÉ        : le vrai Incus ACCEPTE le nom SLA_… (majuscule et souligné)
+                — prise réelle SLA_20261118-203029 le 2026-11-18 sur spark-010
+                (DAT §74.4). Le repli en minuscules n'est donc pas nécessaire.
 Retour arrière: réinstaller la build précédente ; la migration 023 se défait
                 (sparkd rollback), ce qui supprime les politiques et la
                 colonne origin, JAMAIS un instantané. Les instantanés nommés
