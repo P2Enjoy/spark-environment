@@ -162,10 +162,21 @@ Risques       : une rétention supprime sans qu'on le lui demande. Elle ne
                 bande d'un échec de SLA en v1 : il se lit au journal.
 ```
 
-### OP-45 · Appliquer les mises à jour du système depuis la console : `sparkd` et la console (SPK-181)
+### OP-45 · Appliquer les mises à jour du système depuis la console : `sparkd` et la console (SPK-181) — **APPLIQUÉ le 2026-11-18**
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable.
+État          : APPLIQUÉ le 2026-11-18, sur instruction du responsable
+                (« sparkd + tous les paquets »), par la console :
+                - Forge de test : sparkd a003ac285 → 6a74834dc par « Code
+                  déployé » (sauvegarde spark-20261118-140523.db) ; puis, depuis
+                  l'onglet, « Tout sélectionner » : 35 paquets appliqués (dont
+                  incus 7.6, systemd), liste relue vide, demande et issue
+                  signées au journal. Relevé après : /readyz « ready », 9 Sparks
+                  RUNNING, préflight 19 contrôles (2 signalés : disque sdb).
+                  Redémarrage requis (noyaux et libc6 en attente depuis avant) :
+                  NON fait — c'est le geste séparé de l'écran Forge.
+                - spark-010 : sparkd à jour, nano appliqué en preuve.
+                Reste : relancer la console d'exploitation du poste (son geste).
 Objectif      : l'onglet Forge → Mises à jour choisit et applique les paquets
                 en attente. L'hôte console les applique par SSH (sudo -n
                 apt-get --only-upgrade), comme la mise à jour de sparkd ;

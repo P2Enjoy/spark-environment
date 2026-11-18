@@ -12,6 +12,7 @@
  * celle que l'exploitant utilise.
  *
  *   SPARK_CONSOLE_URL=http://127.0.0.1:<port>/ node e2e/forge-reelle/spk181-appliquer.mjs spark-010
+ *   … spark-experiment tout     # « Tout sélectionner » : sur instruction du responsable
  */
 // CLAUDE.md §15 bis : ce script lance un Chromium. Le verrou est pris à l'import.
 import { prendreLeVerrou } from '../verrou.mjs';
@@ -22,7 +23,7 @@ import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const [serveur = 'spark-010'] = process.argv.slice(2);
+const [serveur = 'spark-010', mode = 'un'] = process.argv.slice(2);
 const CONSOLE = process.env.SPARK_CONSOLE_URL;
 if (!CONSOLE) throw new Error('SPARK_CONSOLE_URL : une console À PART, pas celle de l’exploitant');
 const CAPTURES = new URL('../captures/', import.meta.url).pathname;
@@ -58,10 +59,11 @@ try {
   await page.click('.onglet[href="#/forge/mises-a-jour"]');
   await page.waitForSelector('#titre-paquets', { timeout: 60000 });
   const noms = await page.locator('[data-paquet]').evaluateAll((cases) => cases.map((c) => c.dataset.paquet));
-  const choisi = noms.find((n) => !/^linux-/.test(n));
-  if (!choisi) throw new Error(`aucun paquet hors noyau en attente : ${noms.join(', ') || 'aucun'}`);
-  console.log(`paquets en attente : ${noms.length} ; choisi : ${choisi}`);
-  await page.check(`[data-paquet="${choisi}"]`);
+  const choisi = mode === 'tout' ? null : noms.find((n) => !/^linux-/.test(n));
+  if (mode !== 'tout' && !choisi) throw new Error(`aucun paquet hors noyau en attente : ${noms.join(', ') || 'aucun'}`);
+  console.log(`paquets en attente : ${noms.length} ; ${mode === 'tout' ? 'tous' : `choisi : ${choisi}`}`);
+  if (mode === 'tout') await page.click('[data-action="maj-tout"]');
+  else await page.check(`[data-paquet="${choisi}"]`);
   await page.click('[data-action="maj-demander"]');
   await page.waitForSelector('#titre-confirmation-maj');
   await capturer('spk181-reel-confirmation');
@@ -71,7 +73,10 @@ try {
   const issue = await page.locator('#titre-paquets ~ .succes, #titre-paquets ~ .refus').first().innerText();
   verdict('le paquet est appliqué sur la vraie machine', /Mises à jour appliquées/.test(issue), issue.replace(/\s+/g, ' '));
   await page.waitForTimeout(1500);
-  verdict('il sort de la liste relue', await page.locator(`[data-paquet="${choisi}"]`).count() === 0, choisi);
+  const restants = await page.locator('[data-paquet]').count();
+  verdict(mode === 'tout' ? 'la liste relue est vide' : 'il sort de la liste relue',
+          mode === 'tout' ? restants === 0 : await page.locator(`[data-paquet="${choisi}"]`).count() === 0,
+          mode === 'tout' ? `${restants} restant(s)` : choisi);
   await capturer('spk181-reel-appliquee');
 } catch (erreur) {
   verdict('parcours', false, erreur.message);
