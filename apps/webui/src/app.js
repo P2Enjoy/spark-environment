@@ -5234,7 +5234,7 @@ async function chargerSysteme({ focus = false } = {}) {
     // SPK-181 · §73.3 : la dernière application se relit avec le relevé — une
     // application en cours se voit, même en revenant sur l'onglet.
     const [donnees, application] = await Promise.all([
-      api('/v1/forge/systeme'), api('/v1/forge/systeme/appliquer').catch(() => null)]);
+      api('/v1/forge/systeme'), lireApplication()]);
     etat.systeme = { ...SYSTEME_VIDE, status: 'pret', donnees, application };
     if (application?.etat === 'en_cours') suivreApplication();
   } catch (erreur) {
@@ -5252,11 +5252,21 @@ async function chargerSysteme({ focus = false } = {}) {
  */
 let minuterieMaj = null;
 
+/** §73.2 : l'état vit dans l'hôte console, qui applique en SSH — pas dans sparkd. */
+async function lireApplication() {
+  try {
+    const reponse = await fetch(`/api/forge/systeme/appliquer?server=${encodeURIComponent(etat.server)}`);
+    return reponse.ok ? await reponse.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 function suivreApplication() {
   clearTimeout(minuterieMaj);
   minuterieMaj = setTimeout(async () => {
     if (etat.route !== 'misesajour') return;
-    const application = await api('/v1/forge/systeme/appliquer').catch(() => null);
+    const application = await lireApplication();
     if (!application) return suivreApplication();
     if (application.etat === 'en_cours') {
       etat.systeme.application = application;
@@ -5276,12 +5286,11 @@ async function appliquerMisesAJour() {
   ui.refus = null;
   peindre();
   try {
-    const reponse = await relais(
-      `/api/v1/forge/systeme/appliquer?server=${encodeURIComponent(etat.server)}`,
-      { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ paquets: ui.selection }) });
+    const reponse = await fetch('/api/forge/systeme/appliquer', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server: etat.server, paquets: ui.selection }) });
     const corps = await reponse.json();
-    if (!reponse.ok) throw new Error(corps?.detail?.message ?? corps?.message ?? `HTTP ${reponse.status}`);
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
     Object.assign(ui, { selection: [], confirmer: false });
     if (corps.etat === 'en_cours') {
       ui.application = corps;

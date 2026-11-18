@@ -335,36 +335,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/forge/systeme/appliquer": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Forge Systeme Application
-         * @description L'état de la dernière application (§73.2), avec la source du relevé.
-         */
-        get: operations["forge_systeme_application_v1_forge_systeme_appliquer_get"];
-        put?: never;
-        /**
-         * Forge Systeme Appliquer
-         * @description Applique les mises à jour choisies, en arrière-plan.
-         *
-         *     @spec docs/BACKLOG.md#SPK-181 · docs/DAT.md §73.2
-         *
-         *     Seuls des paquets EN ATTENTE se mettent à jour : un nom hors de la liste
-         *     relevée à l'instant est refusé (422). Une seule application à la fois, et
-         *     jamais sur un `dpkg` verrouillé (409). La Forge n'est jamais redémarrée.
-         */
-        post: operations["forge_systeme_appliquer_v1_forge_systeme_appliquer_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/images": {
         parameters: {
             query?: never;
@@ -2055,65 +2025,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
-                };
-            };
-        };
-    };
-    forge_systeme_application_v1_forge_systeme_appliquer_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    forge_systeme_appliquer_v1_forge_systeme_appliquer_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

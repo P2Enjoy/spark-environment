@@ -5,7 +5,8 @@
  *       (les quatre cases d'un réglage), §53.3 (l'interrupteur et le bandeau) ·
  *       §37.4.2 bis (le doublon du transport), §37.6 ter (celui de Docker),
  *       §51.1 (celui du redémarrage), §36.10.9 (celui de la signature),
- *       §71.6 (celui de l'API GitHub, SPK-178)
+ *       §71.6 (celui de l’API GitHub, SPK-178), §73.2 (celui de l’application
+ *       des mises à jour, SPK-181)
  *
  * Le harnais lance la console comme un **processus séparé** : l'environnement
  * est son seul canal, et aucun tour de passe-passe ne l'en dispense. Ce qui est
@@ -16,7 +17,7 @@
  *
  * Deux propriétés, et la seconde compte autant que la première :
  *
- * 1. hors de `SPARK_EPREUVE=1`, les six variables sont **ignorées** ;
+ * 1. hors de `SPARK_EPREUVE=1`, les sept variables sont **ignorées** ;
  * 2. ce qui est ignoré est **dit**, et ce qui est actif se **voit à l'écran**.
  *    Ignorer en silence aurait remplacé une option cachée par un comportement
  *    caché, et un interrupteur qui ne se lirait que dans l'environnement du
@@ -29,7 +30,7 @@ export const INTERRUPTEUR = 'SPARK_EPREUVE';
 export const ACTIF = '1';
 
 /**
- * Les six doublons du produit, et ce que chacun remplace.
+ * Les sept doublons du produit, et ce que chacun remplace.
  *
  * `remplace` est écrit pour être lu **à l'écran** par quelqu'un qui découvre le
  * bandeau : il nomme la commande réelle, pas le module qui la lance.
@@ -54,6 +55,10 @@ export const DOUBLONS = [
   // vrai GitHub, donc sur un vrai dépôt.
   { variable: 'SPARK_GITHUB_BASE_URL',
     remplace: 'l’adresse de l’API GitHub où se posent les clés de déploiement' },
+  // SPK-181 · §73.2 : la commande qui applique les paquets en SSH. Sans lui, la
+  // pile d'épreuve — une Forge locale, sans SSH — ne pourrait pas éprouver le geste.
+  { variable: 'SPARK_UPGRADE_COMMAND',
+    remplace: 'la commande qui applique les mises à jour du système de la Forge' },
 ];
 
 const posee = (env, variable) => String(env?.[variable] ?? '') !== '';

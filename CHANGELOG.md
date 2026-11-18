@@ -9,14 +9,15 @@
     seulement* cochent à votre place.
   - **La confirmation** nomme chaque paquet et ses versions, et dit que la Forge n'est
     jamais redémarrée.
-  - **L'exécution** passe par une nouvelle route, `POST /v1/forge/systeme/appliquer`.
-    Elle lance `apt-get install --only-upgrade` en arrière-plan, et seulement sur des
-    paquets en attente. Une seule application tourne à la fois, jamais sur un `dpkg`
-    verrouillé.
-  - **La trace** : deux lignes au journal, la demande signée puis l'issue. L'onglet
-    suit l'application et relit la liste à la fin.
+  - **L'exécution** passe par la console, en SSH, comme la mise à jour de sparkd :
+    `sudo -n apt-get install --only-upgrade`, seulement sur des paquets en attente,
+    une application à la fois. sparkd, durci, n'écrit pas le système ; la première
+    version, qui le lui confiait, échouait sur une vraie Forge.
+  - **La trace** : deux lignes `system.upgrade` au journal, la demande signée puis
+    l'issue. L'onglet suit l'application et relit la liste à la fin.
 
-  DAT §73, SPK-DS-46, manuel M8, OP-45. Aucune migration, aucune variable.
+  DAT §73, SPK-DS-46, manuel M8, OP-45. Aucune migration. Un septième doublon
+  d'épreuve, `SPARK_UPGRADE_COMMAND`, lu sous `SPARK_EPREUVE=1` seulement.
 
 ### Corrigé
 - **SPK-180 — changer de serveur depuis un Spark mène à la liste des Sparks.** La

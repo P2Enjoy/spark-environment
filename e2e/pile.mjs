@@ -345,6 +345,11 @@ export async function monterPile({ dns = null, notify = null, github = null } = 
     // jeton du poste ne doit pas non plus se réintroduire par l'héritage.
     SPARK_GITHUB_DEPLOY_TOKEN: '',
     SPARK_GITHUB_BASE_URL: github ? github.baseUrl : '',
+    // SPK-181 · §73.2 : le septième doublon. La pile n'a pas de SSH ; il rend
+    // une sortie d'apt et l'issue 0, et nomme les paquets reçus en arguments.
+    SPARK_UPGRADE_COMMAND:
+      "cat >/dev/null; for p in \"$@\"; do printf 'Setting up %s (doublon) ...\\n' \"$p\"; done;"
+      + " printf 'marqueur=code:0\\n'",
   };
   const consoleHost = lancer('node', [join(RACINE, 'apps', 'webui', 'host', 'main.js')],
                              envHoteConsole, journal);

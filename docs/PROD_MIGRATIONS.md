@@ -128,10 +128,16 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ```
 État          : EN ATTENTE — à jouer sur instruction du responsable.
-Objectif      : POST et GET /v1/forge/systeme/appliquer (sparkd), et l'onglet
-                Forge → Mises à jour qui choisit et applique les paquets en
-                attente (console) — DAT §73. Aucune migration, aucune variable.
-Dépend de     : OP-43 (l'onglet et sa route de lecture).
+Objectif      : l'onglet Forge → Mises à jour choisit et applique les paquets
+                en attente. L'hôte console les applique par SSH (sudo -n
+                apt-get --only-upgrade), comme la mise à jour de sparkd ;
+                sparkd, durci, n'écrit pas le système. sparkd accepte en plus
+                l'action déclarée system.upgrade (clé packages, issue error)
+                — DAT §73.2. Aucune migration ; un septième doublon d'épreuve,
+                SPARK_UPGRADE_COMMAND, inactif hors SPARK_EPREUVE=1.
+Dépend de     : OP-43 (l'onglet et sa route de lecture). Le compte SSH de la
+                console doit avoir sudo sans invite sur la Forge (déjà requis
+                pour la mise à jour de sparkd).
 Ordre         : 1. mettre à jour sparkd (bloc « Code déployé » de la console) ;
                 2. relancer la console (son propre geste).
 Vérification  : Forge → Mises à jour : une case par paquet, décochée ; un

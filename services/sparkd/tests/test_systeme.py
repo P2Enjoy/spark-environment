@@ -177,97 +177,38 @@ def test_l_API_ne_journalise_rien_et_n_ecrit_rien(tmp_path):
     assert client.get("/v1/audit").json() == avant
 
 
-# --- SPK-181 · §73 : appliquer les mises à jour choisies -----------------------
+
+# --- SPK-181 · §73.2 : la console déclare l'application, sparkd l'inscrit ----
 #
-# @verifies docs/BACKLOG.md#SPK-181 · docs/DAT.md §73.2 (422 hors liste, 409
-#           occupé ou verrouillé, travail en arrière-plan, audit de la demande et
-#           de l'issue, jamais de redémarrage)
+# @verifies docs/BACKLOG.md#SPK-181 · docs/DAT.md §73.2 (l'action system.upgrade
+#           et la clé packages, bornées ; l'issue error) · §37.4.6
 
-import time  # noqa: E402
-
-import pytest  # noqa: E402
-
-from sparkd.systeme import Application, RefusApplication  # noqa: E402
-
-EN_ATTENTE = {"openssl", "incus", "linux-image-generic"}
-
-
-def test_seuls_des_paquets_EN_ATTENTE_se_mettent_a_jour():
-    assert systeme.valider(["openssl", "incus", "openssl"], EN_ATTENTE) == ["openssl", "incus"]
-    for demande, motif in ((["nginx"], "n'est pas une mise à jour en attente"),
-                           (["-o", "openssl"], "invalide"), (["openssl=1.0"], "invalide"),
-                           (["openssl; reboot"], "invalide"), ([], "Aucun paquet"),
-                           ("openssl", "Aucun paquet"), (["x"] * 501, "Au plus")):
-        with pytest.raises(RefusApplication) as refus:
-            systeme.valider(demande, EN_ATTENTE | {"x"})
-        assert refus.value.code == 422 and motif in str(refus.value), demande
-
-
-def test_la_commande_met_a_jour_et_garde_la_configuration_locale():
-    assert systeme.commande_application(["openssl"]) == [
-        "apt-get", "install", "-y", "--only-upgrade",
-        "-o", "Dpkg::Options::=--force-confold", "openssl"]
-
-
-def test_une_application_reussie_puis_une_en_echec_disent_leur_issue_bornee():
-    fins = []
-    app = Application(executer=lambda c: (0, "ok\n" * 100), verrouille=lambda: False,
-                      fin=fins.append, en_arriere_plan=False)
-    assert app.etat() == {"etat": "aucune"}
-    etat = app.lancer(["openssl"])
-    assert etat["etat"] == "terminee" and etat["code"] == 0
-    assert len(etat["sortie"].splitlines()) == systeme.LIGNES_GARDEES
-    rate = Application(executer=lambda c: (100, "E: Sub-process /usr/bin/dpkg returned an error code (1)"),
-                       verrouille=lambda: False, fin=fins.append, en_arriere_plan=False)
-    assert rate.lancer(["incus"])["etat"] == "echec"
-    assert [f["etat"] for f in fins] == ["terminee", "echec"]
-
-
-def test_une_seule_application_a_la_fois_et_jamais_sur_dpkg_verrouille():
-    lent = Application(executer=lambda c: (time.sleep(0.3), (0, ""))[1], verrouille=lambda: False)
-    lent.lancer(["openssl"])
-    with pytest.raises(RefusApplication) as occupe:
-        lent.lancer(["incus"])
-    assert occupe.value.code == 409
-    verrouille = Application(executer=lambda c: (0, ""), verrouille=lambda: True)
-    inscrit = []
-    with pytest.raises(RefusApplication) as refus:
-        verrouille.lancer(["openssl"], avant=lambda: inscrit.append(1))
-    assert refus.value.code == 409 and "lock-frontend" in str(refus.value)
-    assert inscrit == [], "un geste refusé ne s'inscrit pas comme demandé"
-
-
-def _client(tmp_path):
+def _client_audit(tmp_path):
     return TestClient(create_app(load({"SPARKD_DB": str(tmp_path / "a.db"),
                                        "SPARKD_DRIVER": "fake"})))
 
 
-def _attendre_fin(client):
-    for _ in range(50):
-        etat = client.get("/v1/forge/systeme/appliquer").json()
-        if etat["etat"] != "en_cours":
-            return etat
-        time.sleep(0.05)
-    raise AssertionError("l'application ne se termine pas")
-
-
-def test_l_API_applique_retire_du_releve_et_journalise_demande_puis_issue(tmp_path):
-    client = _client(tmp_path)
-    assert client.get("/v1/forge/systeme/appliquer").json()["etat"] == "aucune"
-    r = client.post("/v1/forge/systeme/appliquer", json={"paquets": ["openssl"]})
-    assert r.status_code == 202 and r.json()["source"] == "fake"
-    assert _attendre_fin(client)["etat"] == "terminee"
-    noms = [p["nom"] for p in client.get("/v1/forge/systeme").json()["mises_a_jour"]["paquets"]]
-    assert "openssl" not in noms and "incus" in noms
+def test_la_console_declare_la_demande_puis_l_issue_d_une_application(tmp_path):
+    client = _client_audit(tmp_path)
+    for resultat, message in (("ok", "Mises à jour demandées : nano openssl."),
+                              ("error", "Mises à jour en échec (code 100).")):
+        r = client.post("/v1/audit", json={
+            "action": "system.upgrade", "result": resultat, "target_type": "forge",
+            "message": message, "payload": {"packages": "nano openssl"}})
+        assert r.status_code == 201, r.json()
     lignes = [e for e in client.get("/v1/audit").json()["entries"] if e["action"] == "system.upgrade"]
-    assert len(lignes) == 2, lignes
-    assert any("demandées" in e["message"] for e in lignes)
-    assert any("appliquées" in e["message"] for e in lignes)
+    assert sorted(e["result"] for e in lignes) == ["error", "ok"]
 
 
-def test_l_API_refuse_un_paquet_hors_liste_sans_rien_journaliser(tmp_path):
-    client = _client(tmp_path)
-    r = client.post("/v1/forge/systeme/appliquer", json={"paquets": ["nginx"]})
-    assert r.status_code == 422 and r.json()["detail"]["error"] == "refused"
-    assert not [e for e in client.get("/v1/audit").json()["entries"] if e["action"] == "system.upgrade"]
-    assert client.post("/v1/forge/systeme/appliquer", json={}).status_code == 422
+def test_des_paquets_hors_forme_sont_refuses_a_la_porte(tmp_path):
+    client = _client_audit(tmp_path)
+    for paquets in ("nano;reboot", "-o x", "nano  openssl", "Nano", "x" * 9000, 3):
+        r = client.post("/v1/audit", json={"action": "system.upgrade", "result": "ok",
+                                           "target_type": "forge", "payload": {"packages": paquets}})
+        assert r.status_code == 422, paquets
+
+
+def test_la_route_d_application_de_sparkd_n_existe_plus(tmp_path):
+    """§73.2 révisé : sparkd, durci, n'écrit pas le système."""
+    client = _client_audit(tmp_path)
+    assert client.post("/v1/forge/systeme/appliquer", json={"paquets": ["nano"]}).status_code in (404, 405)

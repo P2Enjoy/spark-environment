@@ -95,7 +95,7 @@ test('depuis l’accueil, Forge → Mises à jour montre le relevé, et Relire l
 
 // SPK-181 · §73 : choisir, confirmer, appliquer — puis l'issue et le relevé relu.
 // @verifies docs/BACKLOG.md#SPK-181 · docs/DAT.md §73.1-§73.4
-test('choisir un paquet au clavier, confirmer, appliquer : le paquet sort de la liste, le geste est signé', async () => {
+test('choisir un paquet au clavier, confirmer, appliquer : l’issue se dit, la demande est signée au journal', async () => {
   await page.goto(pile.base, { waitUntil: 'domcontentloaded' });
   await page.click('nav a[href="#/forge"]');
   await page.click('.onglet[href="#/forge/mises-a-jour"]');
@@ -118,11 +118,15 @@ test('choisir un paquet au clavier, confirmer, appliquer : le paquet sort de la 
 
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => /Mises à jour appliquées/.test(document.body.innerText), null, { timeout: 20000 });
-  assert.equal(await page.locator('[data-paquet="openssl"]').count(), 0, 'openssl sort du relevé relu');
-  assert.ok(await page.locator('[data-paquet="incus"]').count(), 'les autres restent');
+  // §73.2 : la pile n'a pas de SSH ; le doublon SPARK_UPGRADE_COMMAND a reçu le
+  // paquet. Le relevé de démonstration ne change pas : la sortie du paquet de la
+  // liste se prouve sur la machine réelle (e2e/forge-reelle/spk181-appliquer.mjs).
+  await page.click('[data-action="relire-systeme"]').catch(() => {});
+  const issue = await page.locator('.succes', { hasText: 'Mises à jour appliquées' }).innerText();
+  assert.match(issue, /openssl/);
   await capturer('spk181-appliquee');
 
-  // Effet backend : la demande, signée, puis l'issue, au journal.
+  // Effet backend : la demande, signée, puis l'issue, déclarées par l'hôte console.
   const { corps } = await pile.lireSparkd('/v1/audit');
   const lignes = corps.entries.filter((e) => e.action === 'system.upgrade');
   assert.ok(lignes.some((e) => /demandées/.test(e.message) && e.signed), 'demande signée');

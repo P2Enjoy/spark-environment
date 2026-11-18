@@ -13858,7 +13858,7 @@ qui » n'a pas à exister.
 
 ### 53.3 L'interrupteur d'épreuve, et le bandeau qui le dit
 
-**Six** doublons sont nécessaires : le harnais lance la console comme un
+**Sept** doublons sont nécessaires : le harnais lance la console comme un
 processus séparé, et l'environnement est son seul canal.
 
 | Variable | Ce qu'elle remplace | Contrat |
@@ -13869,6 +13869,7 @@ processus séparé, et l'environnement est son seul canal.
 | `SPARK_SIGN_COMMAND` | la commande de signature d'un geste | §36.10.9 |
 | `SPARK_CONSOLE_IDENTITY` | **la clé qu'OpenSSH emploie pour joindre la Forge** | §53.3 bis |
 | `SPARK_GITHUB_BASE_URL` | l'adresse de l'API GitHub où se posent les clés de déploiement | §71.6 |
+| `SPARK_UPGRADE_COMMAND` | la commande qui applique les mises à jour du système de la Forge | §73.2 |
 
 **`SPARK_EPREUVE=1` les autorise, et rien d'autre ne le fait.** Hors de cet
 interrupteur, les six sont **ignorées** : la console lance les vraies

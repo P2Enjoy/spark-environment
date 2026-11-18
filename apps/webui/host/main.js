@@ -22,6 +22,8 @@ import {
 import { sshHosts, probeServer } from './discovery.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { poserSignataires } from './forge-signataires.js';
+import { Applications, ApplicationRefusee, executerApplication, validerPaquets }
+  from './forge-paquets.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
 import { comparer as comparerBuild, etatDepot, resoudreCommit,
@@ -122,6 +124,47 @@ export function createConsoleHost(options = {}) {
   // `readDocker`, et pour le même motif — un harnais n'a pas d'agent SSH, et
   // sans lui aucune preuve ne pourrait éprouver ce que le relais pose.
   const signerInjecte = options.signIntention ?? null;
+  const signer = signerInjecte ?? ((intention, tunnel) => signerIntention(intention, tunnel, epreuve));
+
+  /**
+   * SPK-181 · §73.2 : l'hôte déclare au journal ce qu'il applique en SSH. La
+   * demande est SIGNÉE, comme tout geste de la console (§36.10.8) ; l'issue
+   * aussi, puisqu'elle passe par la même porte.
+   */
+  async function declarerApplication(tunnel, resultat, message, paquets) {
+    if (!tunnel?.localPort) return false;
+    const corps = { action: 'system.upgrade', result: resultat, target_type: 'forge',
+                    target_id: tunnel.server?.name ?? null, message,
+                    payload: { packages: paquets.join(' ') } };
+    let signature = {};
+    try {
+      const vu = await signer({ method: 'POST', path: '/v1/audit', actor: tunnel.actorHeader,
+                                body: corps, action: null, ts: new Date().toISOString() }, tunnel);
+      signature = signatureService.entetes(vu);
+    } catch { /* §36.10.8 : ne pas pouvoir signer n'empêche jamais le geste */ }
+    try {
+      const reponse = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/audit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-spark-actor': tunnel.actorHeader, ...signature },
+        body: JSON.stringify(corps),
+      });
+      return reponse.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  const applications = options.applications ?? new Applications({
+    executer: (serveur, paquets) => executerApplication(serveur, paquets,
+      { doublon: epreuve.commande('SPARK_UPGRADE_COMMAND') }),
+    fin: (serveur, final) => declarerApplication(tunnels.get(serveur.name),
+      final.etat === 'terminee' ? 'ok' : 'error',
+      final.etat === 'terminee'
+        ? `Mises à jour appliquées : ${final.paquets.join(', ')}.`
+        : `Mises à jour en échec (${final.motif}${final.code !== null ? `, code ${final.code}` : ''}) : `
+          + `${final.paquets.join(', ')}.`,
+      final.paquets),
+  });
   const sonderShellInjecte = options.probeShell ?? null;
   const lireJournauxInjecte = options.readLogs ?? null;
   // SPK-68 · §50.2 : le seul relevé utilisable quand SSH fonctionne mais que
@@ -1066,6 +1109,49 @@ export function createConsoleHost(options = {}) {
      * Une LECTURE : elle n'écrit rien et ne se journalise pas (§36.7). On peut
      * regarder sans agir, et c'est ici que la condition de refus se lit.
      */
+    /**
+     * SPK-181 · §73.2 : l'état de la dernière application de mises à jour.
+     */
+    'GET /api/forge/systeme/appliquer': async (_corps, url) => {
+      const nom = String(url?.searchParams?.get('server') ?? '');
+      return { status: 200, body: { server: nom, ...applications.etat(nom) } };
+    },
+
+    /**
+     * SPK-181 · §73.2 : appliquer les paquets choisis, par SSH. Les noms sont
+     * vérifiés contre la liste que sparkd rend À L'INSTANT : on ne met à jour
+     * que ce qui l'attend. La Forge n'est jamais redémarrée.
+     */
+    'POST /api/forge/systeme/appliquer': async (corps) => {
+      const nom = String(corps?.server ?? '');
+      const serveur = (await load(inventoryPath)).find((c) => c.name === nom);
+      if (!serveur) {
+        return { status: 404, body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      const doublon = epreuve.commande('SPARK_UPGRADE_COMMAND');
+      if (serveur.kind === 'local' && !doublon) {
+        return { status: 422, body: { error: 'local_server',
+          message: 'Une Forge locale n’a pas de transport SSH : ses paquets se mettent à jour sur la machine.' } };
+      }
+      try {
+        const tunnel = tunnels.require(nom);
+        const releve = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/forge/systeme`,
+          { headers: { 'x-spark-actor': tunnel.actorHeader } }).then((r) => r.json());
+        const enAttente = new Set((releve?.mises_a_jour?.paquets ?? []).map((p) => p.nom));
+        const paquets = validerPaquets(corps?.paquets, enAttente);
+        const etat = await applications.lancer(serveur, paquets, {
+          avant: () => declarerApplication(tunnel, 'ok',
+            `Mises à jour demandées : ${paquets.join(', ')}.`, paquets),
+        });
+        return { status: 202, body: { server: nom, ...etat } };
+      } catch (erreur) {
+        if (erreur instanceof ApplicationRefusee) {
+          return { status: erreur.status, body: { error: erreur.code, message: erreur.message } };
+        }
+        return { status: 502, body: { error: 'apply_failed', message: erreur.message } };
+      }
+    },
+
     'GET /api/forge/reboot': async (_corps, url) => {
       const nom = String(url?.searchParams?.get('server') ?? '');
       const serveur = (await load(inventoryPath)).find((c) => c.name === nom);

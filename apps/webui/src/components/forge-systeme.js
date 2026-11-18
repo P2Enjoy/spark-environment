@@ -78,6 +78,13 @@ function renderApplication(paquets, ui) {
   return raccourcis + confirmation;
 }
 
+/** Ce qu'un échec veut dire, en une phrase (§73.2) ; le manuel M8 dit quoi faire. */
+const MOTIFS_ECHEC = {
+  occupe: 'Le gestionnaire de paquets est occupé, sans doute par les mises à jour automatiques : réessayez dans quelques minutes.',
+  sans_droit: 'Le compte SSH de la console n’a ni root ni sudo sans invite sur cette Forge.',
+  apt: 'apt-get a refusé : la sortie ci-dessous dit pourquoi.',
+};
+
 /** L'état de la dernière application (§73.3). */
 export function renderEtatApplication(application) {
   if (!application || application.etat === 'aucune') return '';
@@ -94,9 +101,10 @@ export function renderEtatApplication(application) {
     ? `<div class="succes" role="status"><p><strong>Mises à jour appliquées</strong> :
         ${paquets.map((p) => `<span class="technique">${echapper(p)}</span>`).join(', ')}
         (${echapper(date(application.fin))}).</p>${sortie}</div>`
-    : `<div class="refus" role="alert"><p><strong>Application en échec</strong>, code
-        ${echapper(application.code)} (${echapper(date(application.fin))}). Les paquets
-        non mis à jour restent dans la liste.</p>${sortie}</div>`;
+    : `<div class="refus" role="alert"><p><strong>Application en échec</strong>${
+        application.code !== null && application.code !== undefined ? `, code ${echapper(application.code)}` : ''}
+        (${echapper(date(application.fin))}). ${echapper(MOTIFS_ECHEC[application.motif] ?? MOTIFS_ECHEC.apt)}
+        Les paquets non mis à jour restent dans la liste.</p>${sortie}</div>`;
 }
 
 function renderPaquets(maj, ui = SYSTEME_VIDE) {

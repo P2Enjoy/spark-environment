@@ -881,80 +881,8 @@ def create_app(config: Config) -> FastAPI:
         `source: "fake"` et que l'écran affiche comme tel.
         """
         if config.driver == "fake":
-            return {**app.state.systeme_factice,
-                    "releve_a": systeme_service.releve_factice()["releve_a"]}
+            return systeme_service.releve_factice()
         return systeme_service.releve(systeme_service.lecteur_local())
-
-    # SPK-181 · docs/DAT.md §73 : appliquer les mises à jour choisies. Sous pilote
-    # factice, le relevé de démonstration est une copie PROPRE à cette instance,
-    # et l'application en retire les paquets appliqués.
-    app.state.systeme_factice = systeme_service.releve_factice()
-
-    def _apt_factice(commande: list[str]) -> tuple[int, str]:
-        appliques = set(commande[6:])
-        maj = app.state.systeme_factice["mises_a_jour"]
-        restants = [p for p in maj["paquets"] if p["nom"] not in appliques]
-        app.state.systeme_factice["mises_a_jour"] = {
-            **maj, "paquets": restants, "paquets_rendus": len(restants),
-            "total": len(restants), "securite": sum(1 for p in restants if p["securite"])}
-        return 0, "pilote factice : " + " ".join(sorted(appliques)) + " mis à jour."
-
-    def _issue_application(etat: dict) -> None:
-        """L'issue s'inscrit au journal, hors requête : l'acteur est sparkd (§73.2)."""
-        connection = connect(config.database)
-        try:
-            with connection:
-                audit_service.record(
-                    connection, None, "system.upgrade",
-                    "ok" if etat["etat"] == "terminee" else "error",
-                    (f"Mises à jour appliquées : {', '.join(etat['paquets'])}."
-                     if etat["etat"] == "terminee" else
-                     f"Mises à jour en échec (code {etat['code']}) : "
-                     f"{(etat['sortie'] or '').splitlines()[-1:] or ['sans sortie']}"),
-                    target_type="forge", payload={"paquets": etat["paquets"], "code": etat["code"]})
-        finally:
-            connection.close()
-
-    app.state.application = systeme_service.Application(
-        executer=_apt_factice if config.driver == "fake" else systeme_service._executer_apt,
-        verrouille=(lambda: False) if config.driver == "fake" else systeme_service.dpkg_verrouille,
-        fin=_issue_application)
-
-    @app.get("/v1/forge/systeme/appliquer", tags=["forge"])
-    def forge_systeme_application() -> dict:
-        """L'état de la dernière application (§73.2), avec la source du relevé."""
-        return {**app.state.application.etat(),
-                "source": "fake" if config.driver == "fake" else "hote"}
-
-    @app.post("/v1/forge/systeme/appliquer", tags=["forge"], status_code=202)
-    def forge_systeme_appliquer(corps: dict = Body(...)) -> dict:
-        """Applique les mises à jour choisies, en arrière-plan.
-
-        @spec docs/BACKLOG.md#SPK-181 · docs/DAT.md §73.2
-
-        Seuls des paquets EN ATTENTE se mettent à jour : un nom hors de la liste
-        relevée à l'instant est refusé (422). Une seule application à la fois, et
-        jamais sur un `dpkg` verrouillé (409). La Forge n'est jamais redémarrée.
-        """
-        en_attente = ({p["nom"] for p in app.state.systeme_factice["mises_a_jour"]["paquets"]}
-                      if config.driver == "fake"
-                      else systeme_service.en_attente_reel(systeme_service.lecteur_local()))
-        try:
-            paquets = systeme_service.valider((corps or {}).get("paquets"), en_attente)
-
-            def inscrire_la_demande() -> None:
-                with registry() as connection:
-                    audit_service.record(
-                        connection, None, "system.upgrade", "ok",
-                        f"Mises à jour demandées : {', '.join(paquets)}.",
-                        target_type="forge", payload={"paquets": paquets})
-
-            etat = app.state.application.lancer(paquets, avant=inscrire_la_demande)
-        except systeme_service.RefusApplication as refus:
-            raise HTTPException(status_code=refus.code, detail={
-                "error": "refused" if refus.code == 422 else "busy",
-                "message": str(refus)}) from refus
-        return {**etat, "source": "fake" if config.driver == "fake" else "hote"}
 
     @app.post("/v1/forge/isolation", tags=["forge"])
     def forge_isolate() -> dict:
@@ -2041,7 +1969,11 @@ def create_app(config: Config) -> FastAPI:
                            #: TROIS actions, pour la raison qui sépare les gestes
                            #: de conteneur : ce qui doit se compter, c'est le geste.
                            "spark.deploykey_add", "spark.deploykey_replace",
-                           "spark.deploykey_remove")
+                           "spark.deploykey_remove",
+                           #: SPK-181 · §73.2 : l'hôte console applique des
+                           #: paquets par SSH ; sparkd, durci, ne le peut pas. Il
+                           #: déclare la demande (signée) puis l'issue.
+                           "system.upgrade")
 
     #: Clés admises dans la charge. Un champ libre deviendrait le dépôt de
     #: secrets en clair que le §37.5 interdit précisément.
@@ -2056,7 +1988,10 @@ def create_app(config: Config) -> FastAPI:
     #: corps de clé ou un jeton passerait sinon sous le nom `repository`.
     CLES_DECLARABLES = ("path", "reason", "duration_seconds", "container",
                         "account", "previous_commit", "target_commit",
-                        "repository", "fingerprint", "access")
+                        "repository", "fingerprint", "access",
+                        #: SPK-181 : les noms des paquets, séparés par des
+                        #: espaces, bornés plus bas comme le dépôt.
+                        "packages")
 
     #: Formes admises des trois valeurs de SPK-178 (§71.5). Le dépôt est celui que
     #: la console a déjà validé ; la borne est refaite ici parce que la console
@@ -2064,6 +1999,8 @@ def create_app(config: Config) -> FastAPI:
     FORME_DEPOT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$")
     FORME_EMPREINTE = re.compile(r"^SHA256:[A-Za-z0-9+/]{43}$")
     ACCES_DECLARABLES = ("lecture", "ecriture")
+    #: SPK-181 · §73.2 : des noms de paquets Debian, et rien d'autre.
+    FORME_PAQUETS = re.compile(r"^[a-z0-9][a-z0-9+.-]{0,127}( [a-z0-9][a-z0-9+.-]{0,127}){0,499}$")
 
     #: Les seules valeurs qu'`account` peut prendre. La console les borne déjà,
     #: mais elle n'est pas une autorité : cette porte est étroite précisément
@@ -2077,7 +2014,9 @@ def create_app(config: Config) -> FastAPI:
     #: un Spark protégé — exactement ce qu'un journal existe pour montrer.
     #: Deux valeurs, pas un champ libre : le résultat est une information de
     #: journal, pas un message.
-    RESULTATS_DECLARABLES = ("ok", "denied")
+    #: SPK-181 · §73.2 : `error` est l'issue d'un geste ACCEPTÉ qui a échoué
+    #: (l'application de paquets), ce que `denied` — un refus — ne dit pas.
+    RESULTATS_DECLARABLES = ("ok", "denied", "error")
 
     @app.post("/v1/audit", tags=["audit"], status_code=201)
     def declare_audit(body: dict = Body(...)) -> dict:
@@ -2115,7 +2054,9 @@ def create_app(config: Config) -> FastAPI:
         for cle, valable in (
                 ("repository", lambda v: isinstance(v, str) and FORME_DEPOT.match(v)),
                 ("fingerprint", lambda v: isinstance(v, str) and FORME_EMPREINTE.match(v)),
-                ("access", lambda v: v in ACCES_DECLARABLES)):
+                ("access", lambda v: v in ACCES_DECLARABLES),
+                ("packages", lambda v: isinstance(v, str) and len(v) <= 8000
+                 and FORME_PAQUETS.match(v))):
             if cle in brut and not valable(brut[cle]):
                 raise HTTPException(status_code=422, detail={
                     "error": "payload_refused",

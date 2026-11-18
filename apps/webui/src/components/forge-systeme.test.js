@@ -151,6 +151,11 @@ test('l’issue se dit : terminée en vert, échec en rouge avec la sortie repli
   assert.match(ko, /<details><summary>Sortie d’apt-get \(2 dernières lignes\)/);
   assert.match(ko, /E: &lt;dpkg&gt;/);
   assert.equal(renderEtatApplication({ etat: 'aucune' }), '');
+  const occupe = renderEtatApplication({ etat: 'echec', motif: 'occupe', code: 100, paquets: ['nano'], fin: '' });
+  assert.match(occupe, /gestionnaire de paquets est occupé/);
+  const droit = renderEtatApplication({ etat: 'echec', motif: 'sans_droit', code: null, paquets: ['nano'], fin: '' });
+  assert.match(droit, /ni root ni sudo/);
+  assert.doesNotMatch(droit, /code null/);
 });
 
 test('aucune mise à jour de sécurité se dit en toutes lettres, pas « dont 0 »', () => {
