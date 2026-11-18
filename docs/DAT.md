@@ -17550,7 +17550,10 @@ lui. Une Forge locale non plus : elle n'a pas de transport SSH.
 (paquet absent), `sparkd_ancien` (paquet antérieur à ce module : la Forge est à
 mettre à jour), `refus` (clé déclarée hors forme) ou `echec`, avec un message. Le
 geste part une fois par tunnel, au premier passage à l'état prêt, sans retarder
-l'ouverture. La vue *Serveurs* le montre sur la carte
+l'ouverture. **Il repart aussi après une mise à jour de sparkd réussie depuis la
+console** (ajouté le 2026-11-18, après OP-43 sur la Forge de test) : une Forge trouvée
+avec un sparkd antérieur à ce module affichait « sparkd à mettre à jour » jusqu'au
+redémarrage de la console, alors que la mise à jour venait de la rendre capable. La vue *Serveurs* le montre sur la carte
 du serveur. Un échec ne bloque rien (§36.10.8) : il dit seulement pourquoi les gestes
 signés seront refusés.
 
