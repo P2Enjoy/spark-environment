@@ -10118,6 +10118,11 @@ avec la clé publique déclarée dans `servers.json`, et `SPARKD_ALLOWED_SIGNERS
       *Mises à jour* répond ;
     - les captures versionnées `spk172-serveurs-signature` et `-mobile` masquent les
       adresses : le dépôt est public.
+  - **Forge de test, après OP-43, le 2026-11-18 à 12:29** : même script, contre la
+    console d'exploitation. La colonne dit « clé reconnue par la Forge ». La ligne
+    `project.create` du projet d'essai est « signée » par `console/spark-experiment`.
+    Le projet est ensuite supprimé, vérifié absent du registre, et le serveur
+    courant rétabli sur `spark-010`.
 
 ### [x] SPK-175 · Une Forge survit à la montée de version majeure d'Ubuntu
 
