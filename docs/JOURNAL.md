@@ -15673,8 +15673,14 @@ Ces sorties deviennent les jeux d'essai des contrôles.
   tourné sur une console à part (port 5191), avec une copie de l'inventaire. La relancer
   fait partie d'OP-43.
 
-**Ce qui reste ouvert** : SPK-158, avec deux obstacles écrits au backlog (le banc et la
-mémoire du poste, puis les machines NVMe et UEFI à commander), et SPK-177.
+**Fermées ensuite, le même jour.**
+
+- SPK-177 : la conformité lit `caddy-api.service`, vérifié sur `spark-010`.
+- SPK-158 : le mode `--compresser` est prouvé par le vrai cloud-init d'Ubuntu 26.04
+  dans un conteneur (scripts identiques octet pour octet au mode en clair). La VM
+  entière n'a pas été rejouée : 3 Gio libres pour 6 demandés. Le relevé des schémas
+  NVMe et UEFI chez l'hébergeur, hors DoD, se fera à la première machine de ces
+  offres.
 
 ## 2026-11-18 · Un jeton GitHub pour poser la clé du Spark : un Spark, un dépôt (SPK-178)
 
