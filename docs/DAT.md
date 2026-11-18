@@ -16368,7 +16368,18 @@ croissance de l'amorce et l'indentation, et la mesure l'a corrigée.*
   `ashift` 12, compression active), puis la recette finale passe : préflight 17 sur 17,
   `/healthz`, `/readyz`. **Après un redémarrage**, tout revient sans geste. La variante
   `--carte virtio` du banc est verte depuis le 2026-11-10.
-- **Non prouvé** : `--compresser` n'a pas été joué sur une VM.
+- **`--compresser`, prouvé le 2026-11-18 par le vrai cloud-init, hors VM**
+  (`scripts/mesures-spk158-compresser.sh`). La commande produit les deux sorties,
+  embarquée en clair et compressée. cloud-init 26.2 (Ubuntu 26.04), dans un conteneur
+  jetable :
+  - déclare valide le schéma de l'une et de l'autre ;
+  - dépose avec son module `write_files` deux `spark-amorce.sh` et deux
+    `creer-pool.sh` **identiques octet pour octet**, en `0755`, qui passent leur
+    analyseur et rendent l'aide.
+
+  Le démarrage d'une Forge ne diffère de celui de `--embarquer`, joué sur la VM du banc,
+  que par ce décodage ; la VM entière n'a donc pas été rejouée. Elle demande 6 Gio, et
+  le poste n'en avait que 3 de libres.
 
 ### 66.6 Ce qui reste ouvert
 

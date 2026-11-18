@@ -203,6 +203,11 @@
   et §37.7.4 révisés ; SPK-DS-35 ; manuels M8 et M6 ; OP-31.
 
 ### Modifié
+- **SPK-158 — le cloud-init compressé est prouvé, et l'unité est fermée.**
+  `scripts/mesures-spk158-compresser.sh` fait décoder par le vrai cloud-init d'Ubuntu
+  26.04, dans un conteneur, les deux sorties `--embarquer` : en clair, et compressée
+  (`--compresser`). Les scripts déposés sont identiques octet pour octet. L'acceptation
+  par l'hébergeur était établie le matin même. DAT §66.5.
 - **SPK-158 — qui crée le pool se décide par offre.** Sur l'offre EM-B311X-SATA (Ubuntu
   24.04), l'installateur de l'hébergeur se fige quand le schéma déclare le pool, et
   s'installe quand il ne le déclare pas (2026-11-18). La commande porte donc, pour chaque

@@ -15,6 +15,7 @@ historique d'un terminal.
 | `contract.py` | contrat d'API : génération et contrôle |
 | `creer-pool.sh` | création du pool de stockage de la Forge (SPK-28) ; le cloud-init de `preparer-forge.py` le dépose à côté de l'amorce, qui l'appelle au premier démarrage (SPK-159) |
 | `preparer-forge.py` | **produit** le schéma de partitionnement pour la Forge, pool ZFS déclaré (`partitionnement`), et le cloud-init complet (`cloud-init`), depuis le schéma par défaut de l'offre — sur la sortie standard, prêts à coller dans la console ; `--offre <NOM>` désigne une offre connue de `deploy/cloud-init/offres/` ; `offres` (ré)écrit le JSON de partition de chacune dans `forge/` (`--verifier` : échoue s'il est périmé) — le cloud-init, qui dépend de l'amorce, n'est jamais versionné ; il est léger par défaut (scripts téléchargés au commit épinglé, sha256 vérifié), `--embarquer` pour l'embarquer (SPK-158, `docs/DAT.md` §66) |
+| `mesures-spk158-compresser.sh` | prouve, avec le vrai cloud-init d'Ubuntu 26.04 dans un conteneur jetable, que le user-data `--compresser` dépose les mêmes scripts que le user-data en clair (SPK-158, `docs/DAT.md` §66.5) ; `--image` choisit l'image |
 | `install-serveur.sh` | installation de la Forge |
 | `cle-restreinte.sh` | **produit** la ligne `authorized_keys` de la clé du responsable (SPK-61, `docs/DAT.md` §46) — n'écrit nulle part |
 | `garde-ssh.sh` | la garde posée en `command=` sur cette clé. Elle tourne **sur la Forge**, pas ici, et n'accepte que le dépannage du §37.3 |

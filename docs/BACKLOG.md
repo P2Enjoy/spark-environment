@@ -9689,7 +9689,7 @@ commandée ; le gabarit `user-data.yaml`, collé tel quel, posait une amorce
 **vide** ; l'amorce supposait un pool que le schéma ne livre pas. Contrat au
 `docs/DAT.md` §66, **écrit et committé avant le code**.
 
-### [~] SPK-158 · Une commande produit le schéma de partitionnement et le cloud-init complets d'une Forge
+### [x] SPK-158 · Une commande produit le schéma de partitionnement et le cloud-init complets d'une Forge
 
 **Demandé par le responsable le 2026-11-10** : « une commande qui output le json de
 format et le cloud init complet prêt à copier-coller, renseignée dans le README en
@@ -9739,10 +9739,8 @@ lien et en place des textes bruts ».
   utilisateur, sur le schéma par défaut relevé le 2026-11-10 ; banc de redémarrage
   vert sur le cloud-init produit ; README, DAT §8.2 et §8.6, runbook, manuel,
   `scripts/README.md`, changelog à jour ; `@spec` / `@verifies`.
-- **Reste, dès le code livré, pour passer `[x]` : nécessite une action humaine** —
-  coller la sortie `partitionnement` dans la console de l'hébergeur et lire sa
-  validation (ou appeler `partitioning-schemas/validate`). La session ne peut pas
-  le faire : ni offre ni clé valide.
+- **L'acceptation par l'hébergeur**, condition posée ici avant le code, est **établie**
+  le 2026-11-18 sur la première machine livrée (voir plus bas).
 - **Codé le 2026-11-10**, dans le même changement que SPK-159 : le gabarit
   `user-data.yaml` ne pouvait pas survivre entre les deux sans documenter un état
   déjà faux.
@@ -9825,16 +9823,20 @@ lien et en place des textes bruts ».
     Le JSON versionné d'EM-B311X-SATA est régénéré (`"zfs": null`) : c'est celui qui s'est
     installé. La suite de la commande compte **152 cas**, et la suite sparkd **1 921 sur
     1 921**.
-  - **Reste `[~]`**, revu le 2026-11-18 avec ce qui empêche de conclure :
-    - **`--compresser` sur une VM** : non joué. Deux obstacles.
-      - Le banc (`e2e/forge-vm/redemarrage.mjs`) remplace l'adresse de sparkd par une
-        roue locale **dans le texte** de l'amorce, ce qu'un texte compressé ne permet
-        pas. Le jouer demande au banc une option qui installe sparkd depuis `main`
-        publié, en le disant comme un écart.
-      - La VM demande 6 Gio, et le poste n'en avait que 3 de disponibles ce jour-là
-        (§15 bis : on n'épuise pas la mémoire du poste).
-    - **Schémas NVMe et UEFI** : construits, jamais relevés. Les relever demande une
-      machine de ces offres chez l'hébergeur, donc une commande du responsable.
+  - **`--compresser`, prouvé le 2026-11-18 par le vrai cloud-init**
+    (`scripts/mesures-spk158-compresser.sh`, VERT). La commande produit les deux
+    sorties ; cloud-init 26.2 (Ubuntu 26.04), dans un conteneur jetable, déclare leurs
+    schémas valides. Son module `write_files` dépose, pour l'une comme pour l'autre,
+    `spark-amorce.sh` (sha256 `5b792db8…`) et `creer-pool.sh` (`cb9699f3…`),
+    **identiques octet pour octet**, en `0755`, analyseurs passés, aide rendue.
+    - **Pourquoi hors VM** : le démarrage ne diffère de `--embarquer`, vert sur la VM
+      du banc, que par ce décodage. La VM entière n'a pas été rejouée : elle demande
+      6 Gio, le poste en avait 3 de libres, et le banc substitue sa roue dans le texte
+      de l'amorce, ce qu'un texte compressé ne permet pas.
+  - **Fermée le 2026-11-18.** Les preuves unitaires NVMe et UEFI que la DoD demande
+    existent. Le **relevé** de ces schémas chez l'hébergeur n'en fait pas partie : il
+    demande une machine de ces offres, et il se fera à la première commande (README
+    des offres : une offre nouvelle a sa règle de repli `--sans-zfs`).
 
 ### [x] SPK-159 · L'amorce se suffit à elle-même au premier démarrage
 
