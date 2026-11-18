@@ -120,7 +120,7 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169 à SPK-172, SPK-175, SPK-176)
+### OP-43 · Ce que `spark-010` a appris : `sparkd` et la console (SPK-169 à SPK-172, SPK-175 à SPK-177)
 
 ```
 État          : EN ATTENTE sur la Forge de test (51.158.54.202) — à jouer sur
@@ -141,7 +141,9 @@ Objectif      : - préflight à 19 contrôles : STO-MIROIR (zpool status) et
                 - la mise à niveau ZFS proposée, décochée, dans l'installation
                   de la Forge (forge_install accepte storage.zfsUpgrade) — DAT
                   §70.6. Elle n'est PAS jouée par cette opération : c'est un
-                  choix irréversible, laissé au responsable.
+                  choix irréversible, laissé au responsable ;
+                - la conformité de l'installation lit caddy-api.service — DAT
+                  §70.8 (console seule).
                 Aucune migration de schéma. Aucune variable nouvelle : le défaut
                 d'une variable existante change, et une valeur posée l'emporte.
 Dépend de     : rien.

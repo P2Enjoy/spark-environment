@@ -235,6 +235,10 @@
   aucune migration, rien sur `sparkd` : la console est à relancer (OP-35).
 
 ### Corrigé
+- **SPK-177 — l'installation ne dit plus « Caddy actif : à faire » sur une Forge saine.**
+  Le diagnostic lisait `caddy.service`, masqué depuis SPK-129. Il relève désormais
+  `caddy-api.service` et `caddy.service`. Le contrôle n'est conforme que sur le premier,
+  et son détail nomme les deux. Constaté puis vérifié sur `spark-010`. DAT §70.8.
 - **SPK-175 — une Forge survit à la montée de version majeure d'Ubuntu.** Après la montée
   de 24.04 à 26.04, sparkd ne démarrait plus : son environnement Python restait lié à 3.12.
   L'amorce compare désormais la version de cet environnement à celle de `python3`. Si

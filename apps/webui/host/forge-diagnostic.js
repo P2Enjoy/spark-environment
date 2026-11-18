@@ -6,7 +6,8 @@
  *       implicite) · docs/DESIGN_SYSTEM_APP.md#SPK-DS-12 ·
  *       docs/BACKLOG.md#SPK-176, docs/DAT.md §70.6 (les pools qui ont des
  *       fonctionnalités ZFS à activer, lus par « zpool upgrade » qui ne fait
- *       que lister)
+ *       que lister) · docs/BACKLOG.md#SPK-177, docs/DAT.md §70.8 (Caddy est
+ *       porté par caddy-api.service, §51.5)
  *
  * Le navigateur ne fournit qu'un NOM de serveur déjà validé par l'inventaire.
  * Il ne fournit ni commande ni argument distant : ce fichier possède le seul
@@ -101,8 +102,13 @@ fi
 if command -v systemctl >/dev/null 2>&1; then
   dit sparkd_actif "$(systemctl is-active sparkd.service 2>/dev/null || true)"
   dit sparkd_active "$(systemctl is-enabled sparkd.service 2>/dev/null || true)"
+  # SPK-177 · §70.8 : depuis SPK-129, Caddy est porté par caddy-api.service et
+  # caddy.service est masqué (§51.5). Les DEUX sont relevés : le second seul dit
+  # une Forge d'avant cette décision.
+  dit caddy_api_actif "$(systemctl is-active caddy-api.service 2>/dev/null || true)"
   dit caddy_actif "$(systemctl is-active caddy.service 2>/dev/null || true)"
 else
+  dit caddy_api_actif ""
   dit sparkd_actif ""
   dit sparkd_active ""
   dit caddy_actif ""
@@ -303,7 +309,7 @@ export function parseDiagnostic(output) {
     runtimes: { incus: values.incus_version ?? null, caddy: values.caddy_version ?? null,
                 python: values.python_version ?? null, sparkd: values.sparkd_version ?? null },
     services: { sparkd: values.sparkd_actif ?? null, sparkdEnabled: values.sparkd_active ?? null,
-                caddy: values.caddy_actif ?? null },
+                caddy: values.caddy_actif ?? null, caddyApi: values.caddy_api_actif ?? null },
     // Deux codes HTTP mesurés, jamais déduits de la présence du paquet.
     api: { healthz: httpCode(values.healthz), readyz: httpCode(values.readyz) },
     pools: (values.pools ? values.pools.split(';') : []).filter((line) => POOL_LINE.test(line)),
@@ -391,8 +397,12 @@ export function conformity(report, { poolName, bridgeName } = {}) {
       ok: Boolean(incus) && (incus[0] > INCUS_MINIMUM[0] ||
         (incus[0] === INCUS_MINIMUM[0] && incus[1] >= INCUS_MINIMUM[1])),
       detail: report?.runtimes?.incus },
+    // SPK-177 · §70.8 : conforme sur caddy-api.service seul, et le détail nomme
+    // les deux unités — « inactive » seul se lisait comme une panne.
     { id: 'caddy', label: 'Caddy actif',
-      ok: report?.services?.caddy === 'active', detail: report?.services?.caddy },
+      ok: report?.services?.caddyApi === 'active',
+      detail: `caddy-api.service : ${report?.services?.caddyApi ?? 'non relevé'} · `
+        + `caddy.service : ${report?.services?.caddy ?? 'non relevé'}` },
     { id: 'pool', label: pool ? `Pool ZFS « ${pool} »` : 'Pool ZFS de la Forge',
       // Sans droit d'administration, la liste des pools n'est pas lisible : le
       // contrôle est en défaut, il n'est pas déclaré vert par défaut.

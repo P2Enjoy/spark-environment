@@ -19,7 +19,10 @@ const CONFORME = [
   'racine\t/dev/md1', 'espace_racine\t210108399616:193670443008', 'sudo\toui',
   'incus_version\tClient version: 7.4', 'caddy_version\t2.6.2',
   'python_version\tPython 3.14.4', 'sparkd_version\t0.post1.dev674+g5d1906e79',
-  'sparkd_actif\tactive', 'sparkd_active\tenabled', 'caddy_actif\tactive',
+  'sparkd_actif\tactive', 'sparkd_active\tenabled',
+  // SPK-177 · §70.8 : la Forge réelle depuis SPK-129 — Caddy porté par
+  // caddy-api.service, caddy.service masqué.
+  'caddy_api_actif\tactive', 'caddy_actif\tinactive',
   'pools\tspark,zfs,,1,CREATED;', 'zpool\tspark ONLINE',
   'reseau\tsparkbr0,bridge,YES,10.77.0.1/24,none,,1,CREATED',
   'configuration\tSPARKD_CPU_RESERVE=0.5',

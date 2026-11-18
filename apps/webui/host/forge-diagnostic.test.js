@@ -95,7 +95,10 @@ const FORGE_CONFORME = [
   'espace_racine\t210108399616:193670443008', 'sudo\toui',
   'incus_version\tClient version: 7.4', 'caddy_version\t2.6.2',
   'python_version\tPython 3.14.4', 'sparkd_version\t0.post1.dev674+g5d1906e79',
-  'sparkd_actif\tactive', 'sparkd_active\tenabled', 'caddy_actif\tactive',
+  'sparkd_actif\tactive', 'sparkd_active\tenabled',
+  // SPK-177 · §70.8 : la Forge réelle depuis SPK-129 — Caddy porté par
+  // caddy-api.service, caddy.service masqué.
+  'caddy_api_actif\tactive', 'caddy_actif\tinactive',
   'pools\tspark,zfs,,1,CREATED;',
   'reseau\teno1,physical,NO,,,,0,',
   'reseau\tsparkbr0,bridge,YES,10.77.0.1/24,none,,1,CREATED',
@@ -356,4 +359,30 @@ test('une ligne de relevé devient un pool, ses fonctionnalités, et les manuell
   assert.deepEqual(parseZfsUpgrade('spark:ok,<script>').features, ['ok']);
   const report = parseDiagnostic('os\tubuntu 26.04\nzfs_a_niveau\tspark:longname\nzfs_a_niveau\tbruit');
   assert.deepEqual(report.zfsUpgradable, [{ pool: 'spark', features: ['longname'], manual: [] }]);
+});
+
+// --- SPK-177 · §70.8 : l'unité de Caddy que le produit emploie --------------
+// @verifies docs/BACKLOG.md#SPK-177 · docs/DAT.md §70.8 · §51.5
+
+import { conformity as conformite177 } from './forge-diagnostic.js';
+
+/** Relevé RÉEL de `spark-010` le 2026-11-18 : caddy-api actif, caddy.service masqué. */
+const SPARK_010 = 'os\tubuntu 26.04\nsudo\toui\ncaddy_api_actif\tactive\ncaddy_actif\tinactive';
+
+test('Caddy porté par caddy-api.service est CONFORME, et le détail nomme les deux unités', () => {
+  const caddy = conformite177(parseDiagnostic(SPARK_010)).checks.find((c) => c.id === 'caddy');
+  assert.equal(caddy.ok, true);
+  assert.equal(caddy.detail, 'caddy-api.service : active · caddy.service : inactive');
+});
+
+test('une Forge d’avant SPK-129, où seul caddy.service tourne, reste à faire et le dit', () => {
+  const caddy = conformite177(parseDiagnostic('os\tubuntu 26.04\ncaddy_api_actif\tinactive\ncaddy_actif\tactive'))
+    .checks.find((c) => c.id === 'caddy');
+  assert.equal(caddy.ok, false);
+  assert.match(caddy.detail, /caddy-api\.service : inactive · caddy\.service : active/);
+});
+
+test('le script fermé relève les DEUX unités', () => {
+  assert.match(SCRIPT_176, /dit caddy_api_actif "\$\(systemctl is-active caddy-api\.service/);
+  assert.match(SCRIPT_176, /dit caddy_actif "\$\(systemctl is-active caddy\.service/);
 });

@@ -10142,7 +10142,7 @@ upgrade` est irréversible, et n'a pas été lancé.
   - **Erreur passagère** : un 502 passager au premier passage (premier appel d'une
     console tout juste démarrée), absent au second, avec la relève des réponses 5xx.
 
-### [ ] SPK-177 · Le diagnostic de l'installation lit l'unité de Caddy que le produit emploie
+### [x] SPK-177 · Le diagnostic de l'installation lit l'unité de Caddy que le produit emploie
 
 **Constaté le 2026-11-18** sur `spark-010`, pendant la preuve de SPK-176. La conformité
 de l'installation affiche « Caddy actif : inactive — à faire » sur une Forge saine, et
@@ -10157,6 +10157,15 @@ est porté par `caddy-api.service` et `caddy.service` est **masqué** depuis SPK
 - Dépend de : SPK-129.
 - DoD : relevé réel de `spark-010` en jeu d'essai, rouge avant correction ; écran
   d'installation « conforme » sur une Forge saine.
+- **Fait le 2026-11-18.**
+  - **Tests** : trois tests sur le relevé réel de `spark-010`, rouges avant correction.
+    Les jeux d'essai « Forge conforme » de `forge-diagnostic` et `forge-install`
+    décrivaient une Forge d'avant SPK-129 ; ils sont alignés sur la Forge réelle
+    (`caddy-api.service` actif, `caddy.service` inactif).
+  - **Suites** : host et installation, 614 tests verts.
+  - **Sur `spark-010`**, depuis l'accueil, avec *Diagnostiquer la Forge* : « Caddy
+    actif » conforme, détail `caddy-api.service : active · caddy.service : inactive`
+    (`e2e/forge-reelle/spk171-176-systeme.mjs`).
 ---
 
 ## Lot 9 — La sauvegarde externe des instantanés

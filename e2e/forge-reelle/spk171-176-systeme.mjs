@@ -5,7 +5,9 @@
  * @verifies docs/BACKLOG.md#SPK-171 · docs/DAT.md §70.5 (le relevé réel, sans
  *           le badge de démonstration) · docs/BACKLOG.md#SPK-176 · docs/DAT.md
  *           §70.6 (la case décochée, le plan composé avec et sans elle) ·
- *           docs/DESIGN_SYSTEM_APP.md SPK-DS-46, SPK-DS-47 · CLAUDE.md §16
+ *           docs/DESIGN_SYSTEM_APP.md SPK-DS-46, SPK-DS-47 · CLAUDE.md §16 ·
+ *           docs/BACKLOG.md#SPK-177 · docs/DAT.md §70.8 (« Caddy actif » conforme
+ *           sur caddy-api.service)
  *
  * **Le plan n'est JAMAIS exécuté** : la mise à niveau ZFS est irréversible, et
  * la jouer est une décision du responsable (OP-43). Le script s'arrête au plan
@@ -68,6 +70,10 @@ try {
   await page.click('[data-action="diagnostiquer-forge"]');
   const caseZfs = page.locator('#installation-zfs-upgrade');
   await caseZfs.waitFor({ timeout: 60000 });
+  const caddy = await page.locator('.installation__controle', { hasText: 'Caddy actif' }).innerText();
+  verdict('SPK-177 : « Caddy actif » conforme sur caddy-api.service, les deux unités nommées',
+          /conforme/.test(caddy) && /caddy-api\.service : active/.test(caddy) && /caddy\.service :/.test(caddy),
+          caddy.replace(/\s+/g, ' '));
   verdict('SPK-176 : la case est proposée, et DÉCOCHÉE', !(await caseZfs.isChecked()), 'décochée');
   const aide = await page.locator('#installation-zfs-upgrade-aide').innerText();
   verdict('SPK-176 : l’aide dit l’irréversibilité et la liste, sans les (*)',
