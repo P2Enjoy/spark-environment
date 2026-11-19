@@ -80,6 +80,35 @@ fenêtre : « L'essai a réussi » ou « L'essai a échoué », avec le code de 
 statut obtenu. **Un essai n'enregistre rien et n'envoie aucune alerte** — la
 fenêtre le redit. C'est l'occasion de vérifier une commande avant de la planifier.
 
+## Ajouter les sondes standards
+
+Le **disque**, la **mémoire**, l'**usage du CPU** et la **santé des conteneurs Docker** se surveillent presque partout de la même façon.
+Le bouton **Ajouter les sondes standards (N)**, à côté d'*Ajouter une sonde*, les pose d'un geste — **celles qui manquent**, reconnues
+**par leur nom** : `disque`, `memoire`, `cpu`, `docker`.
+
+![Les sondes standards : ce qu'elles vont poser, commande exacte comprise](images/m14-sondes-standard.jpg)
+
+- **Le compte dit ce qui sera ajouté.** « (3) » signifie que trois sondes manquent. Quand il n'en manque plus, le bouton disparaît et la
+  section l'écrit.
+- **Lisez avant de cliquer.** Sous le bouton, *Ce que les sondes standards vont poser* montre chaque sonde avec sa **commande exacte**, sa
+  cadence et son seuil. Chaque commande s'exécutera dans la cellule à chaque relevé, sous le compte de la pile : c'est vous qui l'autorisez.
+  Aucune n'écrit quoi que ce soit.
+- **Une sonde existante n'est jamais modifiée.** Si vous avez déjà une sonde nommée `disque`, avec vos propres réglages, elle reste telle
+  quelle : le bouton ne pose que les autres, et la phrase de confirmation dit lesquelles étaient déjà là.
+- **`docker` n'est offerte que si Docker est activé** sur le Spark. Sinon elle est écrite comme indisponible, avec sa raison.
+- Un Spark **protégé** refuse : levez la protection d'abord.
+
+| Sonde | Cadence | Alerte après | Échoue quand |
+|---|---|---|---|
+| `disque` | toutes les 15 minutes | 2 échecs | le disque de la cellule est occupé à 90 % ou plus |
+| `memoire` | toutes les 5 minutes | 3 échecs | la mémoire disponible est sous 10 % du total |
+| `cpu` | toutes les 5 minutes | 3 échecs | la cellule utilise 90 % ou plus du CPU dont elle dispose, sur 5 secondes |
+| `docker` | toutes les 5 minutes | 3 échecs | Docker ne répond pas, un conteneur redémarre en boucle, ou un conteneur est `unhealthy` |
+
+Ce sont des valeurs de départ : chaque sonde posée se **modifie** ensuite comme n'importe quelle autre. Une cellule **sans plafond de
+CPU** est comparée à tous les cœurs qu'elle voit : la sonde `cpu` ne se déclenche alors presque jamais — elle dit « ce Spark mange toute
+la machine », pas « il travaille ». Une sonde de CPU qui ne peut pas mesurer (cgroup illisible) **échoue** plutôt que de passer en silence.
+
 ## Suspendre, reprendre, retirer
 
 - *Suspendre* arrête les relevés sans perdre la sonde ni son historique ; *Reprendre*

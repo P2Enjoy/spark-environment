@@ -2775,6 +2775,94 @@
         ]
       }
     },
+    "/v1/sparks/{name}/health/standard": {
+      "get": {
+        "description": "Ce que « Ajouter les sondes standards » poserait sur ce Spark — sans rien écrire (SPK-190).\n\n@spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3, §77.4",
+        "operationId": "get_health_standard_v1_sparks__name__health_standard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Health Standard V1 Sparks  Name  Health Standard Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Health Standard",
+        "tags": [
+          "sante"
+        ]
+      },
+      "post": {
+        "description": "Pose les sondes standards qui MANQUENT, par leur nom, sans toucher à une existante (SPK-190).\n\n@spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3, §77.4\n\nUne ÉCRITURE : un Spark protégé la refuse (423), côté serveur — l'écran ne fait que le dire.",
+        "operationId": "post_health_standard_v1_sparks__name__health_standard_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Health Standard V1 Sparks  Name  Health Standard Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Health Standard",
+        "tags": [
+          "sante"
+        ]
+      }
+    },
     "/v1/sparks/{name}/health/test": {
       "post": {
         "description": "Exécute une définition UNE fois, sans rien écrire (§75.8).\n\nExécuter un script est un GESTE, pas une lecture : sur un Spark protégé, il est\nrefusé comme toute écriture. Les relevés planifiés, eux, continuent (§75.8).",

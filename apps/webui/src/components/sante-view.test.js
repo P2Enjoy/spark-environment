@@ -262,3 +262,85 @@ test('la modale fermée ne rend rien, et la saisie est échappée', () => {
 test('un nom de sonde hostile est échappé dans la liste', () => {
   assert.equal(facette([{ ...SONDE, name: '"><img onerror=x>' }]).includes('<img'), false);
 });
+
+// --- SPK-190 · DESIGN_SYSTEM_APP.md SPK-DS-56 : les sondes standards ---------------------------------------------------------
+// @verifies docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.5 · docs/DESIGN_SYSTEM.md §1.4, §6.22, §6.24, §14.3, §14.4
+
+const STD = (name, extra = {}) => ({
+  name, kind: 'script', expected: 0, schedule: '*/5 * * * *', threshold: 3,
+  target: `commande-exacte-de-${name} && echo "a&b" <x>`, description: `Phrase de ${name}.`, ...extra,
+});
+const A_AJOUTER = [STD('disque', { schedule: '*/15 * * * *', threshold: 2 }), STD('memoire'), STD('cpu'), STD('docker')];
+const standard = (extra = {}) => ({ to_add: A_AJOUTER, present: [], unavailable: [], ...extra });
+const avecStandard = (std, u = ui(), checks = []) =>
+  renderSanteFacette({ checks, limit: 20 }, u, { routes: ROUTES, canal: true, standard: std });
+
+test('le bouton NOMME son effet par un compte, et vit à côté de « Ajouter une sonde »', () => {
+  const rendu = avecStandard(standard());
+  assert.match(rendu, /data-ouvre="sante">Ajouter une sonde<\/button>\s*<button type="button" class="bouton" data-sante-standard>Ajouter les sondes standards \(4\)<\/button>/);
+});
+
+test('le bouton n\'existe pas quand il n\'y a rien à ajouter (§14.4) : la section le dit', () => {
+  const rendu = avecStandard(standard({ to_add: [], present: ['disque', 'memoire', 'cpu', 'docker'] }), ui(), [SONDE]);
+  assert.doesNotMatch(rendu, /data-sante-standard>/);
+  assert.match(rendu, /Les sondes standards sont toutes posées\./);
+});
+
+test('un compte réduit se lit dans le bouton : seules les manquantes comptent', () => {
+  const rendu = avecStandard(standard({ to_add: [STD('cpu'), STD('docker')], present: ['disque', 'memoire'] }));
+  assert.match(rendu, /Ajouter les sondes standards \(2\)/);
+});
+
+test('les commandes EXACTES se montrent avant le clic, sous un repli natif, échappées', () => {
+  const rendu = avecStandard(standard());
+  assert.match(rendu, /<details class="repli"[^>]*>\s*<summary>Ce que les sondes standards vont poser<\/summary>/);
+  for (const nom of ['disque', 'memoire', 'cpu', 'docker']) {
+    assert.ok(rendu.includes(`commande-exacte-de-${nom} &amp;&amp; echo &quot;a&amp;b&quot; &lt;x&gt;`), nom);
+    assert.ok(rendu.includes(`Phrase de ${nom}.`), nom);
+  }
+  assert.doesNotMatch(rendu, /<x>|&&(?!amp;)/);
+  assert.match(rendu, /Toutes les 15 minutes/);                      // la cadence en clair, pas la chaîne seule
+  assert.match(rendu, /alerte après 2 échecs consécutifs/);
+});
+
+test('une sonde indisponible est DITE avec sa raison, jamais omise en silence', () => {
+  const rendu = avecStandard(standard({
+    to_add: [STD('disque'), STD('memoire'), STD('cpu')],
+    unavailable: [{ name: 'docker', reason: 'Docker n’est pas activé sur ce Spark.' }] }));
+  assert.match(rendu, /<span class="technique">docker<\/span> : Docker n’est pas activé sur ce Spark\./);
+  assert.match(rendu, /Ajouter les sondes standards \(3\)/);
+});
+
+test('tout installé mais docker indisponible : la phrase dit « disponibles »', () => {
+  const rendu = avecStandard(standard({ to_add: [], present: ['disque', 'memoire', 'cpu'],
+    unavailable: [{ name: 'docker', reason: 'Docker n’est pas activé sur ce Spark.' }] }), ui(), [SONDE]);
+  assert.match(rendu, /Toutes les sondes standards disponibles sont posées\./);
+  assert.doesNotMatch(rendu, /data-sante-standard>/);
+});
+
+test('une lecture impossible du catalogue ne propose PAS de bouton (une commande dont on ne sait rien)', () => {
+  const rendu = avecStandard(null);
+  assert.doesNotMatch(rendu, /data-sante-standard|sondes standards/);
+  assert.match(rendu, /data-ouvre="sante">Ajouter une sonde/);       // le reste de la facette est intact
+});
+
+test('pendant l\'envoi le bouton est désactivé', () => {
+  assert.match(avecStandard(standard(), ui({ busyStandard: true })), /data-sante-standard disabled>/);
+});
+
+test('après le geste, la phrase est un statut qui reçoit le focus, relue du serveur', () => {
+  const rendu = avecStandard(standard({ to_add: [], present: ['disque', 'memoire', 'cpu', 'docker'] }),
+    ui({ resultatStandard: { added: ['disque', 'memoire', 'cpu', 'docker'], present: [] } }), [SONDE]);
+  assert.match(rendu, /<p class="succes" role="status" tabindex="-1" data-sante-standard-resultat><strong>4 sondes standards ajoutées<\/strong> : disque, memoire, cpu, docker\.<\/p>/);
+});
+
+test('le singulier et les sondes déjà posées, laissées telles quelles, se disent', () => {
+  const rendu = avecStandard(standard({ to_add: [] }),
+    ui({ resultatStandard: { added: ['cpu'], present: ['disque', 'memoire'] } }), [SONDE]);
+  assert.match(rendu, /<strong>1 sonde standard ajoutée<\/strong> : cpu\. Déjà posées, laissées telles quelles : disque, memoire\./);
+});
+
+test('un refus du serveur (Spark protégé) s\'affiche mot pour mot, en alerte', () => {
+  const rendu = avecStandard(standard(), ui({ refusGeste: 'Ce Spark est protégé : levez la protection.' }));
+  assert.match(rendu, /role="alert"[\s\S]*Ce Spark est protégé : levez la protection\./);
+});

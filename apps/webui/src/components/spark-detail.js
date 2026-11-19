@@ -1022,7 +1022,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     sla = null, slaUi = SLA_VIDE, fuseau = null,
                                     // SPK-186 · §75.10 : les sondes (`null` si leur lecture a échoué),
                                     // leur modale, et si un canal d'alerte est configuré (`null` : illisible).
-                                    health = null, santeUi = SANTE_VIDE, canalAlerte = null,
+                                    health = null, santeUi = SANTE_VIDE, canalAlerte = null, santeStandard = null,
                                     catalogue = [], pools = null, cores = null,
                                     // SPK-109 · §57.3 : l'isolation, lue dans Incus.
                                     isolation = undefined,
@@ -1084,7 +1084,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     // SPK-186 · SPK-DS-51 : la proposition de sondes vient EN TÊTE — c'est une décision en
     // attente (§6.13) —, puis la liste, qui se règle par une modale.
     sante: () => renderPropositions(propositions, ['health'])
-                 + renderSanteFacette(health, santeUi, { routes, canal: canalAlerte }),
+                 + renderSanteFacette(health, santeUi, { routes, canal: canalAlerte, standard: santeStandard }),
     environnement: () => renderPropositions(propositions, ['variables', 'secrets'])
                          + renderEnvPanel(spark, env, envUi, renderModale, catalogue,
                                           envImport),

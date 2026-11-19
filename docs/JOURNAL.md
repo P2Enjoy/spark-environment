@@ -16164,7 +16164,7 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   sont cités par le manuel mais ne figurent pas dans la liste des illustrations que le test connaît). Ce n'est pas lié à SPK-189 ;
   signalé, non corrigé — l'unité n'est pas la mienne.
 
-**SPK-189 : les sondes standards — contrat écrit le 2026-11-19, avant le code.**
+**SPK-190 : les sondes standards — contrat écrit le 2026-11-19, avant le code.**
 
 - **Demande du responsable**, après le dépôt de 32 propositions sur les deux Forges : disque, RAM, CPU et conteneurs `unhealthy` sont
   « pratiquement standards » ; un bouton les ajoute dans la page des sondes, **celles qui manquent, par leur nom**.
@@ -16176,3 +16176,18 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   Docker est activé — ailleurs elle serait une fausse alerte permanente.
 - **Risque assumé et à lever avant de conclure** : la cellule factice ne comprend que `true`, `false` et `exit N` ; elle ne prouve donc
   pas ces commandes. La DoD exige de les jouer dans de **vraies cellules**, par « Tester ».
+
+**SPK-190 : les sondes standards — livré et prouvé le 2026-11-19 ; renumérotation.**
+
+- **Collision de numéros** : pendant que j'écrivais mon contrat sous « SPK-189 », une autre session avait commité son propre SPK-189 (l'aperçu du
+  SLA, DAT §74.14, SPK-DS-55, OP-51) **avant** le mien. Le plus tardif cède : mon unité devient **SPK-190**, mes sections **DAT §77** (libre),
+  **SPK-DS-56** et **OP-52**. Les blocs et les lignes que j'avais écrits seuls ont été renumérotés ; **rien de l'autre session n'a été modifié**
+  — sauf, par ma faute d'un glob trop large, quatre captures `spk189-sla-charge-*` renommées puis rétablies avant tout commit.
+- **Les commandes jouées dans de vraies cellules avant de coder** (« Tester », lecture seule) : disque, mémoire, CPU, Docker sur `crm`, `magiline-mcp`,
+  `sso-p2enjoy`. Trois témoins négatifs échouent comme ils doivent.
+- **Défaut trouvé par cette preuve** : `docker` échoue (code 1) sur `magiline-mcp`. Cause : Docker y est en **rootless**, mais le registre ne l'a jamais
+  *relevé* (aucune observation d'amorçage) ; « jamais amorcé vaut enraciné » envoyait `docker ps` sous `root`. C'est le défaut de SPK-184 sous une autre
+  forme : la correction de l'époque lisait la bonne table, mais la table était vide. **Décision** : sans observation et avec Docker activé, demander à la
+  cellule (`id -u spark-docker`) ; une observation qui dit le mode fait foi. Le test qui énonçait « jamais amorcé vaut enraciné » a été réécrit : sa
+  règle est celle que cette correction remplace.
+- **Ce qui reste à mesurer** : le bouton sur une Forge réelle (OP-52), et `docker` sur `magiline-mcp` APRÈS redéploiement de `sparkd`.

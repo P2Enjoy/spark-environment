@@ -2066,6 +2066,37 @@ def create_app(config: Config) -> FastAPI:
                 raise _erreurs_sante(erreur) from erreur
             return health_service.lister(connection, spark)
 
+    @app.get("/v1/sparks/{name}/health/standard", tags=["sante"])
+    def get_health_standard(name: str) -> dict:
+        """Ce que « Ajouter les sondes standards » poserait sur ce Spark — sans rien écrire (SPK-190).
+
+        @spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3, §77.4
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise _erreurs_sante(erreur) from erreur
+            return health_service.standard(connection, spark)
+
+    @app.post("/v1/sparks/{name}/health/standard", tags=["sante"])
+    def post_health_standard(name: str) -> dict:
+        """Pose les sondes standards qui MANQUENT, par leur nom, sans toucher à une existante (SPK-190).
+
+        @spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3, §77.4
+
+        Une ÉCRITURE : un Spark protégé la refuse (423), côté serveur — l'écran ne fait que le dire.
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "sante")
+                resultat = health_service.poser_standard(connection, spark)
+                _reposer_sante(connection, spark)
+                return resultat
+            except (service.NotFound, health_service.SanteError) as erreur:
+                raise _erreurs_sante(erreur) from erreur
+
     @app.post("/v1/sparks/{name}/health/validate", tags=["sante"])
     def validate_health(name: str, body: dict = Body(...)) -> dict:
         """Valide une définition SANS l'exécuter ni l'écrire (SPK-185, §75.9).

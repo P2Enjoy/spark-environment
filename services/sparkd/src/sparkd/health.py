@@ -60,6 +60,34 @@ ACTEUR = "sante"
 COMPTE_ROOTLESS = "spark-docker"
 
 TYPES = ("http", "script")
+
+#: Les sondes STANDARD (DAT §77.2) : quatre sondes ordinaires du §75, que le propriétaire pose d'un geste. Une
+#: seule source — ni la console ni le briefing n'en recopient une valeur. Chaque entrée passe `valider` comme
+#: une sonde saisie à la main. Les commandes sont fixes, en LECTURE seule, et montrées en entier avant l'ajout :
+#: le propriétaire autorise leur exécution répétée (§75.5). Éprouvées dans de vraies cellules le 2026-11-19.
+_CPU = (
+    "[ -r /sys/fs/cgroup/cpu.stat ] || exit 3; "
+    "u() { awk '/^usage_usec/{print $2}' /sys/fs/cgroup/cpu.stat; }; a=$(u); sleep 5; b=$(u); "
+    "q=$(awk '{print ($1==\"max\") ? \"max\" : $1/$2}' /sys/fs/cgroup/cpu.max 2>/dev/null); n=$(nproc); "
+    "awk -v a=\"$a\" -v b=\"$b\" -v q=\"$q\" -v n=\"$n\" "
+    "'BEGIN{c=(q==\"max\"||q==\"\")?n:q; exit !((b-a)/5000000 < c*0.9)}'")
+STANDARD: tuple[dict, ...] = (
+    {"name": "disque", "kind": "script", "expected": 0, "schedule": "*/15 * * * *", "threshold": 2,
+     "target": 'test "$(df --output=pcent / | tail -1 | tr -dc 0-9)" -lt 90',
+     "description": "Occupation du disque de la cellule : en échec à 90 % ou plus.", "requires": None},
+    {"name": "memoire", "kind": "script", "expected": 0, "schedule": "*/5 * * * *", "threshold": 3,
+     "target": "awk '/^MemTotal/{t=$2} /^MemAvailable/{a=$2} END{exit !(t>0 && a*100>=t*10)}' /proc/meminfo",
+     "description": "Mémoire disponible de la cellule : en échec sous 10 % du total.", "requires": None},
+    {"name": "cpu", "kind": "script", "expected": 0, "schedule": "*/5 * * * *", "threshold": 3,
+     "target": _CPU,
+     "description": "Usage du CPU : en échec à 90 % ou plus du CPU utilisable, mesuré sur 5 secondes.",
+     "requires": None},
+    {"name": "docker", "kind": "script", "expected": 0, "schedule": "*/5 * * * *", "threshold": 3,
+     "target": 'docker ps -q >/dev/null && test -z "$(docker ps -q --filter status=restarting)" '
+               '&& test -z "$(docker ps -q --filter health=unhealthy)"',
+     "description": "Conteneurs Docker : en échec si Docker ne répond pas, si un conteneur redémarre en "
+                    "boucle ou est « unhealthy ».", "requires": "docker"},
+)
 ETATS = ("unknown", "healthy", "unstable", "down", "stopped")
 
 NOM = re.compile(r"^[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?$")
@@ -293,26 +321,41 @@ def _executer(connection, incus, sondes, spark: dict, sonde: dict) -> dict:
             return {"ok": False, "latency_ms": None,
                     "detail": f"« {domaine} » n'est plus une route de ce Spark"}
         return releve_http(sondes, domaine, chemin, sonde["expected"])
-    return releve_script(incus, {**spark, "docker_mode": _mode_docker(connection, spark)},
+    return releve_script(incus, {**spark, "docker_mode": _mode_docker(connection, spark, incus)},
                          sonde["target"], sonde["expected"])
 
 
-def _mode_docker(connection: sqlite3.Connection, spark: dict) -> str | None:
-    """Le mode Docker du Spark, lu dans l'observation d'amorçage — là où il vit.
+def _mode_docker(connection: sqlite3.Connection, spark: dict, incus=None) -> str | None:
+    """Le mode Docker du Spark : l'observation d'amorçage, sinon ce que la cellule dit d'elle-même.
 
-    @spec docs/BACKLOG.md#SPK-184 · docs/DAT.md §75.5 (le compte n'est pas un choix de la ligne : `root`
-          sur un Spark enraciné, le compte rootless sur un Spark rootless)
+    @spec docs/BACKLOG.md#SPK-184, docs/BACKLOG.md#SPK-190 · docs/DAT.md §75.5 (le compte n'est pas un
+          choix de la ligne : `root` sur un Spark enraciné, le compte rootless sur un Spark rootless), §77.2
 
     `docker_mode` n'est PAS une colonne de la ligne `spark` : c'est `spark_bootstrap_observation`. Le lire
     sur la ligne rendait toujours `None`, donc un Spark rootless jouait ses scripts sous `root`, sans
     accès à son socket Docker — `docker ps` y sortait en code 1. Mesuré le 2026-11-18 sur la Forge
     réelle spark-010 ; les doublons passaient un dictionnaire où la clé avait été écrite à la main.
-    `None` (jamais amorcé) vaut « enraciné » : le script part sous `root`, comme avant.
+
+    **Mesuré à nouveau le 2026-11-19, sur `magiline-mcp`** : un Spark dont le Docker rootless n'a jamais
+    été RELEVÉ par le produit (aucune observation) tombait dans « jamais amorcé vaut enraciné » et jouait
+    `docker ps` sous `root` : code 1, une panne permanente qui n'en était pas une. Sans observation, sur un
+    Spark où Docker est activé, on **demande à la cellule** : si le compte rootless existe, elle est
+    rootless. Une observation qui dit le mode fait foi — on ne la contredit pas. Sans Docker activé, aucune
+    question n'est posée.
     """
     ligne = connection.execute(
         "SELECT docker_mode FROM spark_bootstrap_observation WHERE spark_id = ?",
         (spark["id"],)).fetchone()
-    return ligne["docker_mode"] if ligne else None
+    if ligne and ligne["docker_mode"]:
+        return ligne["docker_mode"]
+    if incus is not None and spark.get("docker_enabled") and spark.get("incus_name"):
+        try:
+            code, _sortie, _erreurs = incus.exec_capture(spark["incus_name"], ["id", "-u", COMPTE_ROOTLESS])
+        except Exception:  # noqa: BLE001 — la cellule ne répond pas : le script le dira lui-même
+            return None
+        if code == 0:
+            return "rootless"
+    return None
 
 
 # --- le registre ------------------------------------------------------------------------------
@@ -455,6 +498,46 @@ def poser(connection: sqlite3.Connection, spark: dict, definition: dict,
                f"{sonde['kind']} {sonde['target']}.",
                {"spark": spark["name"], **sonde})
     return _vue_sonde(connection, _sonde(connection, spark["id"], sonde["name"]))
+
+
+def standard(connection: sqlite3.Connection, spark: dict) -> dict:
+    """Ce que le bouton « sondes standards » poserait sur ce Spark — sans rien écrire (DAT §77.3, §77.4).
+
+    @spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3
+
+    Une sonde standard est PRÉSENTE dès qu'une sonde du même nom existe, quelle que soit sa définition : on ne
+    modifie jamais le réglage d'un propriétaire. Ce qui ne peut pas être posé est rendu INDISPONIBLE, avec sa
+    raison, jamais omis : Docker non activé, borne de 20 sondes atteinte.
+    """
+    noms = {r["name"] for r in connection.execute(
+        "SELECT name FROM health_check WHERE spark_id = ?", (spark["id"],))}
+    a_ajouter, presentes, indisponibles = [], [], []
+    total = len(noms)
+    for entree in STANDARD:
+        if entree["name"] in noms:
+            presentes.append(entree["name"])
+        elif entree["requires"] == "docker" and not spark.get("docker_enabled"):
+            indisponibles.append({"name": entree["name"], "reason": "Docker n'est pas activé sur ce Spark."})
+        elif total >= MAX_SONDES:
+            indisponibles.append({"name": entree["name"],
+                                  "reason": f"Un Spark porte au plus {MAX_SONDES} sondes."})
+        else:
+            a_ajouter.append({k: v for k, v in entree.items() if k != "requires"})
+            total += 1
+    return {"to_add": a_ajouter, "present": presentes, "unavailable": indisponibles}
+
+
+def poser_standard(connection: sqlite3.Connection, spark: dict, now: datetime | None = None) -> dict:
+    """Pose les sondes standards qui manquent, chacune par le chemin normal de `poser` (journal, premier relevé échu).
+
+    @spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.4
+    """
+    plan = standard(connection, spark)
+    for entree in plan["to_add"]:
+        poser(connection, spark, {k: entree[k] for k in ("name", "kind", "target", "expected", "schedule",
+                                                        "threshold")}, now)
+    return {"added": plan["to_add"], "present": plan["present"], "unavailable": plan["unavailable"],
+            **lister(connection, spark)}
 
 
 def basculer(connection: sqlite3.Connection, spark: dict, nom: str, *, enabled: bool,

@@ -279,3 +279,22 @@ def test_le_briefing_json_de_la_cellule_porte_les_deux_cles_sans_aucun_etat(clie
     modele = json.loads(brut)
     assert modele["health"]["checks"][0]["name"] == "base" and "state" not in modele["health"]["checks"][0]
     assert modele["snapshots"]["sla"] is None
+
+
+# --- SPK-190 · §77.6 : les sondes standard sont dites à l'agent, et lui épargnent de les proposer ----------------
+
+
+def test_le_modele_nomme_les_sondes_standard_du_CATALOGUE_pas_une_copie():
+    assert _modele()["health"]["standard"] == [s["name"] for s in health.STANDARD] == [
+        "disque", "memoire", "cpu", "docker"]
+
+
+@pytest.mark.parametrize("presentation", ["briefing", "dossier"])
+def test_les_deux_presentations_disent_que_les_sondes_standard_ne_se_proposent_pas(presentation):
+    """@verifies docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.6 · CLAUDE.md §17 (le texte rendu nomme la fonction)."""
+    texte = _textes(_modele())[presentation]
+    for nom in ("disque", "memoire", "cpu", "docker"):
+        assert f"`{nom}`" in texte, nom
+    assert "inutile de les proposer" in texte and "jamais remplacée" in texte
+    # une définition, jamais un état : aucune sonde standard n'est dite POSÉE par ce texte
+    assert "sont posées par le **propriétaire**" in texte

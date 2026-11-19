@@ -386,7 +386,7 @@ function peindre() {
                             confirming: etat.confirming, frappe: etat.frappe,
                             admin: etat.admin, quotas: etat.quotas,
                             slaUi: etat.sla, fuseau: fuseauDuNavigateur(),
-                            santeUi: etat.sante,
+                            santeUi: etat.sante, santeStandard: etat.detail?.santeStandard ?? null,
                             envUi: etat.envUi, envImport: etat.envImport,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
@@ -747,6 +747,7 @@ function brancher() {
       etat.sante.open = false;
       etat.sante.refusal = null;
       etat.sante.test = null;
+      etat.sante.resultatStandard = null;
       // SPK-58 : la facette Environnement suit le MÊME contrat, et l'oublier
       // ici RÉOUVRAIT la modale — MESURÉ par le parcours E2E du refus :
       // `close()` s'exécutait, puis la repeinte trouvait `open` encore vrai et
@@ -3603,6 +3604,7 @@ async function enregistrerSante() {
 async function gesteSante(operation) {
   const s = etat.sante;
   s.refusGeste = null;
+  s.resultatStandard = null;
   const r = await operation().catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
   s.confirmingRetrait = null;
   if (!r.ok) {
@@ -3613,12 +3615,37 @@ async function gesteSante(operation) {
   await chargerDetail(etat.spark.name, etat.facette);
 }
 
+/**
+ * « Ajouter les sondes standards » : pose celles qui manquent, par leur nom (SPK-190).
+ *
+ * @spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3-§77.5 · docs/DESIGN_SYSTEM_APP.md SPK-DS-56 ·
+ *       docs/DESIGN_SYSTEM.md §1.3 (la phrase est RELUE du serveur), §14.3 (le bouton disparaît : le focus passe
+ *       à la phrase)
+ */
+async function ajouterSondesStandard() {
+  const s = etat.sante;
+  s.refusGeste = null;
+  s.resultatStandard = null;
+  s.busyStandard = true;
+  peindre();
+  const r = await appel('POST', urlSante('/standard')).catch((e) => ({ ok: false, corps: { detail: { message: e.message } } }));
+  s.busyStandard = false;
+  if (!r.ok) {
+    s.refusGeste = r.corps?.detail?.message ?? 'Le serveur a refusé ce geste.';
+    peindre();
+    return;
+  }
+  s.resultatStandard = { added: (r.corps.added ?? []).map((x) => x.name), present: r.corps.present ?? [] };
+  await chargerDetail(etat.spark.name, etat.facette);
+  racine.querySelector('[data-sante-standard-resultat]')?.focus();
+}
+
 function ouvrirSante(sonde) {
   const s = etat.sante;
   s.open = sonde ? sonde.name : 'neuve';
   s.values = valeursDeSonde(sonde, etat.detail?.routes ?? []);
   s.apercu = null; s.erreur = null; s.refusal = null; s.test = null; s.essai = false;
-  s.confirmingRetrait = null; s.refusGeste = null;
+  s.confirmingRetrait = null; s.refusGeste = null; s.resultatStandard = null;
   peindre();
   majApercuSante();
 }
@@ -3626,6 +3653,7 @@ function ouvrirSante(sonde) {
 function brancherSante() {
   const s = etat.sante;
   racine.querySelector('[data-ouvre="sante"]')?.addEventListener('click', () => ouvrirSante(null));
+  racine.querySelector('[data-sante-standard]')?.addEventListener('click', ajouterSondesStandard);
   for (const bouton of racine.querySelectorAll('[data-sante-modifie]')) {
     bouton.addEventListener('click', () => {
       const sonde = (etat.detail?.health?.checks ?? []).find((c) => c.name === bouton.dataset.santeModifie);
@@ -4317,13 +4345,17 @@ async function chargerDetail(nom, facette = '') {
   // d'`ubuntu-24` — parfaitement amorçable — n'offrait plus le geste, parce
   // qu'elle héritait du `supported: false` de l'autre. Aucune preuve de rendu ne
   // pouvait l'attraper : elles peignent une fiche à la fois.
-  if (etat.spark?.name !== nom) etat.amorcage = { ...AMORCAGE_VIDE };
+  if (etat.spark?.name !== nom) {
+    etat.amorcage = { ...AMORCAGE_VIDE };
+    // SPK-190 : la phrase du dernier ajout de sondes standards est celle de CE Spark-là.
+    etat.sante.resultatStandard = null;
+  }
   peindre();
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
            env, catalogue, forge, , isolation, reseauDuSpark, reseaux,
-           projets, sla, health, canalAlerte] = await Promise.all([
+           projets, sla, health, canalAlerte, santeStandard] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -4368,9 +4400,11 @@ async function chargerDetail(nom, facette = '') {
       // cas = « illisible », que l'écran DIT : ne pas avoir pu lire n'est pas « aucune sonde ».
       api(`/v1/sparks/${encodeURIComponent(nom)}/health`).catch(() => null),
       api('/v1/notify/channels').then((c) => Boolean(c?.live?.configured || c?.live_smtp?.configured)).catch(() => null),
+      // SPK-190 · §77.4 : ce que « Ajouter les sondes standards » poserait. `null` si illisible : pas de bouton.
+      api(`/v1/sparks/${encodeURIComponent(nom)}/health/standard`).catch(() => null),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
-                    snapshots, audit, isolation, reseaux, projets, sla, health, canalAlerte,
+                    snapshots, audit, isolation, reseaux, projets, sla, health, canalAlerte, santeStandard,
                     memberships: reseauDuSpark.memberships ?? [],
                     exposed: reseauDuSpark.exposed ?? [],
                     consumable: reseauDuSpark.consumable ?? [],

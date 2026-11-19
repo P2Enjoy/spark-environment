@@ -9569,7 +9569,7 @@ souris** (le taux de chaque prise lu à l'écran et en largeur rendue, Entrée o
 les barres qui se vident, aucune écriture, jour de semaine gardé, bornes refusées, Échap) ; captures desktop et mobile observées.
 **Défaut vu à la capture et corrigé** : la phrase d'une prise semblait collée à la date suivante.
 
-### [ ] SPK-189 · Les sondes standards : un bouton qui pose celles qui manquent
+### [x] SPK-190 · Les sondes standards : un bouton qui pose celles qui manquent
 
 **Demandé le 2026-11-19** par le responsable, après la proposition de sondes sur les deux Forges : la surveillance du **disque**, de la
 **mémoire**, de l'**usage du CPU** et des **conteneurs Docker en mauvaise santé** est « pratiquement standard » ; elle doit s'ajouter
@@ -9577,7 +9577,7 @@ les barres qui se vident, aucune écriture, jour de semaine gardé, bornes refus
 
 - Spécification : `docs/DAT.md` **§77** · §75 (la santé : états, sondes script, grammaire), §75.5 (la commande exacte se montre) ·
   `docs/DESIGN_SYSTEM.md` §1.3, §1.4, §6.13, §6.22 (une confirmation n'est pas toujours nécessaire), §6.24, §14.3, §14.4 ·
-  `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-55** · manuel M14.
+  `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-56** · manuel M14.
 - Dépend de : SPK-184, SPK-185, SPK-186.
 - Portée : un catalogue de **quatre sondes standards** (`disque`, `memoire`, `cpu`, `docker`) dans le code de `sparkd` ; `GET` et
   `POST /v1/sparks/{nom}/health/standard` (ce qui serait ajouté / ce qui l'est : seules les sondes **absentes par leur nom**, jamais une
@@ -9588,7 +9588,18 @@ les barres qui se vident, aucune écriture, jour de semaine gardé, bornes refus
 - DoD : preuve rouge avant ; tests unitaires du catalogue (chaque entrée passe la validation du §75, noms distincts, commandes sous
   2000 caractères) et de la sélection ; API contre le vrai registre — y compris le **refus par requête directe** d'un Spark protégé
   (423) ; l'idempotence ; E2E depuis l'accueil (souris et clavier) ; captures observées ; **les quatre commandes jouées dans de vraies
-  cellules** par « Tester » avant de tenir l'unité pour finie ; contrat OpenAPI, manuel, seed, changelog, OP-50.
+  cellules** par « Tester » avant de tenir l'unité pour finie ; contrat OpenAPI, manuel, seed, changelog, OP-52.
+- **État au 2026-11-19 : livré et vérifié, `[x]` ; le bouton lui-même n'est pas encore éprouvé sur une Forge réelle (OP-52 en attente).**
+  **Preuve sur CELLULES RÉELLES** (« Tester » du produit, lecture seule) : les quatre commandes réussissent sur `crm`, `magiline-mcp` (sauf `docker`,
+  voir plus bas) et `sso-p2enjoy` ; **trois témoins négatifs** (seuils poussés à l'extrême : disque, mémoire, CPU) **échouent** comme ils le doivent,
+  donc les commandes mesurent vraiment quelque chose. **Défaut trouvé par cette preuve et corrigé dans la même unité** : sur `magiline-mcp`, `docker`
+  échouait en code 1 parce que le registre n'avait jamais relevé son Docker rootless — le script partait sous `root` (DAT §75.5, « Mesuré à nouveau »).
+  Prouvé en local : 17 tests de service et d'API contre le **vrai registre** (catalogue, sélection, idempotence, une existante jamais modifiée, borne de
+  20, **Spark protégé refusé par requête directe (423) avec le vrai mot de passe**, GET sans écriture, quatre cas du compte rootless) ; 2 tests du
+  briefing ; 9 tests de rendu ; la suite `sparkd` et celle de la console vertes ; deux parcours E2E depuis l'accueil, **clavier et souris** (compte du
+  bouton, commandes lues avant le clic, phrase relue qui reçoit le focus, `disque` du propriétaire intacte, idempotence, `docker` indisponible sans
+  Docker, refus d'un Spark protégé à l'écran **et** par requête directe) ; captures observées (desktop, mobile, sans Docker, refus). **Défaut vu à la
+  capture et corrigé** : la ligne `docker` du repli cassait après son nom (les enfants d'un `li` flex). Décisions du rédacteur à confirmer : DAT §77.8.
 
 ---
 

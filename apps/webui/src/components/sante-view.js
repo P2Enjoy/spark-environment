@@ -50,6 +50,9 @@ export const SANTE_VIDE = {
   refusal: null,
   confirmingRetrait: null,   // le nom de la sonde dont le retrait attend confirmation
   refusGeste: null,
+  // SPK-190 · SPK-DS-56 : « Ajouter les sondes standards » — un envoi en cours, et ce que le serveur a RENDU.
+  busyStandard: false,
+  resultatStandard: null,    // { added: [noms], present: [noms] } — relu du serveur, jamais l'espéré
 };
 
 // --- les valeurs de la modale ---------------------------------------------------------------------
@@ -282,11 +285,55 @@ function renderSonde(s, ui) {
     </div></li>`;
 }
 
+// --- SPK-190 · les sondes standards (DAT §77, SPK-DS-56) -------------------------------------------------------------------
+
+const cadenceClaire = (chaine) => PRESETS_SANTE.find((p) => p.schedule === chaine)?.libelle ?? chaine;
+const nSondes = (n, un, plusieurs) => `${n} ${n > 1 ? plusieurs : un}`;
+const liste = (noms) => noms.map(echapper).join(', ');
+
+/** La phrase du geste, RELUE du serveur : ce qui a été ajouté, et ce qui était déjà là et n'a pas été touché. */
+function renderResultatStandard(r) {
+  if (!r?.added?.length) return '';
+  const deja = r.present?.length ? ` Déjà posées, laissées telles quelles : ${liste(r.present)}.` : '';
+  return `<p class="succes" role="status" tabindex="-1" data-sante-standard-resultat><strong>${
+    nSondes(r.added.length, 'sonde standard ajoutée', 'sondes standards ajoutées')}</strong> : ${
+    liste(r.added)}.${deja}</p>`;
+}
+
+/**
+ * Les sondes standards : le bouton, ce qu'il pose (commande EXACTE comprise, DAT §75.5), ce qui est indisponible.
+ * `standard` vaut `null` quand la lecture a échoué : aucun bouton — une commande dont on ne sait rien ne se propose pas.
+ */
+function renderStandard(standard, ui) {
+  const phrase = renderResultatStandard(ui.resultatStandard);
+  if (!standard) return { bouton: '', corps: phrase };
+  const aAjouter = standard.to_add ?? [];
+  const indispo = (standard.unavailable ?? []).map((u) =>
+    `<p class="note"><span class="technique">${echapper(u.name)}</span> : ${echapper(u.reason)}</p>`).join('');
+  if (!aAjouter.length) {
+    const toutes = standard.unavailable?.length ? 'Toutes les sondes standards disponibles sont posées.'
+      : 'Les sondes standards sont toutes posées.';
+    return { bouton: '', corps: `${phrase}<p class="note">${toutes}</p>${indispo}` };
+  }
+  const lignes = aAjouter.map((s) => `
+      <li><span class="technique">${echapper(s.name)}</span> — ${echapper(s.description)}
+        <span class="std-regle note">${echapper(cadenceClaire(s.schedule))}, alerte après ${nSondes(s.threshold, 'échec consécutif', 'échecs consécutifs')}.</span>
+        <span class="technique commande">${echapper(s.target)}</span></li>`).join('');
+  return {
+    bouton: `<button type="button" class="bouton" data-sante-standard${ui.busyStandard ? ' disabled' : ''}>Ajouter les sondes standards (${aAjouter.length})</button>`,
+    corps: `${phrase}
+  <details class="repli"><summary>Ce que les sondes standards vont poser</summary>
+    <ul class="std-liste">${lignes}</ul>
+    <p class="note">Chaque commande s’exécute dans la cellule, sous le compte de la pile, à chaque relevé. Aucune n’écrit rien.</p>
+  </details>${indispo}`,
+  };
+}
+
 /**
  * La facette Santé (SPK-DS-51). `health` vaut `null` quand sa lecture a échoué : l'écran le dit, il ne
  * montre pas une absence de sonde (§14.6). `canal` : `true` / `false` / `null` (illisible).
  */
-export function renderSanteFacette(health, ui = SANTE_VIDE, { routes = [], canal = null } = {}) {
+export function renderSanteFacette(health, ui = SANTE_VIDE, { routes = [], canal = null, standard = null } = {}) {
   let corps;
   if (health == null) {
     corps = '<p class="absence" role="status">Les sondes n’ont pas pu être lues : rien ne dit si ce Spark est surveillé.</p>';
@@ -295,6 +342,7 @@ export function renderSanteFacette(health, ui = SANTE_VIDE, { routes = [], canal
   } else {
     corps = `<ul class="liste-administrable">${health.checks.map((s) => renderSonde(s, ui)).join('')}</ul>`;
   }
+  const std = renderStandard(standard, ui);
   const alerte = canal === false
     ? `<p class="avertissement" role="status">Aucun canal d’alerte n’est configuré : une panne ne se verra qu’ici.
        <a href="#/forge/alertes">Configurer les alertes de la Forge</a></p>`
@@ -306,7 +354,9 @@ export function renderSanteFacette(health, ui = SANTE_VIDE, { routes = [], canal
   ${alerte}
   ${ui.refusGeste ? `<div class="refus" role="alert"><p><strong>${echapper(ui.refusGeste)}</strong></p></div>` : ''}
   ${corps}
-  <p><button type="button" class="bouton" data-ouvre="sante">Ajouter une sonde</button></p>
+  <p class="actions-section"><button type="button" class="bouton" data-ouvre="sante">Ajouter une sonde</button>
+    ${std.bouton}</p>
+  ${std.corps}
   ${renderModaleSante(ui, routes)}
   <p class="note">Une sonde HTTPS part de la Forge et ne peut viser qu’un domaine de ce Spark ; un script
   s’exécute dans la cellule. L’alerte part à la panne, une fois, puis au rétablissement. Un relevé de

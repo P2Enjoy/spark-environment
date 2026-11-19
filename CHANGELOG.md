@@ -3,6 +3,16 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-190 — les sondes standards : un bouton qui pose celles qui manquent.** Dans l'onglet **Santé** d'un Spark, **« Ajouter les sondes
+  standards (N) »** pose, **par leur nom**, celles qui manquent parmi quatre : `disque` (occupation ≥ 90 %, toutes les 15 minutes),
+  `memoire` (mémoire disponible sous 10 %), `cpu` (≥ 90 % du CPU utilisable, échantillon de 5 secondes) et `docker` (Docker muet, conteneur en
+  boucle de redémarrage ou `unhealthy`). **Une sonde du même nom n'est jamais modifiée** (le réglage d'un propriétaire survit), le geste est
+  **idempotent**, respecte la borne de 20 sondes, et `docker` n'est offerte que si Docker est activé (sinon **dite indisponible**, avec sa
+  raison). **Les commandes exactes se lisent avant le clic**, sous un repli ; la phrase du résultat est **relue du serveur** et reçoit le focus ;
+  un Spark **protégé** refuse côté serveur (423). `GET` dit ce qui serait ajouté sans rien écrire, `POST` pose par le chemin normal (journal,
+  premier relevé échu, `/etc/spark/health` et briefing réécrits). Le briefing de l'agent dit que ces quatre sondes se posent d'un geste du
+  propriétaire : inutile de les proposer. **Les quatre commandes ont été jouées dans de vraies cellules** (crm, magiline-mcp, sso-p2enjoy), avec
+  témoins négatifs. Manuel M14. Aucune migration, **aucune variable d'environnement**. DAT §77 ; SPK-DS-56 ; OP-52.
 - **SPK-188 — les onglets « SLA » et « Santé » de la Forge : le tableau de bord de la surveillance.** Deux nouvelles
   destinations de la Forge (`#/forge/sla`, `#/forge/sante`), après la Supervision, qui regroupent ce que le SLA des
   instantanés et la santé ont posé sur **tous** les Sparks, et **mènent** au Spark sur le bon onglet (*Instantanés*,
@@ -164,6 +174,11 @@
   d'épreuve, `SPARK_UPGRADE_COMMAND`, lu sous `SPARK_EPREUVE=1` seulement.
 
 ### Corrigé
+- **SPK-190 — un script de santé joué sous `root` sur un Spark rootless non relevé.** Un Spark dont le Docker rootless n'a jamais été *relevé*
+  par le produit (aucune observation d'amorçage) tombait dans « jamais amorcé vaut enraciné » : `docker ps` partait sous `root`, sans accès au
+  socket, et sortait en code 1 — une panne permanente qui n'en était pas une. **Mesuré le 2026-11-19 sur `magiline-mcp` (spark-010).** Sans
+  observation et avec Docker activé, la cellule est désormais interrogée (`id -u spark-docker`) ; une observation qui dit le mode fait foi.
+  DAT §75.5. OP-52.
 - **SPK-180 — changer de serveur depuis un Spark mène à la liste des Sparks.** La
   console gardait l'adresse de la fenêtre d'un Spark de l'ancienne Forge
   (`#/sparks/gram/routes` sur `spark-010`). Une adresse qui nomme un Spark ou un projet

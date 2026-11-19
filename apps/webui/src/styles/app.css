@@ -391,6 +391,14 @@ tbody tr:hover { background: var(--color-hover); }
 .frise__ok { fill: var(--color-success); }
 .frise__echec { fill: none; stroke: var(--color-danger); stroke-width: 2; stroke-linecap: round; }
 .frise__texte { font-size: var(--text-compact); color: var(--color-text-2); }
+/* SPK-190 · SPK-DS-56 : une commande de sonde standard se montre EN ENTIER — elle se replie sur plusieurs lignes, elle ne
+   défile jamais (§8.1) : l'autoriser, c'est la lire. */
+.std-liste { margin: 0; padding: 0; list-style: none; }
+.std-liste li { padding: var(--space-3) 0; border-top: 1px solid var(--color-border); }
+.std-liste li:first-child { border-top: 0; }
+.std-regle { display: block; margin-top: var(--space-1); }
+.commande { display: block; margin-top: var(--space-1); white-space: pre-wrap; overflow-wrap: anywhere;
+  font-size: var(--text-compact); color: var(--color-text-2); }
 
 /* SPK-188 · SPK-DS-54 : le tableau de bord de la surveillance de la Forge. Une synthèse en paires terme / valeur, et le
    graphe de la charge de la semaine : 672 colonnes d'UN pixel, qui ne s'étirent donc jamais — c'est le conteneur qui défile. */

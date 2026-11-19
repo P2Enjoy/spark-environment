@@ -18506,6 +18506,12 @@ Un script est du **code exécuté sans qu'une personne regarde**. L'agent peut d
 cellule : ce que la sonde ajoute, c'est la **persistance** et le **déclenchement par la Forge**. D'où le
 traitement de l'acceptation (§75.9) : la commande exacte se montre.
 
+**Le compte quand le registre n'a rien relevé (SPK-190, mesuré le 2026-11-19).** Le mode Docker se lit dans l'observation d'amorçage.
+S'il manque — un Spark dont le Docker rootless n'a jamais été *relevé* par le produit, comme `magiline-mcp` sur spark-010 —, « jamais
+amorcé vaut enraciné » jouait `docker ps` sous `root` : code 1, une panne permanente qui n'en était pas une. Désormais, **sans
+observation et sur un Spark où Docker est activé**, `sparkd` **demande à la cellule** (`id -u spark-docker`) : si le compte rootless
+existe, le script part sous lui. Une observation qui dit le mode **fait foi** ; sans Docker activé, aucune question n'est posée.
+
 ### 75.6 La machine à états
 
 Par sonde : `unknown` → `healthy` | `unstable` | `down` | `stopped`.
@@ -18793,7 +18799,7 @@ sonde, un problème en tête.
 
 ---
 
-## 77. Les sondes standards : un bouton qui pose celles qui manquent : contrat (SPK-189)
+## 77. Les sondes standards : un bouton qui pose celles qui manquent : contrat (SPK-190)
 
 *Contrat écrit le 2026-11-19, avant le code, sur la demande du responsable (§77.1). Ce qui est du rédacteur, et à confirmer, est au §77.8.*
 
@@ -18853,7 +18859,7 @@ Dans l'onglet **Santé** (§75.10), à côté de **Ajouter une sonde** : **« Aj
 sondes qui seraient ajoutées. Un repli montre **chacune avec sa commande exacte**. Rien ne demande de confirmation : le geste est
 réversible (chaque sonde se retire) et ce qu'il fait est dit **avant** le clic (§6.22, §6.24). Quand il ne reste rien à ajouter, le bouton
 **disparaît** (§14.4) et la section le dit. Après le geste, l'écran dit ce qui a été ajouté, **relu** du serveur (§1.3). Détail :
-`docs/DESIGN_SYSTEM_APP.md` SPK-DS-55.
+`docs/DESIGN_SYSTEM_APP.md` SPK-DS-56.
 
 ### 77.6 Ce que lit l'agent
 

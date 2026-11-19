@@ -8224,3 +8224,99 @@ test('les onglets SLA et Santé de la Forge montrent tout ce qui surveille les S
     assert.match(await page.locator(`[data-sante-sonde="${sonde}"]`).innerText(), /En panne/);
   });
 });
+
+// SPK-190 · docs/DAT.md §77 · docs/DESIGN_SYSTEM_APP.md SPK-DS-56.
+// @verifies docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3 (celles qui manquent, par leur nom, sans jamais modifier une
+//           existante), §77.4 (GET dit, POST pose ; un Spark protégé refuse), §77.5 (le bouton nomme son effet, les
+//           commandes exactes se lisent avant le clic, la phrase est relue du serveur) · CLAUDE.md §16 (depuis
+//           l'accueil, à la souris et au clavier) · §10 (le refus d'un Spark protégé, par requête directe ET à l'écran)
+test('« Ajouter les sondes standards » pose celles qui manquent par leur nom, dit d’avance ce qu’elle pose, et ne touche pas une existante', async () => {
+  await parcours('sondes-standard', async () => {
+    // Un propriétaire a DÉJÀ réglé « disque » à sa façon : le bouton ne doit pas y toucher.
+    const perso = await pile.ecrireSparkd('/v1/sparks/site-vitrine/health/disque', {
+      kind: 'script', target: 'test "$(df --output=pcent / | tail -1 | tr -dc 0-9)" -lt 95', expected: 0,
+      schedule: '*/30 * * * *', threshold: 7 }, 'PUT');
+    assert.equal(perso.status, 200);
+
+    await ouvrir('site-vitrine', 'sante');
+    const facette = page.locator('section[aria-labelledby="titre-sante"]');
+    await facette.waitFor({ timeout: 10000 });
+    const bouton = page.locator('[data-sante-standard]');
+    // Le compte NOMME l'effet : trois manquent (disque est déjà là), et c'est écrit avant le clic.
+    assert.equal((await bouton.innerText()).trim(), 'Ajouter les sondes standards (3)');
+    assert.equal(await page.locator('.principal [data-ouvre="sante"]').count(), 1, 'à côté d’« Ajouter une sonde »');
+
+    // Les commandes EXACTES se lisent avant le clic, au clavier : le repli est un `details` natif.
+    await page.focus('details.repli summary');
+    await page.keyboard.press('Enter');
+    const repli = page.locator('details.repli');
+    assert.equal(await repli.evaluate((d) => d.open), true);
+    const texte = await repli.innerText();
+    assert.match(texte, /memoire/); assert.match(texte, /cpu/); assert.match(texte, /docker/);
+    assert.doesNotMatch(texte, /disque/, 'disque est déjà posée : elle n’est pas proposée');
+    assert.match(texte, /MemAvailable/); assert.match(texte, /usage_usec/);
+    assert.match(texte, /docker ps -q >\/dev\/null && test -z "\$\(docker ps -q --filter status=restarting\)"/);
+    await capturer('spk190-sante-standard-avant', { hauteur: 1500 });
+    await capturer('spk190-sante-standard-avant-mobile', { largeur: 390, hauteur: 2600 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true,
+      'les commandes se replient, la page ne défile pas horizontalement à 390 px');
+    await page.setViewportSize({ width: 1440, height: 1300 });
+
+    // GET n'a rien écrit : seule « disque » existe.
+    assert.deepEqual((await pile.lireSparkd('/v1/sparks/site-vitrine/health')).corps.checks.map((c) => c.name), ['disque']);
+
+    // Le geste, au CLAVIER.
+    await page.focus('[data-sante-standard]');
+    await page.keyboard.press('Enter');
+    const phrase = page.locator('[data-sante-standard-resultat]');
+    await phrase.waitFor({ timeout: 10000 });
+    assert.match(await phrase.innerText(), /3 sondes standards ajoutées : memoire, cpu, docker\. Déjà posées, laissées telles quelles : disque\./);
+    // La phrase est relue du serveur ; le bouton a disparu, le focus est passé à la phrase (§14.3).
+    assert.equal(await page.locator('[data-sante-standard]').count(), 0);
+    assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-sante-standard-resultat')), true);
+    assert.match(await facette.innerText(), /Les sondes standards sont toutes posées\./);
+    for (const nom of ['disque', 'memoire', 'cpu', 'docker']) {
+      assert.equal(await page.locator(`[data-sante-sonde="${nom}"]`).count(), 1, nom);
+    }
+    // « disque » n'a pas été touchée.
+    const serveur = (await pile.lireSparkd('/v1/sparks/site-vitrine/health')).corps.checks;
+    const disque = serveur.find((c) => c.name === 'disque');
+    assert.equal(disque.threshold, 7); assert.equal(disque.schedule, '*/30 * * * *');
+    assert.equal(serveur.length, 4);
+    await capturer('spk190-sante-standard-apres', { hauteur: 1700 });
+
+    // Idempotent par l'API : un second geste n'ajoute rien.
+    const encore = await pile.ecrireSparkd('/v1/sparks/site-vitrine/health/standard');
+    assert.equal(encore.status, 200);
+    assert.deepEqual(encore.corps.added, []);
+    assert.equal(encore.corps.checks.length, 4);
+
+    // Un Spark SANS Docker : la sonde docker est DITE indisponible, avec sa raison, et le compte le reflète.
+    await ouvrir('busybox-demo', 'sante');
+    await page.locator('section[aria-labelledby="titre-sante"]').waitFor({ timeout: 10000 });
+    assert.equal((await page.locator('[data-sante-standard]').innerText()).trim(), 'Ajouter les sondes standards (3)');
+    assert.match(await page.locator('.principal').innerText(), /docker\s*:\s*Docker n['’]est pas activé sur ce Spark\./);
+    await capturer('spk190-sante-standard-sans-docker', { hauteur: 1500 });
+  });
+});
+
+test('un Spark protégé refuse les sondes standards : par requête directe ET à l’écran, sans rien poser', async () => {
+  await parcours('sondes-standard-protege', async () => {
+    const protegerReponse = await pile.ecrireSparkd('/v1/sparks/postgres-dedie/protection', { password: 'secret-e2e' });
+    assert.equal(protegerReponse.status, 200);
+    // La requête DIRECTE, avec le vrai état de protection : refusée côté serveur.
+    const direct = await pile.ecrireSparkd('/v1/sparks/postgres-dedie/health/standard');
+    assert.equal(direct.status, 423);
+    assert.equal(direct.corps.detail.error, 'spark_protected');
+    assert.equal((await pile.lireSparkd('/v1/sparks/postgres-dedie/health')).corps.checks.length, 0);
+
+    // À l'écran, parcours canonique : le bouton existe (la fonction existe, §14.9), le serveur refuse, le motif se lit.
+    await ouvrir('postgres-dedie', 'sante');
+    await page.locator('[data-sante-standard]').waitFor({ timeout: 10000 });
+    await page.click('[data-sante-standard]');
+    await page.waitForSelector('.principal [role="alert"]', { timeout: 10000 });
+    assert.match(await page.locator('.principal [role="alert"]').first().innerText(), /protég|protection/i);
+    assert.equal((await pile.lireSparkd('/v1/sparks/postgres-dedie/health')).corps.checks.length, 0, 'rien n’a été posé');
+    await capturer('spk190-sante-standard-refus', { hauteur: 1500 });
+  });
+});

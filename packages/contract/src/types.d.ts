@@ -1129,6 +1129,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sparks/{name}/health/standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Health Standard
+         * @description Ce que « Ajouter les sondes standards » poserait sur ce Spark — sans rien écrire (SPK-190).
+         *
+         *     @spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3, §77.4
+         */
+        get: operations["get_health_standard_v1_sparks__name__health_standard_get"];
+        put?: never;
+        /**
+         * Post Health Standard
+         * @description Pose les sondes standards qui MANQUENT, par leur nom, sans toucher à une existante (SPK-190).
+         *
+         *     @spec docs/BACKLOG.md#SPK-190 · docs/DAT.md §77.3, §77.4
+         *
+         *     Une ÉCRITURE : un Spark protégé la refuse (423), côté serveur — l'écran ne fait que le dire.
+         */
+        post: operations["post_health_standard_v1_sparks__name__health_standard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sparks/{name}/health/test": {
         parameters: {
             query?: never;
@@ -3786,6 +3816,72 @@ export interface operations {
         };
     };
     get_health_v1_sparks__name__health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_health_standard_v1_sparks__name__health_standard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_health_standard_v1_sparks__name__health_standard_post: {
         parameters: {
             query?: never;
             header?: never;

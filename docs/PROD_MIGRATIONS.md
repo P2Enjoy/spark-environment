@@ -124,6 +124,28 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-52 · Les sondes standards et le compte des scripts sans observation (SPK-190)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable. Les quatre commandes ont été JOUÉES dans de vraies cellules
+                (« Tester » du produit, lecture seule, le 2026-11-19 : crm, magiline-mcp, sso-p2enjoy) ; le bouton lui-même et la
+                correction du compte ne sont éprouvés que sur la pile d'épreuve.
+Quoi          : GET et POST /v1/sparks/{nom}/health/standard (quatre sondes : disque, memoire, cpu, docker, posées par leur nom,
+                jamais une existante modifiée) ; le bouton dans l'onglet Santé ; une ligne au briefing de l'agent ; et la CORRECTION
+                du compte d'un script sur un Spark dont le Docker rootless n'a jamais été relevé (la cellule est interrogée).
+Migration     : AUCUNE.
+À redéployer  : sparkd et la console.
+Variables     : AUCUNE.
+Effet à connaître : le compte des scripts change pour un Spark DOCKER ACTIVÉ SANS OBSERVATION qui a le compte `spark-docker`
+                (aujourd'hui : magiline-mcp sur spark-010) — ses scripts de santé existants partiront sous ce compte au lieu de root.
+                C'est la correction voulue : `docker ps` y sortait en code 1.
+Vérifier      : sur magiline-mcp, onglet Santé > « Tester » la sonde `docker` : elle doit réussir (elle échouait avant, code 1) ;
+                puis « Ajouter les sondes standards » sur un Spark de test, et constater les quatre sondes et la phrase relue.
+Retour arrière: redéployer le code précédent ; les sondes posées restent des sondes ordinaires (retirables une à une).
+Risques       : les seuils (90 % disque, 10 % mémoire, 90 % CPU) sont des valeurs de départ, pas un engagement ; la sonde `cpu`
+                dure 5 secondes par relevé.
+```
+
 ### OP-51 · L'aperçu du SLA dit le taux d'occupation et recalcule un autre horaire (SPK-189)
 
 ```

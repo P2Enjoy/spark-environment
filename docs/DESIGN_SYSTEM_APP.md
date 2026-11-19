@@ -2258,7 +2258,7 @@ hors bornes affiche son refus **sous les champs**, en `role="alert"`, sans appel
 **États.** Calcul en cours : « Calcul de l'aperçu… » (déjà là) ; aucun autre SLA sur la Forge : chaque prise dit « aucune autre
 prise », la légende reste (le zéro est un vrai zéro, §14.6) ; erreur du serveur : le refus de l'aperçu, inchangé.
 
-### SPK-DS-55 · Les sondes standards : un bouton qui dit d'avance ce qu'il pose
+### SPK-DS-56 · Les sondes standards : un bouton qui dit d'avance ce qu'il pose
 
 Date : 2026-11-19 · `docs/DAT.md` §77 · `docs/DESIGN_SYSTEM.md` §1.3, §1.4, §6.22, §6.24, §9.7, §14.3, §14.4 · SPK-DS-51.
 

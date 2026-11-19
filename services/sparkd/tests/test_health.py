@@ -400,10 +400,14 @@ def test_un_Spark_rootless_du_REGISTRE_joue_son_script_sous_le_compte_rootless(d
 
 
 def test_un_Spark_enracine_ou_non_releve_garde_le_script_nu(db):
+    """SPK-190 : « jamais relevé » n'est plus « enraciné » d'office — la cellule est interrogée — mais sans
+    compte rootless chez elle (`id -u spark-docker` échoue), le script part nu, comme avant."""
     vus = []
 
     class Espion:
         def exec_capture(self, nom, commande):
+            if commande[:2] == ["id", "-u"]:
+                return 1, "", "id: « spark-docker » : utilisateur inexistant"
             vus.append(commande)
             return 0, "", ""
 

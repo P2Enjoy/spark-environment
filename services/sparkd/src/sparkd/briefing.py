@@ -406,6 +406,8 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
                 "threshold_min": health_service.SEUIL_MIN,
                 "threshold_max": health_service.SEUIL_MAX,
             },
+            # SPK-190 · §77.6 : les NOMS des sondes standard, tirés du catalogue du service — jamais une copie.
+            "standard": [s["name"] for s in health_service.STANDARD],
             "script_account": (COMPTE_ROOTLESS if (bootstrap or {}).get("docker_mode") == _ROOTLESS
                                else COMPTE_CELLULE),
             "checks": [{cle: sonde[cle] for cle in CLES_SONDE} for sonde in (surveillance or [])],
@@ -570,7 +572,10 @@ def _lignes_surveillance(model: dict[str, Any], niveau: str = "##") -> list[str]
         "- une sonde qui atteint son seuil **alerte le propriétaire**, une fois, puis au rétablissement ;",
         f"- **pour proposer une sonde**, écrivez une ligne dans `{h['proposals']}` (grammaire plus haut). "
         "Une proposition **ne pose rien** : le propriétaire la relit, avec la commande exacte d'un script, "
-        "avant d'accepter.",
+        "avant d'accepter ;",
+        f"- les sondes **standard** — {', '.join(f'`{n}`' for n in h['standard'])} — sont posées par le "
+        "**propriétaire**, d'un geste, depuis l'onglet Santé : **inutile de les proposer**. Une sonde du même "
+        "nom qui existe déjà n'est jamais remplacée.",
     ])
     return lignes
 
