@@ -18790,3 +18790,94 @@ sonde, un problème en tête.
    sans date — demandent soit un historique que le registre ne garde pas, soit de choisir arbitrairement le mois.
 6. **Pas d'actualisation en tâche de fond** (§76.4), comme l'index du §60 : un tableau qui se repeint sous les yeux d'un
    exploitant qui lit une ligne est un piège. Si le responsable veut un rafraîchissement périodique, c'est une décision à part.
+
+---
+
+## 77. Les sondes standards : un bouton qui pose celles qui manquent : contrat (SPK-189)
+
+*Contrat écrit le 2026-11-19, avant le code, sur la demande du responsable (§77.1). Ce qui est du rédacteur, et à confirmer, est au §77.8.*
+
+### 77.1 La demande
+
+Le responsable : le **disque**, la **RAM**, l'**usage du CPU** et les **conteneurs Docker `unhealthy`** se surveillent presque partout,
+de la même façon. Ils doivent s'ajouter **par défaut, d'un simple bouton, dans la page des sondes** ; le bouton **ajoute celles qui
+manquent, par leur nom**.
+
+### 77.2 Le catalogue : quatre sondes, dans le code
+
+Le catalogue vit dans `health.py` (`STANDARD`), **en un seul endroit**, comme les limites du §75.8 : ni dans la console, ni dans
+le briefing. Chaque entrée est une sonde ordinaire du §75, qui passe la **même validation** (§75.3, §75.4) que si le propriétaire
+l'avait saisie : le catalogue n'a aucun privilège.
+
+| Nom | Type | Cadence (UTC) | Seuil | Ce qui met la sonde en échec |
+|---|---|---|---|---|
+| `disque` | script | `*/15 * * * *` | 2 | le système de fichiers de la cellule est occupé à **90 %** ou plus |
+| `memoire` | script | `*/5 * * * *` | 3 | la mémoire **disponible** (`MemAvailable`) est sous **10 %** du total |
+| `cpu` | script | `*/5 * * * *` | 3 | sur un échantillon de **5 secondes**, la cellule consomme **90 %** ou plus du CPU qu'elle peut utiliser |
+| `docker` | script | `*/5 * * * *` | 3 | Docker ne répond pas, un conteneur **redémarre en boucle**, ou un conteneur est **`unhealthy`** |
+
+Le statut attendu est le code de sortie **0** ; seul le code de sortie compte (§75.5). Les commandes sont **fixes**, écrites au code,
+rendues telles quelles par l'API et montrées en entier à l'écran avant l'ajout : **le propriétaire autorise leur exécution
+répétée** (§75.5), il doit donc les lire. Aucune n'écrit quoi que ce soit.
+
+- **`cpu`** lit `usage_usec` du cgroup de la cellule (`/sys/fs/cgroup/cpu.stat`) deux fois à 5 secondes d'écart, et le compare au plafond
+  `cpu.max` quand il existe, sinon au nombre de cœurs visibles (`nproc`). Un cgroup illisible **échoue avec le code 3** : une
+  sonde qui ne peut pas mesurer le dit, elle ne passe pas en silence.
+- **`memoire`** lit `/proc/meminfo`, que la cellule présente à l'échelle de **sa** limite.
+- **`docker`** n'est offerte que sur un Spark où **Docker est activé** (`docker_enabled`). Ailleurs, elle échouerait toujours
+  (`docker: not found`) : une fausse alerte permanente. Elle est alors **dite indisponible**, avec sa raison, et non omise.
+- La **fréquence** est la plus lente qui reste utile : un disque ne se remplit pas en cinq minutes ; un conteneur qui boucle, si.
+
+### 77.3 « Celles qui manquent, par leur nom »
+
+Une sonde standard est **présente** dès qu'une sonde **du même nom** existe sur ce Spark — **quelle que soit sa définition**. Le geste ne
+**modifie jamais** une sonde existante : un propriétaire qui a réglé `disque` à 95 % ne la voit pas écrasée en cliquant. Il est
+**idempotent** : un second clic n'ajoute rien et le dit. Il respecte la borne de **20 sondes** (§75.8) : ce qui ne tient pas est
+**rendu indisponible**, avec sa raison, jamais tu.
+
+### 77.4 L'API
+
+- `GET /v1/sparks/{nom}/health/standard` — **ce qui serait ajouté**, sans rien écrire : `to_add` (la définition complète de chaque
+  sonde : `name`, `kind`, `target`, `expected`, `schedule`, `threshold`, `description`), `present` (les noms déjà posés),
+  `unavailable` (`{ name, reason }`). Ouvert sur un Spark protégé, comme toute lecture.
+- `POST /v1/sparks/{nom}/health/standard` — pose `to_add`, chaque sonde par le chemin **normal** de `poser` (journal `health.set`, premier
+  relevé échu, `/etc/spark/health` et briefing réécrits). Rend `added`, `present`, `unavailable` et la liste `checks` à jour.
+  **Une écriture : un Spark protégé la refuse (423, `spark_protected`)** côté serveur, comme `PUT …/health/{sonde}` (§75.8) ; l'écran
+  ne fait que le dire.
+
+**Aucune migration, aucune variable d'environnement, aucune action nouvelle au journal ni à la liste fermée du §47.2.**
+
+### 77.5 Ce que la console en fait
+
+Dans l'onglet **Santé** (§75.10), à côté de **Ajouter une sonde** : **« Ajouter les sondes standards (N) »**, où N est le nombre de
+sondes qui seraient ajoutées. Un repli montre **chacune avec sa commande exacte**. Rien ne demande de confirmation : le geste est
+réversible (chaque sonde se retire) et ce qu'il fait est dit **avant** le clic (§6.22, §6.24). Quand il ne reste rien à ajouter, le bouton
+**disparaît** (§14.4) et la section le dit. Après le geste, l'écran dit ce qui a été ajouté, **relu** du serveur (§1.3). Détail :
+`docs/DESIGN_SYSTEM_APP.md` SPK-DS-55.
+
+### 77.6 Ce que lit l'agent
+
+Le geste ne touche la cellule que par les fichiers que le produit réécrit déjà après toute pose de sonde (`/etc/spark/health`, briefing).
+Le briefing gagne **une définition** (jamais un état, §44.4) : ces quatre noms sont les sondes standards, que le **propriétaire** pose d'un
+geste ; **inutile de les proposer** dans `health.?`. Un test prouve que le texte rendu la nomme (CLAUDE.md §17).
+
+### 77.7 Preuves attendues
+
+Unitaires : chaque entrée du catalogue passe `valider` ; noms distincts et conformes ; commandes d'une ligne sous 2000 caractères ; la
+sélection (absente par le nom, présente quelle que soit la définition, `docker` indisponible sans Docker, borne de 20). API contre le
+**vrai registre** : `GET` n'écrit rien ; `POST` pose, **journalise**, est **idempotent**, ne modifie pas une sonde existante, réécrit
+`/etc/spark/health` ; **refus par requête directe** d'un Spark protégé (423) avec le vrai mot de passe de protection ; Spark inconnu
+404. E2E depuis l'accueil, à la souris **et** au clavier. **Dans de vraies cellules** : les quatre commandes jouées par « Tester » sur
+une Forge réelle, et le résultat constaté — la cellule factice ne comprend que `true`, `false` et `exit N` (§75.5) : elle ne prouve pas
+ces commandes.
+
+### 77.8 Décisions du rédacteur, à confirmer par le responsable
+
+1. **Les seuils** (90 % de disque, 10 % de mémoire disponible, 90 % de CPU sur 5 s) et **les cadences** du §77.2 : ce sont des valeurs de
+   départ, réglables ensuite sonde par sonde ; elles ne sont pas un engagement.
+2. **« Usage CPU » = saturation du CPU utilisable**, pas une charge moyenne : une charge élevée sur un Spark sans plafond de CPU est
+   normale tant que la machine tient. Une cellule sans plafond est comparée à **tous** les cœurs qu'elle voit : la sonde ne déclenche
+   alors presque jamais — elle dit « ce Spark mange toute la machine », pas « il est actif ».
+3. **Une sonde du même nom, de n'importe quelle définition, vaut présence** (§77.3).
+4. **Pas de confirmation** avant l'ajout (§77.5), parce qu'il se retire et se lit d'avance.
+5. **`docker` n'est offerte que si Docker est activé** (§77.2).

@@ -2258,6 +2258,29 @@ hors bornes affiche son refus **sous les champs**, en `role="alert"`, sans appel
 **États.** Calcul en cours : « Calcul de l'aperçu… » (déjà là) ; aucun autre SLA sur la Forge : chaque prise dit « aucune autre
 prise », la légende reste (le zéro est un vrai zéro, §14.6) ; erreur du serveur : le refus de l'aperçu, inchangé.
 
+### SPK-DS-55 · Les sondes standards : un bouton qui dit d'avance ce qu'il pose
+
+Date : 2026-11-19 · `docs/DAT.md` §77 · `docs/DESIGN_SYSTEM.md` §1.3, §1.4, §6.22, §6.24, §9.7, §14.3, §14.4 · SPK-DS-51.
+
+**Le bouton.** Dans la section « Santé » d'un Spark, **dans le même groupe que « Ajouter une sonde »** : **« Ajouter les sondes
+standards (N) »**, secondaire, où N est ce que le serveur **ajouterait** (`to_add`). Il **nomme son effet** par son compte ; il ne dit pas
+« Ajouter par défaut ». Il **n'existe que s'il y a quelque chose à ajouter** (§14.4) : à zéro il disparaît, et la section écrit « Les
+sondes standards sont toutes posées. » (une absence utile se nomme, §14.5).
+
+**Ce qu'il pose se lit AVANT le clic.** Sous le groupe, un repli `details` (« Ce que les sondes standards vont poser ») liste **chaque**
+sonde à ajouter : son nom en police technique, sa phrase (« Occupation du disque : en échec à 90 % ou plus »), sa cadence et son seuil
+en clair, et **sa commande exacte** en `.technique`, **jamais résumée** — le propriétaire autorise l'exécution répétée (DAT §75.5). Les
+sondes **indisponibles** (« `docker` : Docker n'est pas activé sur ce Spark ») sont dites sous la liste, avec leur raison.
+
+**Pas de confirmation** : le geste est réversible, et son contenu est montré d'avance (§6.22, §6.24).
+
+**Après le geste.** Une phrase `role="status"` au-dessus de la liste, **relue du serveur** (§1.3) : « 4 sondes standards ajoutées : disque,
+memoire, cpu, docker. » ; avec des sondes déjà présentes : « 2 ajoutées : cpu, docker. Déjà posées, laissées telles quelles : disque,
+memoire. ». Comme le bouton disparaît, **le focus passe à cette phrase** (§14.3). Un refus du serveur (Spark protégé) s'affiche en alerte
+au même endroit, mot pour mot.
+
+**Accessibilité.** Tout se fait au clavier ; le repli est un `details` natif ; l'état n'est jamais porté par la couleur seule.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

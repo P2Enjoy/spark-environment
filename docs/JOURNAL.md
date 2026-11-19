@@ -16164,3 +16164,15 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   sont cités par le manuel mais ne figurent pas dans la liste des illustrations que le test connaît). Ce n'est pas lié à SPK-189 ;
   signalé, non corrigé — l'unité n'est pas la mienne.
 
+**SPK-189 : les sondes standards — contrat écrit le 2026-11-19, avant le code.**
+
+- **Demande du responsable**, après le dépôt de 32 propositions sur les deux Forges : disque, RAM, CPU et conteneurs `unhealthy` sont
+  « pratiquement standards » ; un bouton les ajoute dans la page des sondes, **celles qui manquent, par leur nom**.
+- **Constat** : `disque` et `docker` existent déjà, comme **propositions**, sur dix Sparks réels — leurs commandes étaient des hypothèses
+  non jouées dans une cellule. Le catalogue les reprend à l'identique et ajoute `memoire` et `cpu`.
+- **Décision de forme** : le catalogue vit en **un** endroit, le code de `sparkd` ; il passe la même validation que toute sonde ; `GET`
+  dit ce qui serait ajouté, `POST` l'ajoute par le chemin normal de `poser` (journal, relevé échu, fichier et briefing réécrits).
+  Présence = même nom, quelle que soit la définition : on n'écrase jamais le réglage d'un propriétaire. `docker` n'est offerte que si
+  Docker est activé — ailleurs elle serait une fausse alerte permanente.
+- **Risque assumé et à lever avant de conclure** : la cellule factice ne comprend que `true`, `false` et `exit N` ; elle ne prouve donc
+  pas ces commandes. La DoD exige de les jouer dans de **vraies cellules**, par « Tester ».

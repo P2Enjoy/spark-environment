@@ -9569,6 +9569,27 @@ souris** (le taux de chaque prise lu à l'écran et en largeur rendue, Entrée o
 les barres qui se vident, aucune écriture, jour de semaine gardé, bornes refusées, Échap) ; captures desktop et mobile observées.
 **Défaut vu à la capture et corrigé** : la phrase d'une prise semblait collée à la date suivante.
 
+### [ ] SPK-189 · Les sondes standards : un bouton qui pose celles qui manquent
+
+**Demandé le 2026-11-19** par le responsable, après la proposition de sondes sur les deux Forges : la surveillance du **disque**, de la
+**mémoire**, de l'**usage du CPU** et des **conteneurs Docker en mauvaise santé** est « pratiquement standard » ; elle doit s'ajouter
+**par défaut, d'un simple bouton, dans la page des sondes** d'un Spark, et **le bouton ajoute celles qui manquent, par leur nom**.
+
+- Spécification : `docs/DAT.md` **§77** · §75 (la santé : états, sondes script, grammaire), §75.5 (la commande exacte se montre) ·
+  `docs/DESIGN_SYSTEM.md` §1.3, §1.4, §6.13, §6.22 (une confirmation n'est pas toujours nécessaire), §6.24, §14.3, §14.4 ·
+  `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-55** · manuel M14.
+- Dépend de : SPK-184, SPK-185, SPK-186.
+- Portée : un catalogue de **quatre sondes standards** (`disque`, `memoire`, `cpu`, `docker`) dans le code de `sparkd` ; `GET` et
+  `POST /v1/sparks/{nom}/health/standard` (ce qui serait ajouté / ce qui l'est : seules les sondes **absentes par leur nom**, jamais une
+  existante modifiée) ; le bouton **« Ajouter les sondes standards »** dans l'onglet Santé, avec les commandes exactes sous un repli ;
+  `docker` seulement sur un Spark où Docker est activé ; le seed ; le manuel ; une ligne de définition au briefing de l'agent.
+- Hors périmètre : modifier ou remplacer une sonde existante ; un catalogue réglable par l'utilisateur ; des seuils par Spark (ils se
+  règlent ensuite sonde par sonde) ; une sonde « standard » par image ou par pile.
+- DoD : preuve rouge avant ; tests unitaires du catalogue (chaque entrée passe la validation du §75, noms distincts, commandes sous
+  2000 caractères) et de la sélection ; API contre le vrai registre — y compris le **refus par requête directe** d'un Spark protégé
+  (423) ; l'idempotence ; E2E depuis l'accueil (souris et clavier) ; captures observées ; **les quatre commandes jouées dans de vraies
+  cellules** par « Tester » avant de tenir l'unité pour finie ; contrat OpenAPI, manuel, seed, changelog, OP-50.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks
