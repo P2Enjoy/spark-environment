@@ -11052,3 +11052,23 @@ exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
     `console/spark-010`.
   - **Suites** : sparkd 1 989, webui 1 806. L'E2E de la pile est vert avec le
     doublon `SPARK_UPGRADE_COMMAND`.
+
+### [ ] SPK-191 · Un bouton « Rebuild » : à côté de chaque conteneur de l'onglet Docker, et à côté de « Restart » d'un Spark
+
+**Demandé le 2026-11-21** par le responsable, consigné pour mémoire : le projet est fermé, **rien n'est à coder pour l'instant**.
+
+- **Demande, verbatim** : « le bouton "rebuild" a côté des instances docker dans le onglet docker des sparkd […] et le bouton rebuild
+  et restant a côté de retstart un Spark ».
+- **Deux gestes** :
+  - dans l'**onglet Docker** d'un Spark (SPK-44, `docs/DAT.md` §37.6), un bouton « Rebuild » à côté de chaque conteneur ;
+  - dans les **commandes de cycle de vie** d'un Spark (SPK-09), un bouton « Rebuild » à côté de « Restart ».
+- **À trancher avant toute spécification** (questions au responsable) :
+  - ce que « rebuild » fait pour un **conteneur** : `docker compose up -d --build --no-deps <service>` de la pile qui le porte, ou
+    une simple recréation sans reconstruire l'image ; et quand le conteneur n'appartient à aucune pile Compose connue ;
+  - ce que « rebuild » fait pour un **Spark** : recréer l'instance depuis son image en gardant ses volumes, ou rejouer son
+    amorçage ; ce qui est conservé (disques, secrets, routes, instantanés) ;
+  - les confirmations, la protection d'un Spark protégé (refus `423`), et la trace au journal d'audit ;
+  - l'écart avec SPK-44, qui a fait de l'onglet Docker une surface en **lecture seule** : ce bouton serait le premier geste sur un
+    conteneur.
+- Spécification, DoD : à écrire si le projet rouvre (`docs/DAT.md`, `docs/DESIGN_SYSTEM_APP.md`, manuel M8 et le manuel du cycle de
+  vie ; preuve rouge avant, API contre le vrai registre, E2E souris et clavier, captures observées).
