@@ -16192,25 +16192,29 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   règle est celle que cette correction remplace.
 - **Ce qui reste à mesurer** : le bouton sur une Forge réelle (OP-52), et `docker` sur `magiline-mcp` APRÈS redéploiement de `sparkd`.
 
-## 2026-11-25 · La Forge d'expérience ne revient pas après la mise à jour du noyau 7.0.0-44
+## 2026-11-25 · La Forge d'expérience a été éteinte 29 s après un démarrage réussi (le noyau 7.0.0-44 n'était pas en cause)
 
-**Problème.** Après un redémarrage de la Forge d'expérience (R320, `spark-01`/`spark-experiment`), la machine n'a plus répondu (ni ping, ni SSH,
-ni 80/443) ; mise en mode secours par le responsable.
+**Problème.** Après un redémarrage de la Forge d'expérience (R320, `spark-experiment`), la machine ne répondait plus (ni ping, ni SSH, ni 80/443) ; elle a
+été mise en mode secours.
 
-**Observations (en secours, disques montés en lecture seule).**
-- 23:37 UTC : `apt-get install --only-upgrade … linux-image-generic …` demandé par `ubuntu` fait passer le noyau de 7.0.0-43 à **7.0.0-44** ;
-  l'installation s'achève sans erreur. 23:45:43 UTC : arrêt propre. **Aucune trace d'un démarrage ensuite.**
-- Le disque est sain : deux Toshiba MG08, SMART réussi ; le journal IPMI n'a rien de la nuit.
-- L'initramfs 44 est structurellement identique au 43 (1698 entrées chacun) ; fstab, netplan (par adresse MAC) et `mdadm.conf` sont cohérents.
-- **Hors sujet mais à traiter** : `sdb3` et `sdb4` sont sortis des RAID1 depuis le 27 septembre ; `/` et `/boot` tournent sur `sda` seul.
-- L'autre Forge (`51.159.101.248`) n'a pas été touchée ; elle tourne toujours sous 7.0.0-43.
+**Observations** (secours, disques montés en lecture seule, `syslog` et `auth.log` en texte ; le journal binaire est illisible depuis le noyau 5.15 du secours).
+- 23:37 UTC : mise à jour vers le noyau 7.0.0-44 (`apt-get install --only-upgrade …`, par la console, sans erreur).
+- 23:38:28 : la console redémarre la machine (`sudo sh -s` par SSH : « The system will reboot now! »).
+- **6 min 46 s sans aucune trace** : c'est la durée du POST du R320, pas une panne.
+- **23:45:14 : le noyau 7.0.0-44 démarre et atteint l'espace utilisateur** — `sshd` écoute, Caddy repart avec ses domaines réels, la console rouvre une session
+  SSH `ubuntu` dès 23:45:14, et ses tunnels vers `127.0.0.1:9876` échouent cinq fois (`sparkd` n'écoute pas encore).
+- **23:45:43 : « Power key pressed short. Powering off… »** — arrêt propre déclenché par un **appui ACPI sur le bouton d'alimentation**, venu de l'extérieur du
+  système (hébergeur ou gestion à distance ; l'origine exacte n'est pas établie). La machine a ensuite été démarrée en secours.
+- Disques sains (SMART réussi), journal IPMI sans événement de la nuit.
 
-**Hypothèse (non vérifiée).** Le noyau 7.0.0-44 ne démarre pas sur ce matériel. Aucune sortie console n'a pu être lue : la cause n'est pas prouvée.
+**Hypothèse infirmée.** « Le noyau 7.0.0-44 ne démarre pas » (posée plus tôt le même jour, sur l'absence de trace après 23:45:43) est **fausse** : le 44 a démarré.
+La machine n'était pas en panne ; elle a été éteinte avant que `sparkd` ait eu le temps de répondre. Une Forge R320 met environ 7 minutes à revenir d'un
+redémarrage (POST compris) : on n'agit pas avant.
 
-**Décision (instruction du responsable).** Démarrer le noyau 43, resté sur disque : `GRUB_DEFAULT` pointe vers l'entrée `7.0.0-43-generic` dans
-`/etc/default/grub`, puis `update-grub` en chroot. Le diff de `grub.cfg` ne porte que la ligne `set default=`. Sauvegardes à côté des originaux :
-`/etc/default/grub.avant-noyau43` et `/boot/grub/grub.cfg.avant-noyau43`. Ni `grub-install` ni le secteur de démarrage n'ont été touchés.
+**Erreur à défaire.** Sur instruction du responsable mais sur ce diagnostic faux, `GRUB_DEFAULT` a été fixé sur le noyau 7.0.0-43 (`/etc/default/grub`, puis
+`update-grub` en chroot ; sauvegardes `/etc/default/grub.avant-noyau43` et `/boot/grub/grub.cfg.avant-noyau43`). C'est un changement **inutile** qui prive la Forge
+du noyau à jour : à remettre à `GRUB_DEFAULT=0` depuis ces sauvegardes, puis sortir du secours.
 
-**À vérifier au prochain démarrage.** La machine revient-elle sous 7.0.0-43 (`uname -r`) ? Si oui, le 44 est bien en cause : retenir les paquets noyau
-(`apt-mark hold`) et décider si le geste « mises à jour » doit prévenir qu'un noyau neuf se juge au redémarrage suivant. Sinon, l'hypothèse tombe et il faut
-la sortie console du fournisseur.
+**À vérifier au démarrage normal.** `uname -r` rend 7.0.0-44 ; `sparkd` répond sur `127.0.0.1:9876` ; la Forge reparaît dans la console.
+
+**Sans lien, à traiter** : `sdb3` et `sdb4` sont sortis des RAID1 depuis le 27 septembre ; `/` et `/boot` tournent sur `sda` seul (voir SPK-192).

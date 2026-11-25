@@ -11104,8 +11104,8 @@ exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
     jamais un paquet** : aucun `autoremove`, aucune purge. Preuve sur la Forge d'expérience : les noyaux 7.0.0-31, -43 et -44 s'y accumulent dans `/boot`.
   - **Ce que le geste ferait** (à spécifier) : lire en simulation (`apt-get -s autoremove --purge`) ce qui serait retiré, le montrer **avant** le clic, puis le
     jouer par le même chemin que l'application d'une mise à jour (SSH, demande puis issue **signées** au journal).
-  - **Garde-fou issu de l'incident du noyau 7.0.0-44** : la purge ne doit **jamais** retirer le noyau en marche **ni le précédent** — c'est l'ancien noyau resté sur disque
-    qui a permis de redémarrer la Forge d'expérience (SPK-192 existe à cause de ce secours). Elle refuse aussi tout ce qui n'a pas été montré à l'écran.
+  - **Garde-fou** : la purge ne doit **jamais** retirer le noyau en marche **ni le précédent** : le précédent est le repli si un noyau neuf ne démarre pas, et un noyau neuf
+    ne se juge qu'au redémarrage suivant. Elle refuse aussi tout ce qui n'a pas été montré à l'écran.
   - **À trancher** : la politique de conservation des noyaux (combien) ; si la purge est offerte seule ou proposée après une mise à jour qui vient d'installer un noyau
     (le noyau neuf ne se juge qu'au redémarrage suivant, donc l'ancien doit rester jusque-là) ; si les paquets `rc` (configuration résiduelle) sont inclus.
 - Dépend de : SPK-169 (les lectures existantes), SPK-171 (l'onglet des mises à jour, où la purge prend place), SPK-181 (le chemin d'application par SSH, signé),
