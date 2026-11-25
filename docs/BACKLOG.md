@@ -11073,7 +11073,7 @@ exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
 - Spécification, DoD : à écrire si le projet rouvre (`docs/DAT.md`, `docs/DESIGN_SYSTEM_APP.md`, manuel M8 et le manuel du cycle de
   vie ; preuve rouge avant, API contre le vrai registre, E2E souris et clavier, captures observées).
 
-### [ ] SPK-192 · La santé du stockage d'une Forge, en direct : l'état du pool ZFS et des RAID `md`, lisible sur la Forge sans passer par le secours
+### [ ] SPK-192 · La santé du stockage d'une Forge, en direct (pool ZFS, RAID `md`), et la purge des paquets, dans l'onglet des mises à jour
 
 **Demandé le 2026-11-25** par le responsable, consigné pour mémoire : le projet est fermé, **rien n'est à coder pour l'instant**.
 
@@ -11098,6 +11098,17 @@ exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
   - où le placer : un onglet *Stockage* de la Forge, ou une section de l'onglet *Système* ;
   - si le produit planifie lui-même les `scrub` (Ubuntu en planifie un par mois sur les pools sains : à vérifier avant de le doubler) ;
   - la source SMART (`smartctl` n'est pas garanti installé sur une Forge).
-- Dépend de : SPK-169 (les lectures existantes), SPK-171 (l'onglet *Système*), SPK-184 à SPK-186 (le modèle d'alerte sur transition).
+- **Ajout du 2026-11-25 — la purge des paquets, dans le même onglet que les mises à jour** (SPK-171 liste, SPK-181 applique). Demande, verbatim :
+  « add to the unit the purge of packages on the forge in the same tab of the updates ».
+  - **Ce qui existe** : l'onglet liste les mises à jour en attente et en applique une sélection (`apt-get install --only-upgrade`, par SSH, signé). **Rien ne retire
+    jamais un paquet** : aucun `autoremove`, aucune purge. Preuve sur la Forge d'expérience : les noyaux 7.0.0-31, -43 et -44 s'y accumulent dans `/boot`.
+  - **Ce que le geste ferait** (à spécifier) : lire en simulation (`apt-get -s autoremove --purge`) ce qui serait retiré, le montrer **avant** le clic, puis le
+    jouer par le même chemin que l'application d'une mise à jour (SSH, demande puis issue **signées** au journal).
+  - **Garde-fou issu de l'incident du noyau 7.0.0-44** : la purge ne doit **jamais** retirer le noyau en marche **ni le précédent** — c'est l'ancien noyau resté sur disque
+    qui a permis de redémarrer la Forge d'expérience (SPK-192 existe à cause de ce secours). Elle refuse aussi tout ce qui n'a pas été montré à l'écran.
+  - **À trancher** : la politique de conservation des noyaux (combien) ; si la purge est offerte seule ou proposée après une mise à jour qui vient d'installer un noyau
+    (le noyau neuf ne se juge qu'au redémarrage suivant, donc l'ancien doit rester jusque-là) ; si les paquets `rc` (configuration résiduelle) sont inclus.
+- Dépend de : SPK-169 (les lectures existantes), SPK-171 (l'onglet des mises à jour, où la purge prend place), SPK-181 (le chemin d'application par SSH, signé),
+  SPK-184 à SPK-186 (le modèle d'alerte sur transition).
 - Spécification, DoD : à écrire si le projet rouvre (`docs/DAT.md`, `docs/DESIGN_SYSTEM_APP.md`, manuel, seed ; relevés réels de `spark-experiment` comme
   cas dégradé ; preuve rouge avant, API contre le vrai registre, E2E souris et clavier, captures observées).
