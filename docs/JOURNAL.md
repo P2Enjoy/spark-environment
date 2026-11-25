@@ -16228,8 +16228,20 @@ depuis leurs sauvegardes `.avant-noyau43`, `cmp` les a trouvés identiques, et `
 - Pourquoi personne ne l'a su pendant deux mois : `mdadm` détecte bien le tableau dégradé à chaque démarrage (`DegradedArray event`), mais son alerte
   part par `sendmail`, absent de la machine. Le signal existe, il n'arrive nulle part (voir SPK-192).
 
-**Reste à faire, depuis le système démarré.** Le pool ZFS `spark` (sa moitié `sdb5` était `FAULTED` le 2026-11-18) : le ZFS du secours est trop ancien
-pour l'importer (`vdev_zaps_v2`). Il faut lire `zpool status`, puis `zpool clear` ou `zpool online` pour lancer le resilver.
+**Retour en démarrage normal** (le même jour, 07:19 UTC). Noyau 7.0.0-44, `sparkd` écoute 6 min 30 s après le démarrage du système, `/healthz` et
+`/readyz` répondent 200 (Incus, Caddy et registre prêts), aucun appui sur le bouton d'alimentation. Les deux `md` sont `[UU]` au démarrage.
+- Pool ZFS `spark` : **aucune commande n'a été nécessaire**. ZFS a réintégré `sdb5` de lui-même au démarrage et le resilver, commencé au démarrage
+  interrompu de 23:45:28, a repris. Il s'est achevé à 07:40:07 : 28,1 Go recopiés, 0 erreur, et `zpool status -x` rend « all pools are healthy ».
+  Un scrub a été lancé ensuite (lecture seule, comparaison des sommes de contrôle des deux copies). Son résultat se lit par `zpool status spark`.
+- GRUB : `grub-pc/install_devices_failed_upgrade` remis à `false` dans debconf, puisque l'installation sur les deux disques a réussi.
+- « Hors ligne » vu par la console, alors que la machine était prête : deux causes, ni l'une ni l'autre côté Forge.
+  - Le poste avait enregistré la clé d'hôte du secours, qui partage l'adresse IP de la Forge, et refusait donc la vraie clé (`Host key verification failed`).
+    Les clés présentées ont été comparées à celles de la Forge sauvegardées les 7 septembre et 1er novembre : elles sont identiques. Elles ont été remises.
+  - Le tunnel de la console était resté `broken` depuis le secours (`Permission denied` : le secours n'a pas d'utilisateur `ubuntu`). C'est le
+    comportement voulu (DAT §22.4.6) : la reconnexion se fait à la demande, par `POST /api/tunnels`. Une fois rouvert, le tunnel est `ready` et la console
+    liste le Spark `crm`, en marche.
+- Non établi : pourquoi `sdb` est sorti des miroirs le 27 septembre (`md`) puis le 18 novembre (ZFS), alors que SMART est propre. Si cela se reproduit,
+  regarder le câble ou le contrôleur.
 
 **Le rapport d'incohérences vidé — 2026-11-25.**
 
