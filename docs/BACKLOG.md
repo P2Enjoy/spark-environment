@@ -7720,7 +7720,7 @@ déclarée `tls: false` par l'acceptation d'une proposition de la cellule
   TLS seulement ; parcours E2E des deux gestes, qui constatent l'effet au
   registre ; captures observées ; seed ; manuel ; `@spec` / `@verifies` posés.
 
-### [ ] SPK-113 · Une route TLS ne se sert plus en clair : `http://` renvoie vers `https://`
+### [~] SPK-113 · Une route TLS ne se sert plus en clair : `http://` renvoie vers `https://`
 
 **Constaté le 2026-09-23** en vérifiant SPK-112 : `http://crm.lelabs.tech/` et
 `http://devis.lelabs.tech/`, deux routes `tls = 1`, répondent `200` en clair sans
@@ -7730,16 +7730,24 @@ distincte de SPK-112** : elle change le comportement public de toutes les routes
 TLS de la Forge — celles des locataires comprises —, et elle exige une mesure
 avant d'écrire une ligne.
 
-- Spécification : `docs/DAT.md` §18.2, §18.3 — **à écrire après la mesure**.
-- Hypothèse, non mesurée : la configuration rendue déclare un seul serveur qui
-  écoute `:80` et `:443`, et Caddy n'y ajoute pas ses redirections automatiques.
-- Mesure préalable, sur cellule d'essai et jamais sur une cellule de locataire :
-  quelle forme de configuration fait renvoyer `http://` d'une route TLS vers
-  `https://` ; qu'un défi ACME `HTTP-01` passe toujours ; qu'une route `tls = 0`
-  reste servie en clair ; qu'un domaine non routé garde son `404` (§18.2).
-- DoD : mesure consignée ; preuve unitaire de la configuration rendue ; preuve
-  sur la Forge depuis une cellule d'essai ; DAT, manuel et contrat de
-  déploiement à jour ; `@spec` / `@verifies` posés.
+- Spécification : `docs/DAT.md` §18.2 (la forme produite), §18.3 (la mesure et la
+  décision) · `docs/AGENT_RUNBOOK.md` · `docs/PROD_MIGRATIONS.md` (OP-52).
+- **Mesure faite le 2026-11-25**, sur Caddy 2.6.2 en conteneur jetable, avec la
+  configuration produite par `build_config` — ni Forge, ni cellule de locataire :
+  l'hypothèse est **confirmée** (un seul serveur sur `:80` et `:443` : aucune redirection
+  automatique) ; une **route de redirection explicite `308`** par route TLS, posée juste
+  avant sa route de proxy, redirige ; une route `tls = 0` reste servie en clair ; un domaine
+  non routé garde son `404` ; **un défi `HTTP-01` passe** (certificat obtenu auprès d'une
+  autorité ACME locale, `TLS-ALPN` désactivé).
+- Portée : `ingress.build_config` émet la redirection ; `_nb_servies` et `comportement()` ne
+  la comptent pas comme un site servi ; le briefing d'un agent dit ce que fait l'ingress
+  (calculé depuis la configuration, jamais écrit en dur) ; le manuel M7 le dit à
+  l'exploitant.
+- DoD : mesure consignée (fait) ; preuve unitaire de la configuration rendue ; banc
+  `scripts/mesures-spk113.sh` vert contre un vrai Caddy ; DAT, manuel, runbook agent et
+  contrat de déploiement à jour ; `@spec` / `@verifies` posés ; **preuve sur la Forge**
+  depuis une cellule d'essai — sur instruction du responsable (OP-52), jamais sur une cellule
+  de locataire.
 
 ### [x] SPK-114 · Écarter une ligne proposée ne la refuse pas : elle reste en attente
 

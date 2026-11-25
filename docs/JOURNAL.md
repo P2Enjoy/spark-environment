@@ -16282,3 +16282,28 @@ depuis leurs sauvegardes `.avant-noyau43`, `cmp` les a trouvés identiques, et `
 - **Leçon** : un changement d'interface se prouve par **la campagne complète**, pas par ses seuls parcours. SPK-179 et SPK-189 avaient
   chacun « leur » parcours vert, et en ont fait rougir quatorze autres.
 
+
+## SPK-113 mesurée : `http://` d'une route TLS renvoie vers `https://` — 2026-11-25
+
+**Problème.** Une route `tls = 1` est servie en clair sur `:80`, sans redirection (constat du 2026-09-23). L'unité exigeait une mesure
+avant toute ligne de code, sur une cellule d'essai.
+
+**Hypothèse (DAT §18.3).** Un seul serveur écoute `:80` et `:443` ; Caddy n'y ajoute pas ses redirections automatiques.
+
+**Mesure** (Caddy 2.6.2, la version de la Forge, conteneurs jetables, configuration produite par `build_config` — aucune Forge touchée) :
+- forme actuelle : `http://` d'une route TLS atteint l'amont (`502`, l'amont étant absent) — hypothèse **confirmée** ;
+- avec une route `308` explicite (`match` : domaine + `protocol: http`) posée avant la route de proxy : renvoi vers
+  `https://<hôte><chemin>?<requête>` ; route `tls = 0` toujours servie ; domaine inconnu toujours en `404` ;
+- **défi ACME `HTTP-01`** : contre une autorité ACME locale (un second Caddy, `acme_server`), la première émission est passée par `TLS-ALPN`
+  et ne prouvait rien ; avec `TLS-ALPN` désactivé, `served key authentication` (`http-01`) puis `certificate obtained successfully`, la
+  route de redirection étant en place.
+
+**Décision.** Une route de redirection `308` par route TLS, juste avant sa route de proxy : la préséance du §18.3 bis (un joker TLS ne
+redirige pas un domaine précis servi en clair) tient à l'ordre d'une seule liste. Écartées, **sans mesure** : retirer `:80` de l'écoute
+(les routes `tls = 0` ne seraient plus servies), scinder en deux serveurs (la préséance ne se tiendrait plus). Documents écrits avant le
+code : DAT §18.2/§18.3, BACKLOG SPK-113.
+
+**Conséquence à annoncer.** Une route TLS dont le certificat n'est pas encore émis renvoie vers un `https://` qui échoue, là où elle
+répondait en clair. Changement public de toutes les routes TLS de la Forge : déploiement sur instruction du responsable (OP-52).
+
+**Reste à faire pour `[x]`** : code, preuves unitaires, banc, documents d'exploitation, puis la preuve sur une cellule d'essai de la Forge.

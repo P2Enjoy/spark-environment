@@ -2202,6 +2202,9 @@ précédente avait construit.
   "routes": [
     {"handle": [{"handler": "headers",
                  "response": {"set": {"Alt-Svc": ["clear"]}, "deferred": true}}]},
+    {"match": [{"host": ["crm.example.com"], "protocol": "http"}],
+     "handle": [{"handler": "static_response", "status_code": 308,
+                 "headers": {"Location": ["https://{http.request.host}{http.request.uri}"]}}]},
     {"match": [{"host": ["crm.example.com"]}],
      "handle": [{"handler": "reverse_proxy",
                  "upstreams": [{"dial": "10.77.0.16:8080"}]}]}
@@ -2216,6 +2219,13 @@ Les protocoles sont **déclarés** — HTTP/1.1 et HTTP/2, pas HTTP/3 —, et la
 configuration **commence** par une route commune, sans filtre et non terminale :
 elle vaut pour toute requête, puis la première route qui correspond sert. Les
 deux sont l'objet du §18.6.
+
+**Une route TLS est précédée de sa redirection (SPK-113, §18.3).** Pour chaque route à
+`tls = 1`, la configuration émet **deux** routes, dans cet ordre : celle qui renvoie
+`http://` vers `https://` (`match` = le même domaine **et** `protocol: http`), puis celle
+qui proxifie. Les deux se suivent, donc la préséance du §18.3 bis s'applique aux deux à la
+fois : un joker TLS ne redirige pas un domaine plus précis servi en clair. Une route à
+`tls = 0` n'a pas de redirection.
 
 L'amont est `ipv4_address:target_port` — l'adresse que le **registre** a
 attribuée (§15.1), jamais une découverte par Docker ou par étiquettes. C'est ce
@@ -2240,13 +2250,42 @@ et renouvelle le certificat. Une route à `tls = 0` n'est servie qu'en clair sur
 `:80` — utile pour un domaine interne, un essai, ou un frontal qui termine déjà
 le TLS.
 
-**Ce que `:80` sert réellement, constaté le 2026-09-23 sur la Forge.** Une route
-à `tls = 1` y est **aussi** servie en clair, sans redirection vers `https://` :
-`http://crm.lelabs.tech/` et `http://devis.lelabs.tech/`, deux routes `tls = 1`,
-répondent `200` sans renvoyer vers `https://`. La cause probable, non mesurée : la
-forme du §18.2 déclare un seul serveur qui écoute `:80` **et** `:443`, et Caddy
-n'y ajoute pas ses redirections automatiques. `docs/BACKLOG.md#SPK-113` le traite,
-mesure d'abord.
+**Ce que `:80` servait, constaté le 2026-09-23 sur la Forge, et la redirection qui le
+corrige (SPK-113).** Une route à `tls = 1` y était **aussi** servie en clair, sans
+redirection vers `https://` : `http://crm.lelabs.tech/` et `http://devis.lelabs.tech/`
+répondaient `200`. **Mesuré le 2026-11-25**, sur un Caddy 2.6.2 (la version de la Forge)
+en conteneur jetable, avec la configuration que `build_config` produit : la cause est
+bien celle qu'on soupçonnait — la forme du §18.2 déclare **un seul** serveur qui écoute
+`:80` **et** `:443`, et Caddy n'y ajoute pas ses redirections automatiques. Une requête
+`http://` vers une route TLS atteignait directement l'amont (un `502` quand l'amont est
+absent, jamais un renvoi).
+
+*Décision* : une **route de redirection explicite** précède chaque route TLS (§18.2) :
+`308 Permanent Redirect`, `Location: https://{http.request.host}{http.request.uri}`.
+Le `308` — celui que Caddy émet lui-même pour ses redirections automatiques — conserve la
+méthode et le corps d'une requête ; un `301` ferait rejouer un `POST` en `GET`. Le port
+n'est pas repris : le serveur n'écoute que `:443` pour le TLS.
+
+*Écartées, sans les avoir mesurées* : retirer `:80` de l'écoute du serveur pour laisser Caddy
+rediriger — les routes à `tls = 0` ne seraient plus servies sur `:80` ; scinder en deux
+serveurs — la préséance du §18.3 bis, qui tient à l'ordre d'UNE liste de routes, ne se
+tiendrait plus d'un serveur à l'autre. La route explicite ne change ni la forme du serveur ni
+l'ordre : c'est la plus petite modification qui corrige le constat.
+
+Ce que la mesure établit, sur la configuration produite (banc `scripts/mesures-spk113.sh`) :
+
+- une route `tls = 1` renvoie `308` vers le même chemin et la même requête en `https://` ;
+- une route `tls = 0` reste servie en clair, et un domaine non routé garde son `404` (§18.2) ;
+- **un défi ACME `HTTP-01` passe toujours** : Caddy répond au défi avant d'examiner les
+  routes, et le certificat est obtenu (autorité ACME locale, défi `TLS-ALPN` désactivé pour
+  que seul `HTTP-01` puisse réussir) ;
+- sans la redirection (la forme d'avant), la requête `http://` n'est pas renvoyée.
+
+*Conséquence pour l'exploitant, à connaître avant de déployer* : une route TLS dont le
+certificat n'est **pas encore émis** renvoyait un contenu en clair ; elle renvoie
+désormais vers un `https://` qui échoue tant que l'émission n'a pas abouti. Le diagnostic
+d'une route (§18.9) dit où en est l'émission. Un appelant qui consommait une route TLS en
+`http://` suit le `308`, ou — s'il ne suit pas les redirections — doit passer en `https://`.
 
 **L'émission d'un certificat suppose que le domaine résolve vers cette Forge.**
 Ce n'est toujours pas une propriété que `sparkd` contrôle : elle dépend du DNS,
