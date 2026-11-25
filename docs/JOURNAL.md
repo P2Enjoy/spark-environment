@@ -16191,3 +16191,26 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
   cellule (`id -u spark-docker`) ; une observation qui dit le mode fait foi. Le test qui énonçait « jamais amorcé vaut enraciné » a été réécrit : sa
   règle est celle que cette correction remplace.
 - **Ce qui reste à mesurer** : le bouton sur une Forge réelle (OP-52), et `docker` sur `magiline-mcp` APRÈS redéploiement de `sparkd`.
+
+## 2026-11-25 · La Forge d'expérience ne revient pas après la mise à jour du noyau 7.0.0-44
+
+**Problème.** Après un redémarrage de la Forge d'expérience (R320, `spark-01`/`spark-experiment`), la machine n'a plus répondu (ni ping, ni SSH,
+ni 80/443) ; mise en mode secours par le responsable.
+
+**Observations (en secours, disques montés en lecture seule).**
+- 23:37 UTC : `apt-get install --only-upgrade … linux-image-generic …` demandé par `ubuntu` fait passer le noyau de 7.0.0-43 à **7.0.0-44** ;
+  l'installation s'achève sans erreur. 23:45:43 UTC : arrêt propre. **Aucune trace d'un démarrage ensuite.**
+- Le disque est sain : deux Toshiba MG08, SMART réussi ; le journal IPMI n'a rien de la nuit.
+- L'initramfs 44 est structurellement identique au 43 (1698 entrées chacun) ; fstab, netplan (par adresse MAC) et `mdadm.conf` sont cohérents.
+- **Hors sujet mais à traiter** : `sdb3` et `sdb4` sont sortis des RAID1 depuis le 27 septembre ; `/` et `/boot` tournent sur `sda` seul.
+- L'autre Forge (`51.159.101.248`) n'a pas été touchée ; elle tourne toujours sous 7.0.0-43.
+
+**Hypothèse (non vérifiée).** Le noyau 7.0.0-44 ne démarre pas sur ce matériel. Aucune sortie console n'a pu être lue : la cause n'est pas prouvée.
+
+**Décision (instruction du responsable).** Démarrer le noyau 43, resté sur disque : `GRUB_DEFAULT` pointe vers l'entrée `7.0.0-43-generic` dans
+`/etc/default/grub`, puis `update-grub` en chroot. Le diff de `grub.cfg` ne porte que la ligne `set default=`. Sauvegardes à côté des originaux :
+`/etc/default/grub.avant-noyau43` et `/boot/grub/grub.cfg.avant-noyau43`. Ni `grub-install` ni le secteur de démarrage n'ont été touchés.
+
+**À vérifier au prochain démarrage.** La machine revient-elle sous 7.0.0-43 (`uname -r`) ? Si oui, le 44 est bien en cause : retenir les paquets noyau
+(`apt-mark hold`) et décider si le geste « mises à jour » doit prévenir qu'un noyau neuf se juge au redémarrage suivant. Sinon, l'hypothèse tombe et il faut
+la sortie console du fournisseur.
