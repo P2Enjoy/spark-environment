@@ -181,6 +181,7 @@
   d'épreuve, `SPARK_UPGRADE_COMMAND`, lu sous `SPARK_EPREUVE=1` seulement.
 
 ### Corrigé
+- **Preuve du manuel : les illustrations JPEG comptent.** `e2e/manuel.test.mjs` ne lisait que les `.png` et déclarait « absentes » trois images citées par le manuel (`m8-forge-sla.jpg`, `m8-forge-sante.jpg`, `m14-sondes-standard.jpg`), rouge depuis SPK-188. Il lit désormais `.png` et `.jpg`, dans les deux sens (image citée absente, image produite orpheline) ; 7 preuves sur 7.
 - **SPK-190 — un script de santé joué sous `root` sur un Spark rootless non relevé.** Un Spark dont le Docker rootless n'a jamais été *relevé*
   par le produit (aucune observation d'amorçage) tombait dans « jamais amorcé vaut enraciné » : `docker ps` partait sous `root`, sans accès au
   socket, et sortait en code 1 — une panne permanente qui n'en était pas une. **Mesuré le 2026-11-19 sur `magiline-mcp` (spark-010).** Sans

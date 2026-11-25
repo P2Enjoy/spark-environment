@@ -26,7 +26,10 @@ async function pages() {
 }
 
 async function imagesProduites() {
-  return (await readdir(IMAGES)).filter((f) => f.endsWith('.png')).sort();
+  // Les illustrations du harnais sont des .png ; celles prises contre une Forge réelle ou par un
+  // script de preuve (m8-forge-sla, m8-forge-sante, m14-sondes-standard) sont des .jpg — CLAUDE.md
+  // §16 demande des captures JPEG. Les deux comptent, dans les deux sens (existence et orpheline).
+  return (await readdir(IMAGES)).filter((f) => /[.](png|jpg)$/.test(f)).sort();
 }
 
 /** Toutes les images citées par le manuel, quel que soit le chapitre. */
