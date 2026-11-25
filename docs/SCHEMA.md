@@ -10,6 +10,11 @@ une allocation en interrogeant Incus.
 Toute évolution passe par une migration versionnée dans
 `services/sparkd/src/sparkd/schema/`, appliquée dans l'ordre, jamais à la main.
 
+**Identifiants.** Une clé primaire textuelle (`id`) est **24 caractères hexadécimaux aléatoires**
+(`secrets.token_hex(12)`). Ils ne sont **pas triables par le temps** : aucun code ne le suppose, et ce qui doit
+l'être (les générations de sauvegarde externe, §8 bis) porte son propre horodatage. *(Le schéma disait « ULID » ;
+le code n'en a jamais produit — corrigé le 2026-11-25, voir `docs/JOURNAL.md`.)*
+
 ---
 
 ## 1. Vue d'ensemble
@@ -75,7 +80,7 @@ compris.
 
 | Colonne | Type | Contrainte / valeurs |
 |---|---|---|
-| `id` | TEXT PK | ULID |
+| `id` | TEXT PK | 24 hexadécimaux aléatoires (voir « Identifiants ») |
 | `name` | TEXT UNIQUE | `^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$` |
 | `state` | TEXT | `pending`, `creating`, `stopped`, `starting`, `running`, `stopping`, `error`, `deleting` |
 | `runtime` | TEXT | `container` (implémenté), `vm` (réservé) |
@@ -151,7 +156,7 @@ Un cœur ne peut appartenir qu'à un seul Spark, contrainte d'unicité sur `core
 
 | Colonne | Type | Rôle |
 |---|---|---|
-| `id` | TEXT PK | ULID |
+| `id` | TEXT PK | 24 hexadécimaux aléatoires (voir « Identifiants ») |
 | `domain` | TEXT UNIQUE | nom d'hôte public |
 | `spark_id` | TEXT FK | Spark cible |
 | `target_port` | INTEGER | port sur l'IP privée du Spark |

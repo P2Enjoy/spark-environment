@@ -57,6 +57,13 @@
   formulaires d'Alertes **retiennent leur saisie** à chaque frappe (jamais les mots de passe). Preuve : un parcours
   qui retarde la lecture de la Forge de 2,5 s, passe à l'onglet Alertes, tape, et constate que la saisie survit —
   rouge sans les deux remèdes, vert avec.
+- **Campagne E2E rendue déterministe : 176 parcours sur 176 verts, et le rapport d'incohérences vidé.** Quatorze parcours des routes et du
+  DNS avaient rougi à cause de SPK-179 (le domaine d'une route est un lien : l'aide `ligneRoute` exigeait un `<span>`) ; la légende du
+  taux d'occupation et la zone « autre horaire » (SPK-189) en cassaient un de plus ; le parcours du **mode CPU** attendait un plafond
+  que l'admission refusait à raison depuis le seed de SPK-152 ; **« les trois degrés s'atteignent au clavier »**, rouge intermittent
+  depuis 2026-09-30, attendait `.onglets`, qui existe aussi dans la liste des Sparks. Aucun défaut du produit : des attentes
+  vieillies, des courses, et des parcours qui supposaient un état (« orphelin », « boutique » arrêtée) que la campagne a déjà
+  consommé. `spark.id` : le schéma disait « ULID », le code produit 24 hexadécimaux — le schéma est corrigé.
 - **SPK-189 — l'aperçu du SLA dit le taux d'occupation de chaque prise, et recalcule un autre horaire.** Demandé par le
   responsable. Sous chacune des trois prochaines prises, une **barre** et sa phrase : combien d'**autres SLA** prennent dans la
   même tranche de 15 minutes **ce jour-là** (la sémantique du planificateur, jour de mois et de semaine compris), et lesquels —

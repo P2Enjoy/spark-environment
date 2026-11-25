@@ -16218,3 +16218,42 @@ du noyau à jour : à remettre à `GRUB_DEFAULT=0` depuis ces sauvegardes, puis 
 **À vérifier au démarrage normal.** `uname -r` rend 7.0.0-44 ; `sparkd` répond sur `127.0.0.1:9876` ; la Forge reparaît dans la console.
 
 **Sans lien, à traiter** : `sdb3` et `sdb4` sont sortis des RAID1 depuis le 27 septembre ; `/` et `/boot` tournent sur `sda` seul (voir SPK-192).
+
+**Le rapport d'incohérences vidé — 2026-11-25.**
+
+- **Campagne complète rejouée** (176 parcours, 8 min) : **21 rouges**. Presque tous **mon fait**, pas celui du produit, et plusieurs
+  venaient de changements livrés sans rejouer la campagne — seulement leurs parcours seuls :
+  - **14 parcours des routes et du DNS** : SPK-179 (le domaine d'une route devient un lien) a cassé l'aide `ligneRoute`, qui exigeait un
+    `<span class="technique">` au texte exact. Le texte d'un lien porte une mention lue seulement par le lecteur d'écran. L'aide
+    accepte les deux, sans barre oblique inverse (l'analyseur de sélecteurs de Playwright en traite lui-même).
+  - **« le SLA des instantanés se programme »** : ma légende du taux d'occupation (SPK-189) contient « 15 minutes », que l'attente
+    prenait pour le signe du refus ; et ma zone « autre horaire » porte un `.refus[role=alert]` caché qui passait en premier.
+  - **REFUS 3** : le seed porte depuis SPK-182 cinq instantanés `SLA_…` ; le parcours attendait « seulement les deux manuels ». Il
+    compare l'état d'avant et d'après le refus.
+  - **« changer le MODE CPU »** *(entrée du 2026-10-11)* — **élucidée** : le seed (SPK-152) donne à `boutique` 0,5 CPU et laisse 0,25
+    de libre ; un plafond d'1 CPU demande 1 : **le refus de l'admission est correct** (« 1 demandé, 0,75 disponible »), c'est
+    l'attente du parcours qui avait vieilli. Reproduit contre un registre neuf avant de corriger.
+  - **Parcours SLA/Santé** (SPK-188/189/190) : ils supposaient un état que la campagne a déjà consommé — « orphelin », le SLA en échec
+    du seed, est supprimé par un parcours antérieur ; une liste de routes figée ignorait celles que d'autres parcours laissent
+    derrière eux. Ils lisent maintenant le registre.
+  - **Attentes fragiles** : un défilement cosmétique qui jetait « Element is not attached » quand Caddy repeint la ligne (trois
+    endroits), un focus attendu sans attendre la relecture du serveur, un contenu lu avant d'être chargé (conteneur arrêté).
+  - **Deux courses dues au planificateur de la pile**, qui relève VRAIMENT les sondes pendant la campagne : l'écran de la Forge
+    comparé à une photo de l'API prise à un autre instant, et l'état de la sonde « stock » lu après un relevé. Les parcours relisent
+    l'API et l'écran ensemble.
+- **« Les trois degrés s'atteignent au clavier »** *(entrée du 2026-09-30, la plus ancienne)* — **élucidée, sans besoin de la VM** :
+  après Entrée sur « Forge », le parcours attendait `.onglets`. Or **la liste des Sparks rend elle aussi un `<nav class="onglets">`**
+  (les onglets de projets, `app.js:400`) : l'attente aboutissait avant que l'écran de la Forge soit là, et les Tab suivants parcouraient
+  encore la liste — d'où « `#/sparks/ubuntu-24` » atteint au lieu de « `#/forge/images` ». Il attend maintenant
+  `.onglet[href="#/forge/images"]`, qui n'existe que sur la Forge. Une course, rouge « une fois sur deux » selon la vitesse de la
+  machine ; ce que le rapport attribuait à « un état laissé par un parcours antérieur » n'y était pour rien.
+- **« Un geste sensible envoie une alerte » et « révoquer une clé malgré le gel »** *(entrée du 2026-11-10)* : le premier s'expliquait
+  par `alertes-onglet`, qui laissait le webhook désactivé (corrigé le 2026-11-18). Le second ne se reproduit plus sur six campagnes
+  consécutives, sans cause identifiée séparément : l'entrée est retirée sur ce constat, et non sur une preuve.
+- **`spark.id` « ULID »** *(entrée du 2026-11-10)* : le schéma est corrigé (24 hexadécimaux aléatoires, non triables), comme le rapport
+  le recommandait ; rien ne lisait ces identifiants comme des ULID. Tous les `id` du registre suivent la même forme.
+- **Campagne complète : 176/176 verte** après ces corrections (les passes précédentes : 21, 4, 3, 1 puis 3 rouges, tous traités
+  ci-dessus). **Le rapport d'incohérences est vide : le fichier est supprimé du dépôt** (CLAUDE.md §5).
+- **Leçon** : un changement d'interface se prouve par **la campagne complète**, pas par ses seuls parcours. SPK-179 et SPK-189 avaient
+  chacun « leur » parcours vert, et en ont fait rougir quatorze autres.
+

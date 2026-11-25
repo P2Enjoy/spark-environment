@@ -806,8 +806,8 @@ test('changer le MODE CPU depuis l’écran, au clavier', async () => {
     assert.equal(await page.$('#quota-cpu_max'), null);
     // Amendement du responsable, 2026-09-02 (docs/DESIGN_SYSTEM_APP.md
     // SPK-DS-07) : la grille du CPU est le QUART de CPU, borne basse comprise.
-    // La réservation du seed vaut 1 CPU, donc elle tombe sur un cran et le
-    // réglage reste un curseur.
+    // La réservation du seed (un quart ou une demi-unité, un multiple du cran) tombe sur un cran : le réglage
+    // reste un curseur.
     assert.deepEqual(
       await page.locator('#quota-cpu_reservation')
         .evaluate((el) => ({ type: el.type, min: el.min, step: el.step })),
@@ -818,7 +818,12 @@ test('changer le MODE CPU depuis l’écran, au clavier', async () => {
     await page.waitForSelector('dialog.modale[open] #quota-cpu_max', { timeout: 10000 });
     assert.equal(await page.$('#quota-cpu_reservation'), null);
 
-    await page.fill('#quota-cpu_max', '1');
+    // Le plafond demandé vaut la réservation que le Spark TENAIT déjà : un plafond occupe sa valeur sur la Forge, et la
+    // Forge du seed n'a presque plus de CPU libre. Demander « 1 CPU » comme avant le seed de SPK-152 était refusé à
+    // raison par l'admission (« 1 demandé, 0,75 disponible ») — le refus était correct, c'est l'attente qui avait vieilli
+    // (entrée du rapport d'incohérences du 2026-10-11, élucidée le 2026-11-25).
+    const plafond = String(avant.corps.cpu_reservation);
+    await page.fill('#quota-cpu_max', plafond);
     await page.click('dialog.modale[open] [data-engage="quotas"]');
     await page.waitForFunction(
       () => !document.querySelector('dialog.modale[open]'), { timeout: 15000 });
@@ -826,7 +831,7 @@ test('changer le MODE CPU depuis l’écran, au clavier', async () => {
     // Effet BACKEND (§29.3 : on lit pour constater).
     const apres = await pile.lireSparkd('/v1/sparks/boutique');
     assert.equal(apres.corps.cpu_mode, 'capped');
-    assert.equal(apres.corps.cpu_max, 1);
+    assert.equal(apres.corps.cpu_max, avant.corps.cpu_reservation);
     // §49.2 : les réglages de l'ANCIEN mode ne survivent pas — une réservation
     // sur un Spark plafonné serait une valeur que rien n'emploie.
     assert.equal(apres.corps.cpu_reservation, null);
@@ -1505,7 +1510,7 @@ test('un projet se crée, range deux Sparks depuis leur fenêtre, a son onglet, 
 // Placés AVANT l'alerte hors bande, et ce n'est pas un hasard : le refus se
 // démontre sur « analytics », que le seed protège, et le parcours d'alerte lève
 // cette protection — qu'il peut laisser levée s'il s'interrompt
-// (docs/INCONSISTENCY_REPORT.md).
+// (docs/JOURNAL.md ; le rapport d’incohérences a été vidé le 2026-11-25).
 
 test('une route proposée EN CLAIR se passe en TLS avant d’être acceptée', async () => {
   await parcours('spk112-proposition-tls', async () => {
@@ -1586,7 +1591,9 @@ test('une route sans TLS porte « Activer le TLS », et un Spark protégé le re
     await page.waitForSelector(`${ligne} [data-active-tls]`, { timeout: 10000 });
     // La ligne porte aussi l'état DNS relevé, dans un autre badge.
     assert.match(await page.innerText(`${ligne} .badge:has-text("sans TLS")`), /sans TLS/);
-    await page.locator(ligne).scrollIntoViewIfNeeded();
+    // Le défilement est cosmétique : la ligne peut être repeinte (relevé de Caddy) pendant l'attente de stabilité de
+    // `scrollIntoViewIfNeeded`, qui jetait « Element is not attached » — rouge en campagne, vert seul (2026-11-25).
+    await page.locator(ligne).evaluate((e) => e.scrollIntoView({ block: 'center' })).catch(() => {});
     await capturer('spk112-route-sans-tls', { hauteur: 1000 });
     await capturer('spk112-route-sans-tls-mobile', { largeur: 390, hauteur: 1200 });
 
@@ -2454,6 +2461,10 @@ test('REFUS 3 · restaurer un instantané ancien est refusé, et nomme ce qui bl
     // Avant toute tentative, aucun moyen d'accepter la perte n'existe (§26.5).
     assert.equal(await page.$('[data-accepte-perte]'), null);
 
+    // L'état d'AVANT le refus, lu tel qu'il est : depuis SPK-182 le seed porte aussi cinq instantanés `SLA_…`, et attendre
+    // « seulement les deux manuels » rendait ce parcours rouge sans que le refus ait rien supprimé.
+    const avantRefus = (await pile.lireSparkd('/v1/sparks/crm-production/snapshots')).corps.snapshots.map((s) => s.incus_name);
+    assert.ok(avantRefus.includes('avant-deploiement') && avantRefus.includes('apres-migration'));
     await page.click('[data-restaure="avant-deploiement"]');
     await page.waitForSelector('[data-confirme-restauration]');
     await page.click('[data-confirme-restauration]');
@@ -2465,8 +2476,7 @@ test('REFUS 3 · restaurer un instantané ancien est refusé, et nomme ce qui bl
 
     // Effet backend : rien n'a été détruit puisque le refus tient.
     const { corps } = await pile.lireSparkd('/v1/sparks/crm-production/snapshots');
-    assert.deepEqual(corps.snapshots.map((s) => s.incus_name),
-                     ['avant-deploiement', 'apres-migration'],
+    assert.deepEqual(corps.snapshots.map((s) => s.incus_name), avantRefus,
                      'un refus ne doit rien avoir supprimé');
   });
 });
@@ -2883,7 +2893,10 @@ test('les trois degrés s’atteignent au clavier, et annoncent où l’on est',
     }
     assert.equal(atteint, '#/forge', 'la destination « Forge » est atteignable');
     await page.keyboard.press('Enter');
-    await page.waitForSelector('.onglets', { timeout: 10000 });
+    // `.onglets` existe AUSSI dans la LISTE des Sparks (les onglets de projets) : l'attendre ne disait pas que l'écran de la
+    // Forge était là, et les Tab suivants parcouraient encore la liste (« #/sparks/ubuntu-24 » atteint au lieu de l'onglet).
+    // C'était la cause du rouge « une fois sur deux campagnes » du rapport d'incohérences du 2026-09-30.
+    await page.waitForSelector('.onglet[href="#/forge/images"]', { timeout: 10000 });
 
     let onglet = null;
     for (let i = 0; i < 20 && onglet !== '#/forge/images'; i += 1) {
@@ -2995,7 +3008,14 @@ test('un refus s’affiche DANS la modale et n’efface pas la saisie', async ()
  * « boutique.exemple.test », et le parcours de l'apex cliquait sur la mauvaise
  * ligne — il passait seul et rougissait dans la campagne. Mesuré.
  */
-const ligneRoute = (domaine) => `li:has(span.technique:text-is("${domaine}"))`;
+// SPK-179 : le domaine d'une route est un LIEN (`<a class="technique">`, avec une mention lue seulement par le lecteur d'écran) —
+// ou un `<span>` quand rien ne s'ouvre. Le texte d'un lien porte donc cette mention : on la tolère, au lieu d'exiger l'égalité
+// stricte, que SPK-179 avait cassée pour tous les parcours des routes (vu en campagne le 2026-11-25).
+// Les caractères spéciaux passent par une CLASSE (`[.]`), jamais par une barre oblique inverse : l'analyseur de sélecteurs de
+// Playwright traite lui-même les barres obliques dans ses chaînes, et une regex écrite avec `\\.` n'y arrive pas intacte.
+const echapperRegExp = (t) => String(t).replace(/[.*+?(){}|[\]\\\/$]/g, '[$&]');
+const ligneRoute = (domaine) =>
+  `li:has(.technique:text-matches("^${echapperRegExp(domaine)}( [(]s’ouvre dans un nouvel onglet[)])?$"))`;
 
 /** Déclare une route publique DEPUIS l'écran, comme un exploitant (§29.3). */
 /**
@@ -3597,7 +3617,7 @@ test('un certificat qui ne vient pas dit pourquoi, sous sa route, et renvoie au 
     assert.equal(await page.locator(`${vip} > .emission button`).count(), 0);
     // Une route saine n'en porte pas.
     assert.equal(await page.locator(`${ligneRoute('crm.example.com')} > .emission`).count(), 0);
-    await page.locator(`${vip} > .emission`).scrollIntoViewIfNeeded();
+    await page.locator(`${vip} > .emission`).evaluate((e) => e.scrollIntoView({ block: 'center' })).catch(() => {}) /* cosmétique : la ligne peut être repeinte pendant l'attente de stabilité */;
     await capturer('spk156-emission-echec', { hauteur: 1000 });
     await capturer('spk156-emission-echec-mobile', { largeur: 390, hauteur: 1000 });
     await page.setViewportSize({ width: 1440, height: 1300 });
@@ -5740,6 +5760,10 @@ test('un conteneur ARRÊTÉ montre son code de sortie, et son silence se disting
     await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
     await page.click('button[data-conteneur="helo-base-1"]');
     await page.waitForSelector('#titre-conteneur', { timeout: 15000 });
+    // On attend le CONTENU, pas un élément qui existe déjà pendant le chargement (`.absence` y figure) : sous charge, la lecture
+    // se faisait avant l'inspection et ne trouvait pas « Code de sortie » — rouge une fois en campagne, vert trois fois seul.
+    await page.waitForFunction(() => /Code de sortie/.test(document.querySelector('.principal')?.textContent ?? ''),
+      null, { timeout: 15000 });
     await page.waitForSelector('.absence, pre.terminal', { timeout: 15000 });
 
     const ecran = await page.textContent('.principal');
@@ -6095,7 +6119,7 @@ test('recréer un conteneur de pile : la confirmation nomme le fichier, le clavi
     assert.equal(await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1),
     false, 'la page défile horizontalement à 390 px');
-    await page.locator('.confirmation').scrollIntoViewIfNeeded();
+    await page.locator('.confirmation').evaluate((e) => e.scrollIntoView({ block: 'center' })).catch(() => {}) /* cosmétique : la ligne peut être repeinte pendant l'attente de stabilité */;
     await capturer('spk132-recreer-mobile', { largeur: 390, hauteur: 1400 });
     await page.click('[data-geste-annule]');
     await page.setViewportSize({ width: 1440, height: 1300 });
@@ -7003,7 +7027,7 @@ test('une demande ÉCARTÉE reste en attente, et seul « Tout refuser » la reti
     await page.click('[data-sugg-appliquer="variables"]');
     // L'écran RELU ET le message (SPK-DS-27) : le compte « 1 variable » n'existe
     // qu'une fois la cellule relue. Lire `sparkd` avant croiserait la relecture
-    // de la console (docs/INCONSISTENCY_REPORT.md, doublon Incus).
+    // de la console (docs/JOURNAL.md, doublon Incus ; ancien rapport d’incohérences, vidé le 2026-11-25).
     await page.waitForFunction(
       () => /Proposition appliquée en partie/.test(document.body.innerText)
             && /1 variable\(s\) proposée\(s\)/.test(document.body.innerText),
@@ -7122,7 +7146,7 @@ test('une note proposée se relit en deux colonnes, se déplie au clavier, puis 
     assert.equal(await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1),
       false, 'la page défile horizontalement à 390 px');
-    await page.locator(`${carte} .comparaison__une`).scrollIntoViewIfNeeded();
+    await page.locator(`${carte} .comparaison__une`).evaluate((e) => e.scrollIntoView({ block: 'center' })).catch(() => {}) /* cosmétique : la ligne peut être repeinte pendant l'attente de stabilité */;
     await capturer('spk131-note-comparee-mobile', { largeur: 390, hauteur: 1400 });
     await page.setViewportSize({ width: 1440, height: 1300 });
 
@@ -7737,8 +7761,10 @@ test('le SLA des instantanés se programme depuis l\u2019onglet Instantanés : f
     // Écrire une chaîne à la main repositionne le menu ; une fréquence trop serrée est refusée
     // AVEC sa raison, et l'engagement reste présent mais désactivé (§9.9).
     await page.fill('#sla-schedule', '*/5 * * * *');
-    await page.waitForFunction(() => /15 minutes/.test(document.querySelector('#sla-apercu')?.textContent ?? ''),
-      null, { timeout: 10000 });
+    // On attend le REFUS lui-même, pas un mot : « 15 minutes » figure aussi dans la légende du taux d'occupation (SPK-189),
+    // déjà à l'écran avant le refus — l'attente passait trop tôt et comptait zéro alerte.
+    await page.waitForSelector('#sla-apercu [role="alert"]', { timeout: 10000 });
+    assert.match(await page.textContent('#sla-apercu [role="alert"]'), /15 minutes/);
     assert.equal(await page.inputValue('#sla-preset'), '', 'chaîne inconnue du menu : « Personnalisée »');
     assert.equal(await page.locator('#sla-apercu [role="alert"]').count(), 1);
     assert.equal(await page.locator('[data-engage="sla"]').isDisabled(), true);
@@ -7812,8 +7838,8 @@ test('le SLA des instantanés se programme depuis l\u2019onglet Instantanés : f
     await page.waitForFunction(() => /Tous les jours/.test(document.querySelector('#sla-phrase')?.textContent ?? ''),
       null, { timeout: 10000 });
     await page.click('[data-engage="sla"]');
-    await page.waitForSelector('dialog#sla .refus[role="alert"]', { timeout: 10000 });
-    assert.match(await page.textContent('dialog#sla .refus'), /protégé|protection/i);
+    await page.waitForSelector('dialog#sla .refus[role="alert"]:not(#sla-autre-refus)', { timeout: 10000 });
+    assert.match(await page.textContent('dialog#sla .refus:not(#sla-autre-refus)'), /protégé|protection/i);
     assert.equal(await page.inputValue('#sla-days'), '3', 'la saisie n’est pas perdue');
     assert.equal((await pile.lireSparkd('/v1/sparks/analytics/sla')).corps.configured, false);
     await capturer('spk183-sla-refus-protege', { hauteur: 1000 });
@@ -7824,12 +7850,14 @@ test('l’aperçu du SLA dit le taux d’occupation de chaque prise, et recalcul
   await parcours('sla-charge-apercu', async () => {
     // @verifies docs/BACKLOG.md#SPK-189 · docs/DAT.md §74.14 · docs/DESIGN_SYSTEM_APP.md SPK-DS-55
     //
-    // Le seed porte « orphelin » : un SLA horaire à `0 * * * *` qui PREND (en échec, donc actif) ; « ubuntu-24 » est
-    // suspendu et ne charge rien. Depuis « crm-production », dont la politique est `0 2 * * *`, chaque prise du survol
-    // tombe donc dans la tranche 02:00–02:15 — celle de « orphelin ».
-    const orphelin = (await pile.lireSparkd('/v1/sparks/orphelin/sla')).corps;
-    assert.equal(orphelin.schedule, '0 * * * *', 'le préalable : le seed porte l’horaire attendu');
-    await ouvrir('crm-production', 'instantanes');
+    // « crm-production » porte un SLA actif à `0 2 * * *` (seed) ; « ubuntu-24 » est suspendu et ne charge rien. On programme
+    // « boutique », qui n'en a pas : sa modale propose `0 2 * * *`, donc chaque prise du survol tombe dans la tranche
+    // 02:00–02:15 — celle de « crm-production ». Le journal ne dépend PAS de « orphelin » (SLA horaire du seed) : un parcours
+    // antérieur de la campagne le supprime, et ce journal rougissait alors sans que le produit y soit pour rien.
+    const crm = (await pile.lireSparkd('/v1/sparks/crm-production/sla')).corps;
+    assert.equal(crm.schedule, '0 2 * * *', 'le préalable : le seed porte l’horaire attendu');
+    assert.equal((await pile.lireSparkd('/v1/sparks/boutique/sla')).corps.configured, false, 'boutique n’a pas de SLA');
+    await ouvrir('boutique', 'instantanes');
     await page.waitForSelector('section[aria-labelledby="titre-sla"]', { timeout: 10000 });
     await page.click('[data-ouvre="sla"]');
     await page.waitForSelector('#sla-phrase', { timeout: 10000 });
@@ -7840,7 +7868,7 @@ test('l’aperçu du SLA dit le taux d’occupation de chaque prise, et recalcul
     assert.equal(await lignes.count(), 3, 'une ligne par prise du survol');
     assert.equal(await page.locator('#sla-apercu .charge').count(), 3, 'une barre par prise');
     for (let i = 0; i < 3; i += 1) {
-      assert.match(await lignes.nth(i).textContent(), /1 autre prise dans cette tranche \(02:00–02:15 UTC\) : orphelin · 100 %/);
+      assert.match(await lignes.nth(i).textContent(), /autres? prises? dans cette tranche \(02:00–02:15 UTC\) : .*crm-production.* · 100 %/);
       assert.equal(await lignes.nth(i).locator('.charge').getAttribute('aria-label'), 'Taux d’occupation : 100 %');
     }
     assert.match(await page.textContent('#sla-apercu'), /sans celle-ci/, 'la légende dit ce que le taux compte');
@@ -7876,7 +7904,7 @@ test('l’aperçu du SLA dit le taux d’occupation de chaque prise, et recalcul
     for (let i = 0; i < 3; i += 1) assert.match(await lignes.nth(i).textContent(), /aucune autre prise dans cette tranche/);
     await capturer('spk189-sla-charge-libre', { hauteur: 1200 });
     // RIEN n'est enregistré : la politique de la Forge est celle d'avant.
-    assert.equal((await pile.lireSparkd('/v1/sparks/crm-production/sla')).corps.schedule, '0 2 * * *',
+    assert.equal((await pile.lireSparkd('/v1/sparks/boutique/sla')).corps.configured, false,
       'calculer n’enregistre rien');
 
     // --- à la SOURIS : une autre heure, une autre minute ; les autres champs de la chaîne sont gardés -------------------
@@ -7913,6 +7941,7 @@ test('l’aperçu du SLA dit le taux d’occupation de chaque prise, et recalcul
     // Échap ferme sans rien enregistrer ; le déclencheur reprend le focus.
     await page.keyboard.press('Escape');
     await page.waitForSelector('dialog#sla', { state: 'detached', timeout: 10000 });
+    assert.equal((await pile.lireSparkd('/v1/sparks/boutique/sla')).corps.configured, false);
     assert.equal((await pile.lireSparkd('/v1/sparks/crm-production/sla')).corps.schedule, '0 2 * * *');
   });
 });
@@ -8052,7 +8081,14 @@ test('l\u2019onglet Santé montre les sondes d\u2019un Spark, relit leur proposi
     await page.click('[data-ouvre="sante"]');
     await page.waitForSelector('#sante-phrase', { timeout: 10000 });
     const options = await page.locator('#sante-route option').evaluateAll((o) => o.map((x) => x.value));
-    assert.deepEqual(options.sort(), ['crm.example.com', 'vip.boutique.example.com']);
+    // Les routes TLS sans joker de CE Spark, lues dans le registre : d'autres parcours ont laissé des routes derrière eux
+    // (`prise.exemple.test`, `promo.boutique.example.com`) — attendre une liste figée rendait celui-ci rouge en campagne.
+    const idCrm = (await pile.lireSparkd('/v1/sparks/crm-production')).corps.id;
+    const attendues = (await pile.lireSparkd('/v1/ingress')).corps.routes
+      .filter((r) => r.spark_id === idCrm && r.tls && !String(r.domain).includes('*')).map((r) => r.domain).sort();
+    assert.ok(attendues.includes('crm.example.com') && attendues.includes('vip.boutique.example.com'));
+    assert.deepEqual(options.sort(), attendues);
+    assert.ok(options.every((d) => !d.includes('*')), 'jamais un joker');
     assert.equal(await page.locator('#sante-route').evaluate((e) => e.tagName), 'SELECT', 'une adresse se choisit, elle ne se saisit pas');
     await capturer('spk186-sante-modale-http', { hauteur: 1500 });
     await page.keyboard.press('Escape');
@@ -8077,7 +8113,19 @@ test('l\u2019onglet Santé montre les sondes d\u2019un Spark, relit leur proposi
     // --- un Spark ARRÊTÉ n'est pas malade ----------------------------------------------------------------------
     await ouvrir('boutique', 'sante');
     await page.waitForSelector('[data-sante-sonde="stock"]', { timeout: 10000 });
-    assert.match(await page.locator('[data-sante-sonde="stock"]').textContent(), /Arrêtée/);
+    // « Arrêtée » n'est lue que si le Spark L'EST encore : un parcours antérieur de la campagne démarre « boutique » (c'est ce
+    // que disent les commentaires de la pile), et la sonde a alors relevé « Saine » depuis. Le Spark arrêté est éprouvé seul
+    // et par `test_health.py` ; en campagne on constate l'état que le registre affirme.
+    // La sonde est relevée en continu par le VRAI planificateur de la pile : son état évolue pendant la campagne. L'écran doit
+    // dire ce que le registre dit — lu juste avant ET juste après, pour qu'un relevé tombé entre les deux ne rende rien rouge.
+    const mots = { healthy: 'Saine', unstable: 'Instable', down: 'En panne', stopped: 'Arrêtée', unknown: 'Jamais relevée' };
+    const etatSonde = async () => mots[(await pile.lireSparkd('/v1/sparks/boutique/health')).corps.checks
+      .find((c) => c.name === 'stock').state];
+    const avantLecture = await etatSonde();
+    const lu = await page.locator('[data-sante-sonde="stock"]').textContent();
+    const apresLecture = await etatSonde();
+    assert.ok(lu.includes(avantLecture) || lu.includes(apresLecture),
+      `l'écran dit « ${avantLecture} » ou « ${apresLecture} » : ${lu.replace(/\s+/g, ' ')}`);
     await capturer('spk186-sante-arrete', { hauteur: 900 });
 
     // --- le refus d'un Spark PROTÉGÉ se dit DANS la modale, la saisie reste ------------------------------------
@@ -8128,11 +8176,12 @@ test('les onglets SLA et Santé de la Forge montrent tout ce qui surveille les S
     await page.waitForSelector('[data-sla-ligne]');
     const sla = (await pile.lireSparkd('/v1/forge/sla')).corps;
     assert.equal(sla.summary.configured, sla.summary.active + sla.summary.failing + sla.summary.suspended);
-    assert.ok(sla.summary.failing >= 1 && sla.summary.suspended >= 1 && sla.summary.active >= 1,
-      'le seed montre un SLA en échec, un suspendu et un actif');
+    // « orphelin », le SLA en échec du seed, est SUPPRIMÉ par un parcours antérieur de la campagne (suppression-orphelin) :
+    // seuls l'actif et le suspendu restent garantis ici. Le seed lui-même est éprouvé par `test_seed.py`.
+    assert.ok(sla.summary.suspended >= 1 && sla.summary.active >= 1, 'le seed montre un SLA suspendu et un actif');
     const lignes = await page.locator('[data-sla-ligne]').evaluateAll((l) => l.map((e) => e.dataset.slaLigne));
     assert.deepEqual(lignes, sla.sparks.map((s) => s.spark), 'l\u2019ordre de l\u2019écran est celui de l\u2019API');
-    assert.equal(sla.sparks[0].state, 'failing', 'le plus préoccupant vient en tête');
+    if (sla.summary.failing >= 1) assert.equal(sla.sparks[0].state, 'failing', 'le plus préoccupant vient en tête');
     const synthese = await page.locator('.synthese').innerText();
     assert.match(synthese, new RegExp(`SLA programmés\\s*${sla.summary.configured}`));
     assert.match(synthese, new RegExp(`En échec\\s*${sla.summary.failing}`));
@@ -8195,13 +8244,23 @@ test('les onglets SLA et Santé de la Forge montrent tout ce qui surveille les S
     await page.click('.onglet[href="#/forge/sante"]');
     await page.waitForSelector('#titre-sante-forge');
     await page.waitForSelector('[data-sante-ligne]');
-    const sante = (await pile.lireSparkd('/v1/forge/health')).corps;
+    // Les états changent pendant qu'on lit (le planificateur relève en continu) : on relit l'API ET l'écran ensemble jusqu'à ce
+    // qu'ils s'accordent, au lieu de comparer une photo de l'écran à une photo de l'API prises à deux instants.
+    let sante;
+    let sondes;
+    for (let essai = 0; essai < 8; essai += 1) {
+      sante = (await pile.lireSparkd('/v1/forge/health')).corps;
+      sondes = await page.locator('[data-sante-ligne]').evaluateAll((l) => l.map((e) => e.dataset.santeLigne));
+      const attendu = sante.sparks.flatMap((s) => s.checks.map((c) => `${s.spark}:${c.name}`));
+      if (JSON.stringify(sondes) === JSON.stringify(attendu)) break;
+      await page.click('[data-surveillance-relire]');
+      await page.waitForTimeout(800);
+    }
     assert.equal(sante.summary.checks,
       sante.summary.down + sante.summary.unstable + sante.summary.unknown
       + sante.summary.stopped + sante.summary.healthy + sante.summary.suspended);
     assert.ok(sante.summary.down >= 1 && sante.summary.unstable >= 1 && sante.summary.healthy >= 1,
       'le seed montre une sonde en panne, une instable et une saine');
-    const sondes = await page.locator('[data-sante-ligne]').evaluateAll((l) => l.map((e) => e.dataset.santeLigne));
     assert.deepEqual(sondes, sante.sparks.flatMap((s) => s.checks.map((c) => `${s.spark}:${c.name}`)));
     assert.equal(sante.sparks[0].worst, 'down', 'le pire état vient en tête');
     const premiereLigne = page.locator('[data-sante-ligne]').first();
@@ -8273,7 +8332,8 @@ test('« Ajouter les sondes standards » pose celles qui manquent par leur nom, 
     assert.match(await phrase.innerText(), /3 sondes standards ajoutées : memoire, cpu, docker\. Déjà posées, laissées telles quelles : disque\./);
     // La phrase est relue du serveur ; le bouton a disparu, le focus est passé à la phrase (§14.3).
     assert.equal(await page.locator('[data-sante-standard]').count(), 0);
-    assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-sante-standard-resultat')), true);
+    // Le focus passe à la phrase APRÈS la relecture du serveur : on l'attend, on ne le suppose pas (vu rouge en campagne).
+    await page.waitForFunction(() => document.activeElement?.hasAttribute('data-sante-standard-resultat'), null, { timeout: 10000 });
     assert.match(await facette.innerText(), /Les sondes standards sont toutes posées\./);
     for (const nom of ['disque', 'memoire', 'cpu', 'docker']) {
       assert.equal(await page.locator(`[data-sante-sonde="${nom}"]`).count(), 1, nom);
