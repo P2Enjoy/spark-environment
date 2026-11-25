@@ -11072,3 +11072,32 @@ exécuter (ou sélectionner), ce tab ne sert pas à grand-chose ».
     conteneur.
 - Spécification, DoD : à écrire si le projet rouvre (`docs/DAT.md`, `docs/DESIGN_SYSTEM_APP.md`, manuel M8 et le manuel du cycle de
   vie ; preuve rouge avant, API contre le vrai registre, E2E souris et clavier, captures observées).
+
+### [ ] SPK-192 · La santé du stockage d'une Forge, en direct : l'état du pool ZFS et des RAID `md`, lisible sur la Forge sans passer par le secours
+
+**Demandé le 2026-11-25** par le responsable, consigné pour mémoire : le projet est fermé, **rien n'est à coder pour l'instant**.
+
+- **Constat qui motive l'unité** (incident de la Forge d'expérience, `docs/JOURNAL.md` 2026-11-25) : c'est **en mode secours** qu'on a découvert que
+  `sdb3` et `sdb4` étaient sortis de leurs RAID1 depuis le 27 septembre et que `/` et `/boot` tournaient sur un seul disque. Rien dans la console ne le disait.
+- **Ce qui existe** : `STO-MIROIR` (`zpool status`) et `SYS-RAID` (`/proc/mdstat`) du préflight (SPK-169, `docs/DAT.md` §70.1) lisent bien l'état — mais
+  **une seule fois**, à l'installation et à la reprise. Aucun onglet de la Forge ne les montre en direct ; l'onglet *Système* (SPK-171) ne parle que
+  des mises à jour et de `zpool upgrade` ; aucune alerte ne part quand un disque sort ; **aucun `scrub` n'est planifié ni relevé par le produit**.
+- **Demande, verbatim** : « there should be a pool health tab somewhere on the forge, right? because I always learn something wrong on rescue but never on
+  the sparkui and how the pool repair itself? does it need a command or we just wait for it to happen? »
+- **Ce que l'unité devra montrer** (à spécifier) : l'état du pool et de chaque membre avec ses compteurs d'erreurs ; chaque `md` et ses membres sortis ;
+  la dernière passe de `scrub` et son résultat, une resynchronisation en cours et son avancement ; la santé SMART des disques ; une **alerte sur la
+  transition** `saine → dégradée` (comme `backup.degraded`, DAT §60), jamais à chaque relevé.
+- **Réponse de fond à « comment ça se répare »** (à reporter dans le manuel quand l'unité existera) :
+  - ZFS corrige seul un bloc corrompu **quand il le lit** et lors d'un `scrub` ; une resynchronisation démarre seule après `zpool online` ou `zpool replace`.
+    Mais un disque **sorti ou `FAULTED` ne revient pas seul** : il faut `zpool clear` / `zpool online`, ou `zpool replace` après remplacement par l'hébergeur.
+  - `md` ne réintègre **jamais** seul un membre sorti : `mdadm --add` (ou `--re-add`), puis la resynchronisation est automatique.
+  - Un disque qui sort à répétition avec des erreurs d'écriture est suspect même si `smartctl -H` répond `PASSED` : le remplacement se décide, il ne s'attend pas.
+- **À trancher avant toute spécification** (questions au responsable) :
+  - l'écran **montre** seulement, ou propose les gestes de réparation (`zpool clear`, `zpool replace`, `mdadm --add`) — qui sont des opérations sur des données
+    partagées et exigent confirmation, signature et sauvegarde vérifiée (`CLAUDE.md` §9) ;
+  - où le placer : un onglet *Stockage* de la Forge, ou une section de l'onglet *Système* ;
+  - si le produit planifie lui-même les `scrub` (Ubuntu en planifie un par mois sur les pools sains : à vérifier avant de le doubler) ;
+  - la source SMART (`smartctl` n'est pas garanti installé sur une Forge).
+- Dépend de : SPK-169 (les lectures existantes), SPK-171 (l'onglet *Système*), SPK-184 à SPK-186 (le modèle d'alerte sur transition).
+- Spécification, DoD : à écrire si le projet rouvre (`docs/DAT.md`, `docs/DESIGN_SYSTEM_APP.md`, manuel, seed ; relevés réels de `spark-experiment` comme
+  cas dégradé ; preuve rouge avant, API contre le vrai registre, E2E souris et clavier, captures observées).
