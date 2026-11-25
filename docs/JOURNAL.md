@@ -16232,7 +16232,8 @@ depuis leurs sauvegardes `.avant-noyau43`, `cmp` les a trouvés identiques, et `
 `/readyz` répondent 200 (Incus, Caddy et registre prêts), aucun appui sur le bouton d'alimentation. Les deux `md` sont `[UU]` au démarrage.
 - Pool ZFS `spark` : **aucune commande n'a été nécessaire**. ZFS a réintégré `sdb5` de lui-même au démarrage et le resilver, commencé au démarrage
   interrompu de 23:45:28, a repris. Il s'est achevé à 07:40:07 : 28,1 Go recopiés, 0 erreur, et `zpool status -x` rend « all pools are healthy ».
-  Un scrub a été lancé ensuite (lecture seule, comparaison des sommes de contrôle des deux copies). Son résultat se lit par `zpool status spark`.
+  Le scrub lancé ensuite (lecture seule, comparaison des sommes de contrôle des deux copies) s'est achevé à 07:51:30 : 0 octet réparé, 0 erreur,
+  `sda5` et `sdb5` `ONLINE`. Les deux copies sont identiques et saines.
 - GRUB : `grub-pc/install_devices_failed_upgrade` remis à `false` dans debconf, puisque l'installation sur les deux disques a réussi.
 - « Hors ligne » vu par la console, alors que la machine était prête : deux causes, ni l'une ni l'autre côté Forge.
   - Le poste avait enregistré la clé d'hôte du secours, qui partage l'adresse IP de la Forge, et refusait donc la vraie clé (`Host key verification failed`).
