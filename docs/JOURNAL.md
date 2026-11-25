@@ -16211,13 +16211,25 @@ entièrement prouvé. Si la Forge tombe, plus aucune sonde ni alerte ne part (§
 La machine n'était pas en panne ; elle a été éteinte avant que `sparkd` ait eu le temps de répondre. Une Forge R320 met environ 7 minutes à revenir d'un
 redémarrage (POST compris) : on n'agit pas avant.
 
-**Erreur à défaire.** Sur instruction du responsable mais sur ce diagnostic faux, `GRUB_DEFAULT` a été fixé sur le noyau 7.0.0-43 (`/etc/default/grub`, puis
-`update-grub` en chroot ; sauvegardes `/etc/default/grub.avant-noyau43` et `/boot/grub/grub.cfg.avant-noyau43`). C'est un changement **inutile** qui prive la Forge
-du noyau à jour : à remettre à `GRUB_DEFAULT=0` depuis ces sauvegardes, puis sortir du secours.
+**Erreur défaite.** Sur instruction du responsable mais sur ce diagnostic faux, `GRUB_DEFAULT` avait été fixé sur le noyau 7.0.0-43. C'était un
+changement inutile, qui privait la Forge du noyau à jour. Il a été défait en secours le même jour : `/etc/default/grub` et `grub.cfg` ont été restaurés
+depuis leurs sauvegardes `.avant-noyau43`, `cmp` les a trouvés identiques, et `default="0"` a été relu après démontage.
 
-**À vérifier au démarrage normal.** `uname -r` rend 7.0.0-44 ; `sparkd` répond sur `127.0.0.1:9876` ; la Forge reparaît dans la console.
+**Réparation des RAID système** (en secours, le 2026-11-25, sur instruction du responsable). `sdb3` et `sdb4` étaient sortis de `/boot` et de `/` depuis le
+27 septembre, et les deux tournaient sur `sda` seul.
+- Avant d'écrire : le sens de la copie a été vérifié. `sda4` est actif (2 330 675 événements) et `sdb4` périmé (1 578), donc seul `sdb4` est écrasé.
+  SMART des deux disques : 0 secteur réalloué, en attente ou non corrigible, 0 erreur CRC, auto-test étendu réussi. Débit mesuré : 239 et 250 Mo/s.
+- `md` (racine, 200 Gio) : `sdb4` était vu comme spare. Sa reconstruction, gelée le temps de restaurer GRUB, a été relancée. Elle a pris environ
+  3 minutes et non les 18 estimées, sans doute grâce au bitmap. `md` (`/boot`) : `mdadm --add` de `sdb3`, synchronisé à la suite.
+  Résultat : les deux tableaux sont `[UU]`, avec 2 membres actifs, 0 défaillant.
+- GRUB : debconf déclarait déjà les deux disques, mais portait `install_devices_failed_upgrade: true`, signe qu'une mise à jour passée avait échoué à
+  réinstaller le chargeur. `grub-install --target=i386-pc` a été rejoué sur les deux disques. Sur les tableaux complets, il ne donne plus aucun
+  avertissement `physical volume (null)` et `grub-probe` reconnaît `mdraid1x`. La machine peut donc démarrer sur l'un ou l'autre disque.
+- Pourquoi personne ne l'a su pendant deux mois : `mdadm` détecte bien le tableau dégradé à chaque démarrage (`DegradedArray event`), mais son alerte
+  part par `sendmail`, absent de la machine. Le signal existe, il n'arrive nulle part (voir SPK-192).
 
-**Sans lien, à traiter** : `sdb3` et `sdb4` sont sortis des RAID1 depuis le 27 septembre ; `/` et `/boot` tournent sur `sda` seul (voir SPK-192).
+**Reste à faire, depuis le système démarré.** Le pool ZFS `spark` (sa moitié `sdb5` était `FAULTED` le 2026-11-18) : le ZFS du secours est trop ancien
+pour l'importer (`vdev_zaps_v2`). Il faut lire `zpool status`, puis `zpool clear` ou `zpool online` pour lancer le resilver.
 
 **Le rapport d'incohérences vidé — 2026-11-25.**
 
